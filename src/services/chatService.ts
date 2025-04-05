@@ -1,41 +1,47 @@
 import { api } from './api';
-import { ChatRoom, Message } from '../store/types';
+import { ChatRoom } from '../store/types';
 
-interface CreateRoomRequest {
-  participants: string[];
+export interface CreateChatRoomDto {
+  title: string;
+  maxMembers: number;
+  category: string;
+  description: string;
 }
 
-export const chatService = {
-  async getRooms(): Promise<ChatRoom[]> {
-    const response = await api.get<ChatRoom[]>('/chat/rooms');
+interface ChatRoomSearchDto {
+  keyword?: string;
+  category?: string;
+  page: number;
+  size: number;
+}
+
+class ChatService {
+  async createRoom(createDto: CreateChatRoomDto): Promise<ChatRoom> {
+    const response = await api.post<ChatRoom>('/chat/rooms', createDto);
     return response.data;
-  },
+  }
 
-  async getRoom(roomId: string): Promise<ChatRoom> {
-    const response = await api.get<ChatRoom>(`/chat/rooms/${roomId}`);
+  async searchRooms(searchDto: ChatRoomSearchDto): Promise<{
+    content: ChatRoom[];
+    totalElements: number;
+    totalPages: number;
+  }> {
+    const response = await api.get('/chat/rooms/search', { params: searchDto });
     return response.data;
-  },
+  }
 
-  async createRoom(participants: string[]): Promise<ChatRoom> {
-    const response = await api.post<ChatRoom>('/chat/rooms', { participants });
-    return response.data;
-  },
+  async joinRoom(roomId: number): Promise<void> {
+    await api.post(`/chat/rooms/${roomId}/join`);
+  }
 
-  async getMessages(roomId: string): Promise<Message[]> {
-    const response = await api.get<Message[]>(`/chat/rooms/${roomId}/messages`);
-    return response.data;
-  },
-
-  async sendMessage(roomId: string, content: string): Promise<Message> {
-    const response = await api.post<Message>(`/chat/rooms/${roomId}/messages`, { content });
-    return response.data;
-  },
-
-  async deleteRoom(roomId: string): Promise<void> {
-    await api.delete(`/chat/rooms/${roomId}`);
-  },
-
-  async leaveRoom(roomId: string): Promise<void> {
+  async leaveRoom(roomId: number): Promise<void> {
     await api.post(`/chat/rooms/${roomId}/leave`);
-  },
-}; 
+  }
+
+  async getMyRooms(): Promise<ChatRoom[]> {
+    const response = await api.get<ChatRoom[]>('/chat/rooms/my');
+    return response.data;
+  }
+}
+
+export const chatService = new ChatService();

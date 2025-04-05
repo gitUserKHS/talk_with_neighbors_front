@@ -11,6 +11,7 @@ import Register from './pages/Register';
 import Profile from './pages/Profile';
 import ChatRoomList from './pages/ChatRoomList';
 import ChatRoom from './pages/ChatRoom';
+import CreateChatRoom from './pages/CreateChatRoom';
 import Matching from './pages/Matching';
 
 // Components
@@ -47,10 +48,18 @@ const App: React.FC = () => {
             }
           />
           <Route
-            path="/chat"
+            path="/chat/rooms"
             element={
               <PrivateRoute>
                 <ChatRoomList />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/chat/create"
+            element={
+              <PrivateRoute>
+                <CreateChatRoom />
               </PrivateRoute>
             }
           />

@@ -7,10 +7,15 @@ export interface User {
 }
 
 export interface ChatRoom {
-  id: string;
-  participants: string[];
-  lastMessage?: string;
-  lastMessageTime?: string;
+  id: number;
+  title: string;
+  createdBy: string;
+  maxMembers: number;
+  currentMembers: number;
+  category: string;
+  description: string;
+  createdAt: string;
+  status: 'ACTIVE' | 'CLOSED';
 }
 
 export interface Message {
