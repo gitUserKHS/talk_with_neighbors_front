@@ -14,8 +14,11 @@ import {
   Box,
   Alert,
   Snackbar,
-  CircularProgress
+  CircularProgress,
+  IconButton,
+  Menu
 } from '@mui/material';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { useNavigate } from 'react-router-dom';
 import { chatService } from '../services/chatService';
 import { ChatRoom } from '../store/types';
@@ -41,13 +44,22 @@ const ChatRoomList = () => {
     size: 10,
     sort: 'createdAt,desc'
   });
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [selectedRoom, setSelectedRoom] = useState<ChatRoom | null>(null);
 
   const loadRooms = async () => {
     setIsLoading(true);
     try {
-      const result = await chatService.searchRooms(search);
-      setRooms(result.content);
-      setTotalPages(result.totalPages);
+      const result = await chatService.searchRooms({
+        keyword: search.keyword,
+        category: search.category,
+        page: search.page,
+        size: search.size,
+        sort: search.sort
+      });
+      console.log('Loaded rooms:', result); // 디버깅을 위한 로그
+      setRooms(result.content || []);
+      setTotalPages(result.totalPages || 0);
       setError(null);
     } catch (error) {
       console.error('Failed to load rooms:', error);
@@ -57,17 +69,45 @@ const ChatRoomList = () => {
     }
   };
 
-  // Debounce search to prevent too many API calls
-  const debouncedSearch = useCallback(
-    debounce((newSearch: SearchUpdate) => {
-      setSearch((prev) => ({ ...prev, ...newSearch }));
-    }, 300),
+  // 검색 조건이 변경될 때마다 호출될 디바운스된 함수
+  const debouncedLoadRooms = useCallback(
+    debounce(() => {
+      loadRooms();
+    }, 500),
     []
   );
 
+  // 키워드 검색에 대한 별도의 디바운스 처리
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearch(prev => ({ ...prev, keyword: value, page: 0 }));
+    },
+    []
+  );
+
+  // 카테고리 변경 처리
+  const handleCategoryChange = (value: string) => {
+    setSearch(prev => ({ ...prev, category: value, page: 0 }));
+  };
+
+  // 정렬 변경 처리
+  const handleSortChange = (value: string) => {
+    setSearch(prev => ({ ...prev, sort: value, page: 0 }));
+  };
+
+  // 페이지 변경 처리
+  const handlePageChange = (_: React.ChangeEvent<unknown>, value: number) => {
+    setSearch(prev => ({ ...prev, page: value - 1 }));
+  };
+
+  // 검색 조건이 변경될 때만 API 호출
   useEffect(() => {
-    loadRooms();
-  }, [search.keyword, search.category, search.page, search.size, search.sort]);
+    debouncedLoadRooms();
+    // cleanup 함수로 디바운스 취소
+    return () => {
+      debouncedLoadRooms.cancel();
+    };
+  }, [search]);
 
   const handleJoin = async (roomId: number) => {
     try {
@@ -78,6 +118,79 @@ const ChatRoomList = () => {
       console.error('Failed to join room:', err);
     }
   };
+
+  const handleMenuOpen = (event: React.MouseEvent<HTMLElement>, room: ChatRoom) => {
+    setAnchorEl(event.currentTarget);
+    setSelectedRoom(room);
+  };
+
+  const handleMenuClose = () => {
+    setAnchorEl(null);
+    setSelectedRoom(null);
+  };
+
+  const handleEdit = () => {
+    if (selectedRoom) {
+      navigate(`/chat/edit/${selectedRoom.id}`);
+    }
+    handleMenuClose();
+  };
+
+  const handleDelete = async () => {
+    if (selectedRoom) {
+      try {
+        await chatService.deleteRoom(selectedRoom.id);
+        loadRooms();
+      } catch (err: any) {
+        setError(err.response?.data?.message || '채팅방 삭제에 실패했습니다.');
+      }
+    }
+    handleMenuClose();
+  };
+
+  const renderRoomCard = (room: ChatRoom) => (
+    <Card 
+      sx={{ 
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: '100%',
+        transition: 'transform 0.2s',
+        '&:hover': {
+          transform: 'translateY(-4px)',
+          boxShadow: 3
+        }
+      }}
+    >
+      <CardContent sx={{ flexGrow: 1 }}>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <Typography variant="h6" gutterBottom>
+            {room.title}
+          </Typography>
+          <IconButton onClick={(e) => handleMenuOpen(e, room)}>
+            <MoreVertIcon />
+          </IconButton>
+        </Box>
+        <Typography color="textSecondary" gutterBottom>
+          {room.category}
+        </Typography>
+        <Typography variant="body2" sx={{ mb: 2 }}>
+          {room.description}
+        </Typography>
+        <Typography color="textSecondary" variant="body2">
+          참여자: {room.currentMembers}/{room.maxMembers}
+        </Typography>
+        <Button
+          variant="contained"
+          fullWidth
+          onClick={() => handleJoin(room.id)}
+          disabled={room.currentMembers >= room.maxMembers}
+          sx={{ mt: 2 }}
+        >
+          참여하기
+        </Button>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <Container maxWidth="lg" sx={{ py: 4 }}>
@@ -99,7 +212,7 @@ const ChatRoomList = () => {
             fullWidth
             label="검색"
             value={search.keyword}
-            onChange={(e) => debouncedSearch({ keyword: e.target.value, page: 0 })}
+            onChange={(e) => handleSearchChange(e.target.value)}
           />
         </Box>
         <Box>
@@ -108,7 +221,7 @@ const ChatRoomList = () => {
             <Select
               value={search.category}
               label="카테고리"
-              onChange={(e) => setSearch(prev => ({ ...prev, category: e.target.value, page: 0 }))}
+              onChange={(e) => handleCategoryChange(e.target.value)}
             >
               <MenuItem value="">전체</MenuItem>
               <MenuItem value="HOBBY">취미</MenuItem>
@@ -123,7 +236,7 @@ const ChatRoomList = () => {
             <Select
               value={search.sort}
               label="정렬"
-              onChange={(e) => setSearch(prev => ({ ...prev, sort: e.target.value }))}
+              onChange={(e) => handleSortChange(e.target.value)}
             >
               <MenuItem value="createdAt,desc">최신순</MenuItem>
               <MenuItem value="currentMembers,desc">참여자 많은순</MenuItem>
@@ -143,42 +256,7 @@ const ChatRoomList = () => {
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: '1fr 1fr 1fr' }, gap: 3 }}>
           {rooms.map((room) => (
             <Box key={room.id}>
-              <Card 
-                sx={{ 
-                  display: 'flex', 
-                  flexDirection: 'column', 
-                  height: '100%',
-                  transition: 'transform 0.2s',
-                  '&:hover': {
-                    transform: 'translateY(-4px)',
-                    boxShadow: 3
-                  }
-                }}
-              >
-                <CardContent sx={{ flexGrow: 1 }}>
-                  <Typography variant="h6" gutterBottom>
-                    {room.title}
-                  </Typography>
-                  <Typography color="textSecondary" gutterBottom>
-                    {room.category}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mb: 2 }}>
-                    {room.description}
-                  </Typography>
-                  <Typography color="textSecondary" variant="body2">
-                    참여자: {room.currentMembers}/{room.maxMembers}
-                  </Typography>
-                  <Button
-                    variant="contained"
-                    fullWidth
-                    onClick={() => handleJoin(room.id)}
-                    disabled={room.currentMembers >= room.maxMembers}
-                    sx={{ mt: 2 }}
-                  >
-                    참여하기
-                  </Button>
-                </CardContent>
-              </Card>
+              {renderRoomCard(room)}
             </Box>
           ))}
         </Box>
@@ -189,10 +267,18 @@ const ChatRoomList = () => {
           <Pagination
             count={totalPages}
             page={search.page + 1}
-            onChange={(_, value) => setSearch({ ...search, page: value - 1 })}
+            onChange={handlePageChange}
           />
         </Box>
       )}
+      <Menu
+        anchorEl={anchorEl}
+        open={Boolean(anchorEl)}
+        onClose={handleMenuClose}
+      >
+        <MenuItem onClick={handleEdit}>수정</MenuItem>
+        <MenuItem onClick={handleDelete}>삭제</MenuItem>
+      </Menu>
       <Snackbar
         open={!!error}
         autoHideDuration={6000}

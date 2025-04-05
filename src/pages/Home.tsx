@@ -1,9 +1,18 @@
 import React from 'react';
 import { Container, Typography, Box, Button } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import { authService } from '../services/authService';
 
 const Home: React.FC = () => {
   const navigate = useNavigate();
+
+  const handleNavigate = (path: string) => {
+    if (!authService.isAuthenticated()) {
+      navigate('/login');
+    } else {
+      navigate(path);
+    }
+  };
 
   return (
     <Container>
@@ -21,7 +30,7 @@ const Home: React.FC = () => {
               fullWidth
               variant="contained"
               size="large"
-              onClick={() => navigate('/matching')}
+              onClick={() => handleNavigate('/matching')}
               sx={{ height: '100px', fontSize: '1.2rem' }}
             >
               랜덤 매칭 시작하기
@@ -32,7 +41,7 @@ const Home: React.FC = () => {
               fullWidth
               variant="contained"
               size="large"
-              onClick={() => navigate('/chat')}
+              onClick={() => handleNavigate('/chat')}
               sx={{ height: '100px', fontSize: '1.2rem' }}
             >
               채팅방 검색
@@ -44,4 +53,4 @@ const Home: React.FC = () => {
   );
 };
 
-export default Home; 
+export default Home;

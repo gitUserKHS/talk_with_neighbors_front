@@ -18,6 +18,14 @@ export interface ChatRoom {
   status: 'ACTIVE' | 'CLOSED';
 }
 
+export interface ChatRoomListResponse {
+  content: ChatRoom[];
+  totalElements: number;
+  totalPages: number;
+  size: number;
+  number: number;
+}
+
 export interface Message {
   id: string;
   roomId: string;
@@ -64,4 +72,4 @@ export interface RootState {
     loading: boolean;
     error: string | null;
   };
-} 
+}

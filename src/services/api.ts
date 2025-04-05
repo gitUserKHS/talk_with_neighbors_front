@@ -1,12 +1,14 @@
 import axios from 'axios';
+import { store } from '../store';
+import { setUser } from '../store/slices/authSlice';
 
 // 환경 변수 로딩 확인
 console.log('API URL:', process.env.REACT_APP_API_URL);
 console.log('Socket URL:', process.env.REACT_APP_SOCKET_URL);
 
-const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8080/api';
+const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
 
-export const api = axios.create({
+const api = axios.create({
   baseURL,
   withCredentials: true,
   headers: {
@@ -17,13 +19,15 @@ export const api = axios.create({
 // 요청 인터셉터
 api.interceptors.request.use(
   (config) => {
-    const sessionId = localStorage.getItem('sessionId');
-    if (sessionId) {
-      config.headers['X-Session-Id'] = sessionId;
-    }
+    console.log('API 요청:', {
+      method: config.method,
+      url: config.url,
+      data: config.data,
+    });
     return config;
   },
   (error) => {
+    console.error('API 요청 오류:', error);
     return Promise.reject(error);
   }
 );
@@ -31,18 +35,23 @@ api.interceptors.request.use(
 // 응답 인터셉터
 api.interceptors.response.use(
   (response) => {
-    // 세션 ID가 응답 헤더에 있는 경우 저장
-    const sessionId = response.headers['x-session-id'];
-    if (sessionId) {
-      localStorage.setItem('sessionId', sessionId);
-    }
+    console.log('API 응답:', {
+      status: response.status,
+      data: response.data,
+    });
     return response;
   },
-  async (error) => {
+  (error) => {
+    console.error('API 응답 오류:', error);
+    
+    // 401 에러 발생 시 로그아웃 처리
     if (error.response?.status === 401) {
-      localStorage.removeItem('sessionId');
-      window.location.href = '/login';
+      localStorage.removeItem('user');
+      store.dispatch(setUser(null));
     }
+    
     return Promise.reject(error);
   }
-); 
+);
+
+export default api;

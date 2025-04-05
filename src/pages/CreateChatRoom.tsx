@@ -5,20 +5,20 @@ import {
   Button,
   Box,
   Typography,
-  Select,
-  MenuItem,
   FormControl,
   InputLabel,
+  Select,
+  MenuItem,
   Alert,
   Snackbar
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { chatService, CreateChatRoomDto } from '../services/chatService';
+import { chatService } from '../services/chatService';
 
 const CreateChatRoom = () => {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
-  const [formData, setFormData] = useState<CreateChatRoomDto>({
+  const [formData, setFormData] = useState({
     title: '',
     maxMembers: 10,
     category: '',

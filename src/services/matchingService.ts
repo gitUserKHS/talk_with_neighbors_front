@@ -1,4 +1,4 @@
-import { api } from './api';
+import api from './api';
 import { MatchProfile, MatchingPreferences, Location } from '../store/types';
 
 // 거리 계산 (Haversine formula)
