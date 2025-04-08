@@ -50,7 +50,7 @@ class AuthService implements IAuthService {
   constructor() {
     // 로컬 스토리지에서 사용자 정보 복원
     const storedUser = localStorage.getItem('user');
-    if (storedUser) {
+    if (storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
       try {
         this.currentUser = JSON.parse(storedUser);
         store.dispatch(setUser(this.currentUser));
@@ -59,7 +59,12 @@ class AuthService implements IAuthService {
       } catch (error) {
         console.error('로컬 스토리지에서 사용자 정보 복원 중 오류 발생:', error);
         localStorage.removeItem('user');
+        localStorage.removeItem('sessionId');
       }
+    } else {
+      // 유효하지 않은 값이 저장되어 있는 경우 제거
+      localStorage.removeItem('user');
+      localStorage.removeItem('sessionId');
     }
   }
 
@@ -73,22 +78,26 @@ class AuthService implements IAuthService {
     this.sessionCheckPromise = (async () => {
       try {
         console.log('세션 체크 시작');
-        const response = await api.get<LoginResponse>('/auth/me', {
-          withCredentials: true
-        });
-        console.log('세션 체크 응답:', response.data);
         
-        // 세션 쿠키 확인
-        const cookies = document.cookie.split(';');
-        const sessionCookie = cookies.find(cookie => cookie.trim().startsWith('JSESSIONID='));
-        if (!sessionCookie) {
-          console.warn('세션 체크 후에도 세션 쿠키가 없습니다.');
-        } else {
-          console.log('세션 쿠키 확인됨');
+        // 세션 ID가 없으면 바로 null 반환
+        const sessionId = localStorage.getItem('sessionId');
+        if (!sessionId) {
+          console.log('세션 ID가 없습니다.');
+          return null;
         }
         
-        if (response.data.user) {
-          this.currentUser = response.data.user;
+        const response = await api.get<LoginResponse>('/auth/me', {
+          withCredentials: true,
+          headers: {
+            'X-Session-Id': sessionId
+          }
+        });
+        
+        console.log('세션 체크 응답:', response.data);
+        
+        const userData = response.data.user || response.data;
+        if (userData && userData.id) {
+          this.currentUser = userData;
           // 로컬 스토리지에 사용자 정보 저장
           localStorage.setItem('user', JSON.stringify(this.currentUser));
           // Redux 상태 업데이트
@@ -98,6 +107,7 @@ class AuthService implements IAuthService {
           console.log('세션 응답에 사용자 정보 없음');
           this.currentUser = null;
           localStorage.removeItem('user');
+          localStorage.removeItem('sessionId');
           // Redux 상태 업데이트
           store.dispatch(setUser(null));
         }
@@ -112,6 +122,7 @@ class AuthService implements IAuthService {
         }
         this.currentUser = null;
         localStorage.removeItem('user');
+        localStorage.removeItem('sessionId');
         // Redux 상태 업데이트
         store.dispatch(setUser(null));
       } finally {
@@ -145,37 +156,36 @@ class AuthService implements IAuthService {
       console.log('로그인 응답:', response.data);
       console.log('응답 헤더:', response.headers);
       
-      // 세션 쿠키 확인 (약간의 지연을 주어 쿠키가 설정될 시간을 줌)
-      await new Promise(resolve => setTimeout(resolve, 500));
-      
-      const cookies = document.cookie.split(';');
-      const sessionCookie = cookies.find(cookie => cookie.trim().startsWith('JSESSIONID='));
-      
-      if (!sessionCookie) {
-        console.warn('로그인 후에도 세션 쿠키가 없습니다. CORS 설정을 확인해주세요.');
-        console.log('현재 쿠키:', document.cookie);
-        
-        // 쿠키가 없으면 로그아웃 API 호출
-        try {
-          await this.logout();
-        } catch (logoutError) {
-          console.error('로그아웃 중 오류 발생:', logoutError);
-        }
-        
-        // 로컬 상태 초기화
-        this.currentUser = null;
-        localStorage.removeItem('user');
-        store.dispatch(setUser(null));
-        throw new Error('세션 쿠키가 설정되지 않았습니다. 로그인이 실패했습니다.');
+      // X-Session-Id 헤더 확인
+      const sessionId = response.headers['x-session-id'];
+      if (!sessionId) {
+        console.warn('로그인 응답에 X-Session-Id 헤더가 없습니다.');
+        throw new Error('세션 ID가 설정되지 않았습니다. 로그인이 실패했습니다.');
       }
       
-      console.log('세션 쿠키가 성공적으로 설정됨:', sessionCookie);
+      // 세션 ID를 로컬 스토리지에 저장
+      localStorage.setItem('sessionId', sessionId);
+      console.log('세션 ID를 로컬 스토리지에 저장했습니다.');
       
       // 사용자 정보 저장
-      this.currentUser = response.data.user;
+      const userData = response.data.user || response.data;
+      this.currentUser = userData;
+      console.log('사용자 정보 저장:', this.currentUser);
+      
+      if (!this.currentUser || !this.currentUser.id) {
+        console.error('유효하지 않은 사용자 정보:', this.currentUser);
+        throw new Error('유효하지 않은 사용자 정보가 반환되었습니다.');
+      }
+      
       localStorage.setItem('user', JSON.stringify(this.currentUser));
       store.dispatch(setUser(this.currentUser));
       
+      // 세션 체크 상태 초기화
+      this.isInitialized = true;
+      this.lastCheckTime = Date.now();
+      this.sessionCheckPromise = null;
+      
+      console.log('로그인 성공:', this.currentUser);
       return this.currentUser;
     } catch (error) {
       console.error('로그인 중 오류 발생:', error);
@@ -216,6 +226,7 @@ class AuthService implements IAuthService {
       // 로컬 상태 초기화
       this.currentUser = null;
       localStorage.removeItem('user');
+      localStorage.removeItem('sessionId');
       store.dispatch(setUser(null));
       
       console.log('로그아웃 성공');
@@ -224,6 +235,7 @@ class AuthService implements IAuthService {
       // 에러가 발생하더라도 로컬 상태는 초기화
       this.currentUser = null;
       localStorage.removeItem('user');
+      localStorage.removeItem('sessionId');
       store.dispatch(setUser(null));
       throw error;
     }
@@ -240,7 +252,7 @@ class AuthService implements IAuthService {
     
     // 로컬 스토리지에서 사용자 정보 복원
     const storedUser = localStorage.getItem('user');
-    if (storedUser) {
+    if (storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
       try {
         this.currentUser = JSON.parse(storedUser);
         // Redux 상태 업데이트
@@ -252,7 +264,18 @@ class AuthService implements IAuthService {
       } catch (error) {
         console.error('로컬 스토리지에서 사용자 정보 복원 중 오류 발생:', error);
         localStorage.removeItem('user');
+        localStorage.removeItem('sessionId');
       }
+    }
+    
+    // 세션 ID가 없으면 바로 null 반환
+    const sessionId = localStorage.getItem('sessionId');
+    if (!sessionId) {
+      console.log('세션 ID가 없습니다.');
+      this.currentUser = null;
+      this.isInitialized = true;
+      this.lastCheckTime = now;
+      return null;
     }
     
     // 로컬 스토리지에도 없을 때만 세션 체크

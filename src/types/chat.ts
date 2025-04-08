@@ -92,7 +92,7 @@ export interface ChatState {
 
 export interface CreateRoomRequest {
   name: string;
-  type: ChatRoomType;
+  type: string;
   participantIds?: number[];
   description?: string;
 } 

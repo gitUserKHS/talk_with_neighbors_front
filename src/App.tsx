@@ -23,39 +23,23 @@ import { RootState } from './store/types';
 // 세션 체크 훅
 const useSessionCheck = () => {
   const user = useSelector((state: RootState) => state.auth.user);
+  const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
   const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const dispatch = useDispatch();
 
   useEffect(() => {
     const checkSession = async () => {
       try {
-        // 로컬 스토리지에서 사용자 정보 복원
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-          try {
-            const user = JSON.parse(storedUser);
-            if (user && user.id) {
-              console.log('로컬 스토리지에서 사용자 정보 복원:', user);
-              dispatch(setUser(user));
-            } else {
-              console.warn('로컬 스토리지의 사용자 정보가 유효하지 않습니다.');
-              localStorage.removeItem('user');
-            }
-          } catch (error) {
-            console.warn('로컬 스토리지의 사용자 정보를 파싱할 수 없습니다.');
-            localStorage.removeItem('user');
-          }
-        }
-
-        // 세션 체크
         const user = await authService.getCurrentUser();
+        console.log('세션 체크 결과:', user);
         if (user) {
-          console.log('세션에서 사용자 정보 복원:', user);
           dispatch(setUser(user));
+        } else {
+          dispatch(setUser(null));
         }
       } catch (error) {
         console.error('세션 체크 중 오류 발생:', error);
+        dispatch(setUser(null));
       } finally {
         setIsLoading(false);
       }
@@ -71,6 +55,7 @@ const useSessionCheck = () => {
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const { isLoading, isAuthenticated } = useSessionCheck();
+  console.log('ProtectedRoute 상태:', { isLoading, isAuthenticated });
 
   if (isLoading) {
     return (
@@ -81,7 +66,7 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
 
   if (!isAuthenticated) {
-    // 현재 경로를 state로 전달하여 로그인 후 돌아올 수 있도록 함
+    console.log('인증되지 않은 사용자, 로그인 페이지로 리다이렉트');
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
@@ -90,16 +75,31 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // 인증 상태 초기화 컴포넌트
 const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isInitialized, setIsInitialized] = useState(false);
-  const { isLoading } = useSessionCheck();
+  const [isLoading, setIsLoading] = useState(true);
+  const dispatch = useDispatch();
 
   useEffect(() => {
-    if (!isLoading) {
-      setIsInitialized(true);
-    }
-  }, [isLoading]);
+    const checkSession = async () => {
+      try {
+        const user = await authService.getCurrentUser();
+        console.log('세션 체크 결과:', user);
+        if (user) {
+          dispatch(setUser(user));
+        } else {
+          dispatch(setUser(null));
+        }
+      } catch (error) {
+        console.error('세션 체크 중 오류 발생:', error);
+        dispatch(setUser(null));
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  if (!isInitialized) {
+    checkSession();
+  }, [dispatch]);
+
+  if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <CircularProgress />

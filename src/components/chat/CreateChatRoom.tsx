@@ -21,7 +21,7 @@ const CreateChatRoom = () => {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [type, setType] = useState<ChatRoomType>(ChatRoomType.GROUP);
+  const [type, setType] = useState<string>('GROUP');
   const [participants, setParticipants] = useState<number[]>([]);
   const [newParticipant, setNewParticipant] = useState('');
 
@@ -76,10 +76,10 @@ const CreateChatRoom = () => {
             <Select
               value={type}
               label="채팅방 유형"
-              onChange={(e) => setType(e.target.value as ChatRoomType)}
+              onChange={(e) => setType(e.target.value)}
             >
-              <MenuItem value={ChatRoomType.ONE_ON_ONE}>1:1 채팅</MenuItem>
-              <MenuItem value={ChatRoomType.GROUP}>그룹 채팅</MenuItem>
+              <MenuItem value="ONE_ON_ONE">1:1 채팅</MenuItem>
+              <MenuItem value="GROUP">그룹 채팅</MenuItem>
             </Select>
           </FormControl>
 
