@@ -6,7 +6,7 @@ import { setUser } from '../store/slices/authSlice';
 console.log('API URL:', process.env.REACT_APP_API_URL);
 console.log('Socket URL:', process.env.REACT_APP_SOCKET_URL);
 
-const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:3000';
+const baseURL = process.env.REACT_APP_API_URL || 'http://localhost:8080';
 
 const api = axios.create({
   baseURL,
@@ -16,7 +16,7 @@ const api = axios.create({
   },
 });
 
-// 요청 인터셉터
+// 요청 인터셉터: 요청 전 로깅
 api.interceptors.request.use(
   (config) => {
     console.log('API 요청:', {
@@ -32,7 +32,7 @@ api.interceptors.request.use(
   }
 );
 
-// 응답 인터셉터
+// 응답 인터셉터: 응답 후 로깅 및 에러 처리
 api.interceptors.response.use(
   (response) => {
     console.log('API 응답:', {

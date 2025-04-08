@@ -1,29 +1,11 @@
-export interface User {
-  id: string;
-  email: string;
-  username: string;
-  profileImage?: string;
-  lastLogin?: string;
-}
+import { ChatState } from '../types/chat';
+import { User } from '../types/user';
 
-export interface ChatRoom {
-  id: number;
-  title: string;
-  createdBy: string;
-  maxMembers: number;
-  currentMembers: number;
-  category: string;
-  description: string;
-  createdAt: string;
-  status: 'ACTIVE' | 'CLOSED';
-}
-
-export interface ChatRoomListResponse {
-  content: ChatRoom[];
-  totalElements: number;
-  totalPages: number;
-  size: number;
-  number: number;
+export interface AuthState {
+  user: User | null;
+  isAuthenticated: boolean;
+  loading: boolean;
+  error: string | null;
 }
 
 export interface Message {
@@ -60,16 +42,6 @@ export interface MatchProfile {
 }
 
 export interface RootState {
-  auth: {
-    user: User | null;
-    isAuthenticated: boolean;
-    loading: boolean;
-    error: string | null;
-  };
-  chat: {
-    rooms: ChatRoom[];
-    currentRoom: ChatRoom | null;
-    loading: boolean;
-    error: string | null;
-  };
+  chat: ChatState;
+  auth: AuthState;
 }

@@ -33,12 +33,19 @@ export interface IAuthService {
   isAuthenticated(): boolean;
 }
 
+// 인증 서비스
+// 로그인, 회원가입, 세션 관리 등을 처리
 class AuthService implements IAuthService {
+  // 현재 로그인한 사용자 정보
   private currentUser: User | null = null;
+  // 세션 체크 Promise 캐시
   private sessionCheckPromise: Promise<User | null> | null = null;
+  // 초기화 상태
   private isInitialized = false;
+  // 마지막 체크 시간
   private lastCheckTime = 0;
-  private readonly CACHE_DURATION = 60000; // 1분 캐시
+  // 캐시 유효 시간 (1분)
+  private readonly CACHE_DURATION = 60000;
 
   constructor() {
     // 로컬 스토리지에서 사용자 정보 복원
@@ -56,6 +63,7 @@ class AuthService implements IAuthService {
     }
   }
 
+  // 세션 유효성 검사
   private async checkSession(): Promise<User | null> {
     // 이미 세션 체크가 진행 중이면 해당 Promise를 반환
     if (this.sessionCheckPromise) {
@@ -107,6 +115,7 @@ class AuthService implements IAuthService {
     return this.sessionCheckPromise;
   }
 
+  // 로그인 처리
   async login(email: string, password: string): Promise<User> {
     try {
       const response = await api.post<LoginResponse>('/auth/login', { email, password });
@@ -127,6 +136,7 @@ class AuthService implements IAuthService {
     }
   }
 
+  // 회원가입 처리
   async register(email: string, password: string, username: string): Promise<User> {
     try {
       const response = await api.post<LoginResponse>('/auth/register', { email, password, username });
@@ -147,6 +157,7 @@ class AuthService implements IAuthService {
     }
   }
 
+  // 로그아웃 처리
   async logout(): Promise<void> {
     try {
       // 로그아웃 요청 전에 현재 사용자 ID를 저장
@@ -171,6 +182,7 @@ class AuthService implements IAuthService {
     }
   }
 
+  // 현재 사용자 정보 조회
   async getCurrentUser(): Promise<User | null> {
     // 캐시가 유효한 경우 (1분 이내에 체크했고 currentUser가 있는 경우)
     const now = Date.now();
