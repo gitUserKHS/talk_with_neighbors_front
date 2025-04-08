@@ -14,8 +14,8 @@ export interface ChatRoom {
   participants: User[];
   lastMessage?: string;
   lastMessageTime?: string;
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface Message {
@@ -28,7 +28,7 @@ export interface Message {
   createdAt: string;
   updatedAt?: string;
   isDeleted: boolean;
-  readByUsers: string[];
+  readByUsers: number[];
 }
 
 export interface ChatMessageDto {
@@ -39,7 +39,10 @@ export interface ChatMessageDto {
   senderName: string;
   isRead: boolean;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
+  type?: MessageType;
+  isDeleted?: boolean;
+  readByUsers?: number[];
 }
 
 export interface MessageDto {
@@ -52,7 +55,7 @@ export interface MessageDto {
   updatedAt?: string;
   type: MessageType;
   isDeleted: boolean;
-  readByUsers: string[];
+  readByUsers: number[];
 }
 
 export interface WebSocketMessage {
@@ -61,6 +64,7 @@ export interface WebSocketMessage {
   content: string;
   senderId: number;
   senderName: string;
+  isRead?: boolean;
 }
 
 export interface WebSocketResponse {
@@ -73,6 +77,8 @@ export interface WebSocketResponse {
   createdAt: string;
   updatedAt?: string;
   isRead: boolean;
+  isDeleted?: boolean;
+  readByUsers?: number[];
 }
 
 export interface ChatState {
@@ -88,4 +94,5 @@ export interface CreateRoomRequest {
   name: string;
   type: ChatRoomType;
   participantIds?: number[];
+  description?: string;
 } 

@@ -12,11 +12,12 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ isOpen, onClos
   const [name, setName] = useState('');
   const [type, setType] = useState<ChatRoomType>(ChatRoomType.GROUP);
   const [participantIds, setParticipantIds] = useState<number[]>([]);
+  const [description, setDescription] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await chatService.createRoom(name, type, participantIds);
+      await chatService.createRoom(name, type, participantIds, description);
       onRoomCreated();
       onClose();
     } catch (error) {
@@ -49,6 +50,13 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ isOpen, onClos
               <option value={ChatRoomType.ONE_ON_ONE}>1:1 채팅</option>
               <option value={ChatRoomType.GROUP}>그룹 채팅</option>
             </select>
+          </div>
+          <div>
+            <label>설명:</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+            />
           </div>
           <div className="modal-buttons">
             <button type="submit">생성</button>

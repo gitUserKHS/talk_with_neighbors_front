@@ -30,49 +30,39 @@ const useSessionCheck = () => {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        // 이미 Redux에 사용자 정보가 있으면 세션 체크
-        if (user) {
-          const currentUser = await authService.getCurrentUser();
-          if (currentUser) {
-            setIsAuthenticated(true);
-          } else {
-            // 세션이 유효하지 않으면 로그아웃 처리
-            dispatch(setUser(null));
-            setIsAuthenticated(false);
-          }
-        } else {
-          // Redux에 사용자 정보가 없으면 로컬 스토리지 확인
-          const storedUser = localStorage.getItem('user');
-          if (storedUser) {
-            try {
-              const parsedUser = JSON.parse(storedUser);
-              dispatch(setUser(parsedUser));
-              setIsAuthenticated(true);
-            } catch (error) {
-              console.error('로컬 스토리지에서 사용자 정보 복원 중 오류 발생:', error);
-              localStorage.removeItem('user');
-              setIsAuthenticated(false);
-            }
-          } else {
-            // 로컬 스토리지에도 없으면 API 요청
-            const currentUser = await authService.getCurrentUser();
-            if (currentUser) {
-              setIsAuthenticated(true);
+        // 로컬 스토리지에서 사용자 정보 복원
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          try {
+            const user = JSON.parse(storedUser);
+            if (user && user.id) {
+              console.log('로컬 스토리지에서 사용자 정보 복원:', user);
+              dispatch(setUser(user));
             } else {
-              setIsAuthenticated(false);
+              console.warn('로컬 스토리지의 사용자 정보가 유효하지 않습니다.');
+              localStorage.removeItem('user');
             }
+          } catch (error) {
+            console.warn('로컬 스토리지의 사용자 정보를 파싱할 수 없습니다.');
+            localStorage.removeItem('user');
           }
+        }
+
+        // 세션 체크
+        const user = await authService.getCurrentUser();
+        if (user) {
+          console.log('세션에서 사용자 정보 복원:', user);
+          dispatch(setUser(user));
         }
       } catch (error) {
         console.error('세션 체크 중 오류 발생:', error);
-        setIsAuthenticated(false);
       } finally {
         setIsLoading(false);
       }
     };
 
     checkSession();
-  }, [dispatch, user]);
+  }, [dispatch]);
 
   return { isLoading, isAuthenticated };
 };
@@ -101,7 +91,6 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 // 인증 상태 초기화 컴포넌트
 const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [isInitialized, setIsInitialized] = useState(false);
-  const dispatch = useDispatch();
   const { isLoading } = useSessionCheck();
 
   useEffect(() => {

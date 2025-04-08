@@ -42,12 +42,13 @@ const convertToChatMessageDto = (message: Message | WebSocketResponse): ChatMess
 };
 
 class ChatService {
-  async createRoom(name: string, type: ChatRoomType, participantIds?: number[]): Promise<ChatRoom> {
+  async createRoom(name: string, type: ChatRoomType, participantIds?: number[], description?: string): Promise<ChatRoom> {
     try {
       const response = await api.post<ChatRoom>('/chat/rooms', {
         name,
         type,
-        participantIds
+        participantIds,
+        description
       }, {
         withCredentials: true
       });
@@ -67,37 +68,64 @@ class ChatService {
     await api.delete(`/chat/rooms/${roomId}`);
   }
 
-  async getRoom(roomId: number): Promise<ChatRoom> {
-    const response = await api.get<ChatRoom>(`/chat/rooms/${roomId}`);
-    return response.data;
+  async getRoom(roomId: string): Promise<ChatRoom> {
+    try {
+      const response = await api.get<ChatRoom>(`/chat/rooms/${roomId}`, {
+        withCredentials: true
+      });
+      return response.data;
+    } catch (error) {
+      console.error('채팅방 정보 로딩 중 오류 발생:', error);
+      throw error;
+    }
   }
 
   async searchRooms(searchDto: ChatRoomSearchDto): Promise<{
     content: ChatRoom[];
     totalPages: number;
   }> {
-    const response = await api.get('/chat/rooms', { 
-      params: {
-        ...searchDto,
-        page: searchDto.page || 0,
-        size: searchDto.size || 10,
-        sort: searchDto.sort || 'createdAt,desc'
-      }
-    });
-    return {
-      content: response.data.content || [],
-      totalPages: response.data.totalPages || 0
-    };
+    try {
+      const response = await api.get('/chat/rooms/search', { 
+        params: {
+          ...searchDto,
+          page: searchDto.page || 0,
+          size: searchDto.size || 10,
+          sort: searchDto.sort || 'createdAt,desc'
+        },
+        withCredentials: true
+      });
+      return {
+        content: response.data.content || [],
+        totalPages: response.data.totalPages || 0
+      };
+    } catch (error) {
+      console.error('채팅방 검색 중 오류 발생:', error);
+      throw error;
+    }
   }
 
   async joinRoom(roomId: string): Promise<void> {
-    await api.post(`/chat/rooms/${roomId}/join`);
-    websocketService.joinRoom(roomId);
+    try {
+      await api.post(`/chat/rooms/${roomId}/join`, {}, {
+        withCredentials: true
+      });
+      websocketService.joinRoom(roomId);
+    } catch (error) {
+      console.error('채팅방 입장 중 오류 발생:', error);
+      throw error;
+    }
   }
 
   async leaveRoom(roomId: string): Promise<void> {
-    await api.post(`/chat/rooms/${roomId}/leave`);
-    websocketService.unsubscribeFromRoom(roomId);
+    try {
+      await api.post(`/chat/rooms/${roomId}/leave`, {}, {
+        withCredentials: true
+      });
+      websocketService.unsubscribeFromRoom(roomId);
+    } catch (error) {
+      console.error('채팅방 퇴장 중 오류 발생:', error);
+      throw error;
+    }
   }
 
   async closeRoom(roomId: number): Promise<void> {
@@ -107,18 +135,34 @@ class ChatService {
   }
 
   async getMyRooms(): Promise<ChatRoom[]> {
-    const response = await api.get<ChatRoom[]>('/chat/rooms/my');
-    return response.data;
+    try {
+      const response = await api.get<ChatRoom[]>('/chat/rooms/my', {
+        withCredentials: true
+      });
+      return response.data;
+    } catch (error) {
+      console.error('내 채팅방 목록 로딩 중 오류 발생:', error);
+      throw error;
+    }
   }
 
   async getRooms(): Promise<ChatRoom[]> {
-    const response = await api.get('/chat/rooms');
-    return response.data;
+    try {
+      const response = await api.get<ChatRoom[]>('/chat/rooms', {
+        withCredentials: true
+      });
+      return response.data;
+    } catch (error) {
+      console.error('채팅방 목록 로딩 중 오류 발생:', error);
+      throw error;
+    }
   }
 
   async getMessages(roomId: string): Promise<ChatMessageDto[]> {
     try {
-      const response = await api.get<Message[]>(`/chat/rooms/${roomId}/messages`);
+      const response = await api.get<Message[]>(`/chat/rooms/${roomId}/messages`, {
+        withCredentials: true
+      });
       return response.data.map(convertToChatMessageDto);
     } catch (error) {
       console.error('메시지 로딩 중 오류 발생:', error);
@@ -127,7 +171,14 @@ class ChatService {
   }
 
   async markMessagesAsRead(roomId: string): Promise<void> {
-    await api.post(`/chat/rooms/${roomId}/messages/read`);
+    try {
+      await api.post(`/chat/rooms/${roomId}/messages/read`, {}, {
+        withCredentials: true
+      });
+    } catch (error) {
+      console.error('메시지 읽음 처리 중 오류 발생:', error);
+      throw error;
+    }
   }
 
   sendMessage(roomId: string, content: string, type: MessageType = 'TEXT'): void {
