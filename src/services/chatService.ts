@@ -59,8 +59,14 @@ class ChatService {
     return response.data;
   }
 
-  async deleteRoom(roomId: number): Promise<void> {
-    await api.delete(`/chat/rooms/${roomId}`);
+  async deleteRoom(roomId: string): Promise<boolean> {
+    try {
+      const response = await api.delete<{success: boolean, message: string}>(`/chat/rooms/${roomId}`);
+      return response.data.success;
+    } catch (error) {
+      console.error('채팅방 삭제 중 오류 발생:', error);
+      throw error;
+    }
   }
 
   async getRoom(roomId: string): Promise<ChatRoom> {
@@ -73,25 +79,31 @@ class ChatService {
     }
   }
 
-  async searchRooms(searchDto: ChatRoomSearchDto): Promise<{
-    content: ChatRoom[];
-    totalPages: number;
-  }> {
+  async searchRooms(keyword?: string, type?: string): Promise<ChatRoom[]> {
     try {
-      const response = await api.get('/chat/rooms/search', { 
+      const response = await api.get<ChatRoom[]>('/chat/rooms/search/all', {
         params: {
-          ...searchDto,
-          page: searchDto.page || 0,
-          size: searchDto.size || 10,
-          sort: searchDto.sort || 'createdAt,desc'
+          keyword,
+          type
         }
       });
-      return {
-        content: response.data.content || [],
-        totalPages: response.data.totalPages || 0
-      };
+      return response.data;
     } catch (error) {
       console.error('채팅방 검색 중 오류 발생:', error);
+      throw error;
+    }
+  }
+
+  async searchGroupRooms(keyword?: string): Promise<ChatRoom[]> {
+    try {
+      const response = await api.get<ChatRoom[]>('/chat/rooms/search', {
+        params: {
+          keyword
+        }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('그룹 채팅방 검색 중 오류 발생:', error);
       throw error;
     }
   }

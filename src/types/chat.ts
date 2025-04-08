@@ -8,10 +8,10 @@ export enum ChatRoomType {
 
 export interface ChatRoom {
   id: string;
-  name: string;
+  roomName: string;
   type: ChatRoomType;
-  creator: number;
-  participants: User[];
+  creatorId: string;
+  participants: string[];
   lastMessage?: string;
   lastMessageTime?: string;
   createdAt?: string;
