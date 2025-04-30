@@ -50,24 +50,37 @@ const Matching: React.FC = () => {
   const handleStartMatching = async () => {
     try {
       setIsMatching(true);
+      // 진단용: 매칭 시작 전 콘솔 출력
+      console.log('매칭 시작 요청 preferences:', preferences);
+      const sessionId = localStorage.getItem('sessionId') || sessionStorage.getItem('sessionId');
+      console.log('매칭 시작 요청 SessionId:', sessionId);
       await matchingService.startMatching(preferences);
-      
-      // 임시 매칭 시뮬레이션
-      setTimeout(() => {
-        setCurrentMatch({
-          id: '1',
-          username: '새로운 친구',
-          age: 25,
-          gender: '여성',
-          interests: ['게임', '음악', '영화'],
-          bio: '안녕하세요! 새로운 친구를 만나고 싶습니다.',
-          profileImage: '/static/images/avatar/2.jpg',
-          distance: 2.5,
-        });
+      // 실제 매칭 후보를 서버에서 받아오는 로직 추가 필요
+      // 예시: 주변 사용자 검색 후 첫 번째 매칭을 currentMatch로 설정
+      const candidates = await matchingService.searchNearbyUsers(
+        preferences.location.latitude,
+        preferences.location.longitude,
+        preferences.maxDistance
+      );
+      if (candidates && candidates.length > 0) {
+        if (!candidates[0].id) {
+          alert('경고: 서버에서 받은 매칭 후보에 id가 없습니다. 백엔드에서 id 필드가 누락되지 않았는지 확인하세요.');
+          setCurrentMatch(null);
+          setShowMatchDialog(false);
+          setIsMatching(false);
+          return;
+        }
+        setCurrentMatch(candidates[0]);
         setShowMatchDialog(true);
-      }, 2000);
+      } else {
+        setCurrentMatch(null);
+        setShowMatchDialog(false);
+        alert('주변에 매칭될 사용자가 없습니다.');
+      }
     } catch (error) {
+      setIsMatching(false);
       console.error('매칭 시작 실패:', error);
+      alert('매칭 시작 중 오류가 발생했습니다.');
     }
   };
 
@@ -75,34 +88,56 @@ const Matching: React.FC = () => {
     try {
       await matchingService.stopMatching();
       setIsMatching(false);
+      setCurrentMatch(null);
+      setShowMatchDialog(false);
     } catch (error) {
       console.error('매칭 중단 실패:', error);
+      alert('매칭 중단 중 오류가 발생했습니다.');
     }
   };
 
+  // 매칭 수락
+  const handleAcceptMatch = async () => {
+    if (!currentMatch || !currentMatch.id) {
+      alert('매칭 정보가 올바르지 않습니다. (id 없음)');
+      return;
+    }
+    try {
+      await matchingService.acceptMatch(currentMatch.id);
+      setShowMatchDialog(false);
+      setCurrentMatch(null);
+      // TODO: 채팅방 이동 등 후속 처리
+    } catch (error) {
+      console.error('매칭 수락 실패:', error);
+    }
+  };
+
+  // 매칭 거절
+  const handleRejectMatch = async () => {
+    if (!currentMatch || !currentMatch.id) {
+      alert('매칭 정보가 올바르지 않습니다. (id 없음)');
+      return;
+    }
+    try {
+      await matchingService.rejectMatch(currentMatch.id);
+      setShowMatchDialog(false);
+      setCurrentMatch(null);
+    } catch (error) {
+      console.error('매칭 거절 실패:', error);
+    }
+  };
+
+  // 대화 시작(수락과 별개로, 실제 채팅방 이동 등)
   const handleStartChat = async () => {
-    if (currentMatch) {
-      try {
-        await matchingService.acceptMatch(currentMatch.id);
-        setShowMatchDialog(false);
-        // TODO: Navigate to chat room
-      } catch (error) {
-        console.error('매칭 수락 실패:', error);
-      }
-    }
+    // TODO: 채팅방 이동 구현
+    setShowMatchDialog(false);
   };
 
+  // 매칭 건너뛰기(거절과 유사)
   const handleSkipMatch = async () => {
-    if (currentMatch) {
-      try {
-        await matchingService.rejectMatch(currentMatch.id);
-        setShowMatchDialog(false);
-        setCurrentMatch(null);
-      } catch (error) {
-        console.error('매칭 거절 실패:', error);
-      }
-    }
+    await handleRejectMatch();
   };
+
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
@@ -115,7 +150,7 @@ const Matching: React.FC = () => {
           <Typography variant="h6" gutterBottom>
             매칭 설정
           </Typography>
-          
+
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <Box>
               <LocationSelector
@@ -127,14 +162,14 @@ const Matching: React.FC = () => {
                 } : undefined}
               />
             </Box>
-            
+
             <Box>
               <Typography gutterBottom>
                 검색 반경: {preferences.maxDistance}km
               </Typography>
               <Slider
                 value={preferences.maxDistance}
-                onChange={(_, value) => 
+                onChange={(_, value) =>
                   setPreferences((prev: MatchingPreferences) => ({ ...prev, maxDistance: value as number }))
                 }
                 min={1}
@@ -150,7 +185,7 @@ const Matching: React.FC = () => {
                   <Select
                     value={preferences.gender}
                     label="성별"
-                    onChange={(e) => 
+                    onChange={(e) =>
                       setPreferences((prev: MatchingPreferences) => ({ ...prev, gender: e.target.value }))
                     }
                   >
@@ -166,7 +201,7 @@ const Matching: React.FC = () => {
                   fullWidth
                   label="관심사 (쉼표로 구분)"
                   value={preferences.interests?.join(', ')}
-                  onChange={(e) => 
+                  onChange={(e) =>
                     setPreferences((prev: MatchingPreferences) => ({
                       ...prev,
                       interests: e.target.value.split(',').map(i => i.trim()),
@@ -215,13 +250,18 @@ const Matching: React.FC = () => {
               <Typography variant="body2" color="text.secondary" gutterBottom>
                 {currentMatch.distance.toFixed(1)}km 떨어짐
               </Typography>
-              <Typography variant="body1" paragraph>
+              <Typography variant="body1" gutterBottom>
                 {currentMatch.bio}
               </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
                 {currentMatch.interests.map((interest: string, index: number) => (
                   <Chip key={index} label={interest} />
                 ))}
+              </Box>
+              {/* 매칭 수락/거절 버튼 */}
+              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center', mt: 2 }}>
+                <Button variant="contained" color="primary" onClick={handleAcceptMatch}>수락</Button>
+                <Button variant="outlined" color="secondary" onClick={handleRejectMatch}>거절</Button>
               </Box>
             </CardContent>
           </Card>
@@ -238,9 +278,9 @@ const Matching: React.FC = () => {
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleSkipMatch}>건너뛰기</Button>
-          <Button onClick={handleStartChat} variant="contained">
-            대화 시작하기
+          <Button onClick={handleRejectMatch}>거절</Button>
+          <Button onClick={handleAcceptMatch} variant="contained">
+            수락
           </Button>
         </DialogActions>
       </Dialog>
@@ -248,4 +288,4 @@ const Matching: React.FC = () => {
   );
 };
 
-export default Matching; 
+export default Matching;
