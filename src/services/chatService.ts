@@ -1,5 +1,5 @@
 import api from './api';
-import { ChatRoom, Message, ChatMessageDto, MessageDto, MessageType, WebSocketResponse, CreateRoomRequest, ChatRoomType } from '../types/chat';
+import { ChatRoom, Message, ChatMessageDto, MessageDto, MessageType, WebSocketResponse, CreateRoomRequest, ChatRoomType, WebSocketMessage } from '../types/chat';
 import { websocketService } from './websocketService';
 import { store } from '../store';
 import { setMessages, markMessagesAsRead } from '../store/slices/chatSlice';
@@ -31,15 +31,17 @@ interface ChatRoomSearchDto {
 
 // Message를 ChatMessageDto로 변환하는 함수
 const convertToChatMessageDto = (message: Message | WebSocketResponse): ChatMessageDto => {
+  const msg = message as any; // Helper to access potential dynamic properties
   return {
     id: message.id,
-    chatRoomId: 'chatRoomId' in message ? message.chatRoomId : message.roomId,
+    chatRoomId: typeof msg.chatRoomId === 'string' ? msg.chatRoomId : msg.roomId,
     content: message.content,
     senderId: typeof message.senderId === 'string' ? parseInt(message.senderId, 10) : message.senderId,
     senderName: message.senderName || '',
     isRead: 'isRead' in message ? message.isRead : false,
     createdAt: message.createdAt,
-    updatedAt: message.updatedAt || message.createdAt
+    updatedAt: message.updatedAt || message.createdAt,
+    type: message.type
   };
 };
 
@@ -186,29 +188,53 @@ class ChatService {
 
   async markMessagesAsRead(roomId: string): Promise<void> {
     try {
-      await api.post(`/chat/rooms/${roomId}/messages/read`, {});
+      await api.post(`/chat/rooms/${roomId}/messages/read`);
     } catch (error) {
       console.error('메시지 읽음 처리 중 오류 발생:', error);
       throw error;
     }
   }
 
-  sendMessage(roomId: string, content: string, type: MessageType = 'TEXT'): void {
-    const user = store.getState().auth.user;
-    
-    if (!user?.id) {
-      console.error('사용자 ID를 찾을 수 없습니다.');
-      return;
-    }
+  /**
+   * 1:1 채팅룸 생성 또는 조회
+   */
+  async oneToOneRoom(otherUserId: number): Promise<ChatRoom> {
+    const response = await api.post<ChatRoom>(`/chat/rooms/one-to-one/${otherUserId}`);
+    return response.data;
+  }
 
-    const message = {
-      type,
-      chatRoomId: roomId,
-      content,
-      senderId: typeof user.id === 'string' ? parseInt(user.id, 10) : user.id,
-      senderName: user.username || '',
-    };
-    websocketService.sendMessage(message);
+  /**
+   * 랜덤 매칭 채팅룸 생성
+   */
+  // async randomMatchRoom(): Promise<ChatRoom> {
+  //   const response = await api.post<ChatRoom>('/chat/rooms/random');
+  //   return response.data;
+  // }
+
+  // 메시지 전송 (API 호출 + 소켓 전송)
+  async sendMessage(message: ChatMessageDto): Promise<void> {
+    try {
+      // 1. API를 통해 메시지를 서버에 저장 (옵션) - 현재는 사용 안 함
+
+      // 2. 소켓을 통해 메시지 전송
+      // ChatMessageDto를 WebSocketMessage로 변환
+      const webSocketMessage: WebSocketMessage = {
+        type: message.type, // ChatMessageDto의 type은 필수임
+        chatRoomId: message.chatRoomId,
+        content: message.content,
+        senderId: message.senderId,
+        senderName: message.senderName,
+        // isRead는 서버에서 처리하거나, 수신 시 결정되므로 전송 시에는 포함하지 않거나 false로 설정
+        // isRead: message.isRead 
+      };
+      websocketService.sendMessage(webSocketMessage);
+
+      // 3. Redux 스토어에 메시지 추가 (Optimistic Update) - 현재는 websocketService에서 수신 시 처리
+
+    } catch (error) {
+      console.error('메시지 전송 중 오류 발생:', error);
+      throw error;
+    }
   }
 }
 

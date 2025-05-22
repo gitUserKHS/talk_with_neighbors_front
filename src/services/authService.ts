@@ -31,6 +31,7 @@ export interface IAuthService {
   getCurrentUser(): Promise<User | null>;
   checkDuplicates(email?: string, username?: string): Promise<DuplicateCheckResponse>;
   isAuthenticated(): boolean;
+  updateProfile(profile: User): Promise<User>;
 }
 
 // 인증 서비스
@@ -294,6 +295,25 @@ class AuthService implements IAuthService {
 
   isAuthenticated(): boolean {
     return !!this.currentUser;
+  }
+
+  // 프로필 업데이트 처리
+  async updateProfile(profile: User): Promise<User> {
+    try {
+      const sessionId = localStorage.getItem('sessionId');
+      const response = await api.put<User>('/auth/profile', profile, {
+        headers: { 'X-Session-Id': sessionId || '' },
+        withCredentials: true
+      });
+      const updatedUser = response.data;
+      this.currentUser = updatedUser;
+      localStorage.setItem('user', JSON.stringify(this.currentUser));
+      store.dispatch(setUser(this.currentUser));
+      return this.currentUser;
+    } catch (error) {
+      console.error('프로필 업데이트 중 오류 발생:', error);
+      throw error;
+    }
   }
 }
 

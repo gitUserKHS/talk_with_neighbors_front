@@ -27,7 +27,7 @@ import {
   Snackbar,
   Alert
 } from '@mui/material';
-import { Add as AddIcon, Search as SearchIcon, Delete as DeleteIcon, ExitToApp as LeaveIcon } from '@mui/icons-material';
+import { Add as AddIcon, Search as SearchIcon, Delete as DeleteIcon, ExitToApp as LeaveIcon, Group as GroupIcon } from '@mui/icons-material';
 import { chatService } from '../../services/chatService';
 import { setRooms } from '../../store/slices/chatSlice';
 import { RootState } from '../../store/types';
@@ -290,6 +290,7 @@ const ChatRoomList: React.FC = () => {
                   backgroundColor: 'action.hover',
                 },
                 borderBottom: '1px solid #eee',
+                py: 1.5,
               }}
               secondaryAction={
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -330,36 +331,56 @@ const ChatRoomList: React.FC = () => {
             >
               <ListItemAvatar>
                 <Badge
-                  color="primary"
+                  color="error"
                   badgeContent={unreadCount[room.id] || 0}
-                  invisible={!unreadCount[room.id]}
+                  invisible={!(unreadCount[room.id] && unreadCount[room.id] > 0)}
                 >
-                  <Avatar>{room.roomName[0]}</Avatar>
+                  <Avatar sx={{ bgcolor: 'primary.light' }}>
+                    {room.roomName && room.roomName.length > 0 ? room.roomName[0].toUpperCase() : '?'}
+                  </Avatar>
                 </Badge>
               </ListItemAvatar>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography variant="subtitle1">
-                  {room.roomName}
-                </Typography>
+              <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      maxWidth: '70%'
-                    }}
-                  >
-                    {room.lastMessage || '새로운 채팅방입니다.'}
-                  </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', overflow: 'hidden', flexGrow: 1, mr: 1 }}>
+                    <Typography 
+                      variant="subtitle1" 
+                      sx={{ 
+                        fontWeight: 500,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                      title={room.roomName}
+                    >
+                      {room.roomName || '채팅방'}
+                    </Typography>
+                    {room.type === 'GROUP' && typeof room.participantCount === 'number' && room.participantCount > 0 && (
+                      <Box sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary', ml: 0.75 }}>
+                        <GroupIcon sx={{ fontSize: '1rem', mr: 0.25 }} />
+                        <Typography variant="caption" sx={{ lineHeight: '1rem' }}>{room.participantCount}</Typography>
+                      </Box>
+                    )}
+                  </Box>
                   {room.lastMessageTime && (
-                    <Typography variant="caption" color="text.secondary">
+                    <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
                       {formatLastMessageTime(room.lastMessageTime)}
                     </Typography>
                   )}
                 </Box>
+                <Typography
+                  variant="body2"
+                  color="text.secondary"
+                  sx={{
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                    mt: 0.25,
+                  }}
+                  title={room.lastMessage}
+                >
+                  {room.lastMessage || (room.type === 'GROUP' ? '그룹 채팅방입니다.' : '1:1 채팅방입니다.')}
+                </Typography>
               </Box>
             </ListItem>
           ))

@@ -12,4 +12,5 @@ export interface User {
   lastOnlineAt?: string;
   latitude?: number;
   longitude?: number;
-} 
+  interests?: string[];
+}

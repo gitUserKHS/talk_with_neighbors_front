@@ -1,7 +1,7 @@
 // WebSocket 서비스
 // 실시간 통신을 위한 Socket.IO 클라이언트 관리
 import { io, Socket } from 'socket.io-client';
-import { Message } from '../store/types';
+import { ChatMessageDto } from '../types/chat';
 import { ChatRoom } from '../types/chat';
 import { User } from '../types/user';
 
@@ -12,7 +12,7 @@ class SocketService {
   // Socket.IO 인스턴스
   private socket: Socket | null = null;
   // 메시지 이벤트 핸들러 목록
-  private messageHandlers: ((message: Message) => void)[] = [];
+  private messageHandlers: ((message: ChatMessageDto) => void)[] = [];
   // 매칭 이벤트 핸들러 목록
   private matchHandlers: ((user: User) => void)[] = [];
   // 채팅방 업데이트 핸들러 목록
@@ -44,7 +44,7 @@ class SocketService {
   private setupEventListeners() {
     if (!this.socket) return;
 
-    this.socket.on('message', (message: Message) => {
+    this.socket.on('message', (message: ChatMessageDto) => {
       this.messageHandlers.forEach(handler => handler(message));
     });
 
@@ -76,8 +76,12 @@ class SocketService {
   }
 
   // 메시지 전송
-  sendMessage(roomId: string, content: string) {
-    this.socket?.emit('message', { roomId, content });
+  sendMessage(message: ChatMessageDto) {
+    if (this.socket && this.socket.connected) {
+      this.socket.emit('message', message);
+    } else {
+      console.error('Socket is not connected. Cannot send message.');
+    }
   }
 
   // 매칭 시작
@@ -91,7 +95,7 @@ class SocketService {
   }
 
   // 메시지 이벤트 핸들러 등록
-  onMessage(handler: (message: Message) => void) {
+  onMessage(handler: (message: ChatMessageDto) => void) {
     this.messageHandlers.push(handler);
     return () => {
       this.messageHandlers = this.messageHandlers.filter(h => h !== handler);

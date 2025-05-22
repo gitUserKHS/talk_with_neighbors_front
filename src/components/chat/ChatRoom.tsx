@@ -1,172 +1,249 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, Container, TextField, Button, Typography, Paper, Avatar, CircularProgress, IconButton } from '@mui/material';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useDispatch, useSelector } from 'react-redux';
-import {
-  Box,
-  Paper,
-  Typography,
-  TextField,
-  IconButton,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar,
-  Avatar,
-  Divider,
-  Button,
-} from '@mui/material';
-import { Send as SendIcon, ArrowBack as ArrowBackIcon } from '@mui/icons-material';
 import { chatService } from '../../services/chatService';
 import { websocketService } from '../../services/websocketService';
-import { setMessages, markMessagesAsRead } from '../../store/slices/chatSlice';
+import { ChatMessageDto, ChatRoom as ChatRoomType, WebSocketResponse } from '../../types/chat';
+import { useSelector, useDispatch } from 'react-redux';
 import { RootState } from '../../store/types';
-import { ChatMessageDto, WebSocketResponse } from '../../types/chat';
+import { setMessages as setStoreMessages, markMessagesAsRead as markMessagesAsReadAction } from '../../store/slices/chatSlice';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import { createSelector } from 'reselect';
+
+// Memoized selectors
+const selectChatMessages = (state: RootState) => state.chat.messages;
+const selectCurrentRoomId = (_state: RootState, roomId: string | undefined) => roomId;
+
+const selectMemoizedMessagesByRoomId = createSelector(
+  [selectChatMessages, selectCurrentRoomId],
+  (messages, roomId) => (roomId ? messages[roomId] || [] : [])
+);
+
+const selectChatUnreadCount = (state: RootState) => state.chat.unreadCount;
+
+const selectMemoizedUnreadCountByRoomId = createSelector(
+  [selectChatUnreadCount, selectCurrentRoomId],
+  (unreadCount, roomId) => (roomId ? unreadCount[roomId] || 0 : 0)
+);
 
 const ChatRoom: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
   const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const [message, setMessage] = useState('');
+  const dispatch = useDispatch<any>();
 
-  const messages = useSelector((state: RootState) => 
-    roomId ? state.chat.messages[roomId] || [] : []
+  const messagesFromStore = useSelector((state: RootState) => 
+    selectMemoizedMessagesByRoomId(state, roomId)
   );
+  const unreadCount = useSelector((state: RootState) => 
+    selectMemoizedUnreadCountByRoomId(state, roomId)
+  );
+  
+  const [newMessage, setNewMessage] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [chatRoomInfo, setChatRoomInfo] = useState<ChatRoomType | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const currentUser = useSelector((state: RootState) => state.auth.user);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
 
   useEffect(() => {
     if (!roomId || !currentUser) return;
 
-    const loadMessages = async () => {
+    websocketService.initialize(); 
+
+    const messageHandlerForLogging = (response: WebSocketResponse) => {
+      console.log('[ChatRoom.tsx] Message received via specific room subscription (logging only):', response);
+    };
+
+    websocketService.subscribeToRoom(roomId, messageHandlerForLogging); 
+
+    const fetchDataAndMaybeJoinRoom = async () => {
       try {
-        const messages = await chatService.getMessages(roomId);
-        dispatch(setMessages({ roomId, messages }));
-        await chatService.markMessagesAsRead(roomId);
-        dispatch(markMessagesAsRead(roomId));
-      } catch (error) {
-        console.error('메시지 로딩 중 오류 발생:', error);
+        setIsLoading(true);
+        setError(null);
+        const [fetchedMessages, roomInfo] = await Promise.all([
+          chatService.getMessages(roomId),
+          chatService.getRoom(roomId)
+        ]);
+        
+        dispatch(setStoreMessages({ roomId, messages: fetchedMessages.sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()) }));
+        setChatRoomInfo(roomInfo);
+
+      } catch (err: any) {
+        console.error('데이터 로드 실패:', err);
+        setError(err.message || '채팅방 정보를 불러오는데 실패했습니다.');
+      } finally {
+        setIsLoading(false);
       }
     };
 
-    loadMessages();
-    
-    // 로그인 상태일 때만 웹소켓 연결
-    if (currentUser) {
-      websocketService.initialize();
-      websocketService.subscribeToRoom(roomId, handleNewMessage);
-    }
+    fetchDataAndMaybeJoinRoom();
 
     return () => {
-      websocketService.unsubscribeFromRoom(roomId);
+      if (roomId) {
+        websocketService.unsubscribeFromRoom(roomId); 
+      }
     };
-  }, [roomId, dispatch, currentUser]);
+  }, [roomId, currentUser, dispatch]);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    const markRoomMessagesAsRead = async () => {
+      if (roomId && chatRoomInfo && unreadCount > 0) {
+        console.log(`[ChatRoom.tsx] Attempting to mark messages as read for room: ${roomId}, unread: ${unreadCount}`);
+        try {
+          await chatService.markMessagesAsRead(roomId); 
+          console.log(`[ChatRoom.tsx] API call successful: Marked messages as read for room: ${roomId}`);
+          
+          dispatch(markMessagesAsReadAction(roomId)); 
+          console.log(`[ChatRoom.tsx] Redux action dispatched: Marked messages as read in store for room: ${roomId}`);
 
-  const handleNewMessage = (message: WebSocketResponse) => {
-    if (message.chatRoomId === roomId) {
-      dispatch(setMessages({ 
-        roomId, 
-        messages: [...messages, {
-          ...message,
-          updatedAt: message.updatedAt || message.createdAt
-        }] 
-      }));
+        } catch (error) {
+          console.error(`[ChatRoom.tsx] Failed to mark messages as read for room ${roomId}:`, error);
+        }
+      } else if (roomId && chatRoomInfo && unreadCount === 0) {
+        console.log(`[ChatRoom.tsx] No unread messages to mark as read for room: ${roomId}`);
+      }
+    };
+
+    if (chatRoomInfo) {
+      markRoomMessagesAsRead();
+    }
+  }, [roomId, chatRoomInfo, unreadCount, dispatch]);
+
+  useEffect(() => {
+    console.log('[ChatRoom.tsx] messagesFromStore updated:', messagesFromStore);
+    scrollToBottom();
+  }, [messagesFromStore]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newMessage.trim() && roomId && currentUser && chatRoomInfo) {
+      setError(null);
+      const tempId = `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      const messageToSend: ChatMessageDto = {
+        id: tempId,
+        chatRoomId: roomId,
+        content: newMessage.trim(),
+        senderId: currentUser.id,
+        senderName: currentUser.username,
+        createdAt: new Date().toISOString(),
+        isRead: true,
+        type: 'TEXT',
+      };
+      try {
+        await chatService.sendMessage(messageToSend);
+        setNewMessage('');
+      } catch (err: any) {
+        console.error("메시지 전송 실패:", err);
+        setError(err.message || "메시지 전송에 실패했습니다. 다시 시도해주세요.");
+      }
     }
   };
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  const formatMessageTime = (timeString: string) => {
+    if (!timeString) return '시간 정보 없음';
+    try {
+      const date = new Date(timeString);
+      if (isNaN(date.getTime())) return '잘못된 날짜';
+      return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return '날짜 오류'; }
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!message.trim() || !roomId) return;
-
-    chatService.sendMessage(roomId, message);
-    setMessage('');
-  };
-
-  const formatMessageTime = (time: string) => {
-    const date = new Date(time);
-    return date.toLocaleTimeString('ko-KR', { 
-      hour: '2-digit', 
-      minute: '2-digit' 
-    });
-  };
+  if (isLoading && !messagesFromStore.length) {
+    return <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}><CircularProgress /></Box>;
+  }
 
   return (
-    <Paper sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ p: 2, display: 'flex', alignItems: 'center', borderBottom: 1, borderColor: 'divider' }}>
-        <IconButton onClick={() => navigate('/chat')} sx={{ mr: 1 }}>
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography variant="h6">채팅방</Typography>
-      </Box>
-      <List sx={{ flexGrow: 1, overflow: 'auto', p: 2 }}>
-        {messages.map((msg: ChatMessageDto) => (
-          <ListItem
-            key={msg.id}
-            sx={{
-              flexDirection: msg.senderId === currentUser?.id ? 'row-reverse' : 'row',
-            }}
-          >
-            <ListItemAvatar>
-              <Avatar>{msg.senderName[0]}</Avatar>
-            </ListItemAvatar>
-            <Box
-              sx={{
-                maxWidth: '70%',
-                ml: msg.senderId === currentUser?.id ? 0 : 2,
-                mr: msg.senderId === currentUser?.id ? 2 : 0,
-              }}
-            >
-              <Paper
+    <Container maxWidth="md" sx={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column', pt: 2, pb: 1 }}>
+      <Paper sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider', display: 'flex', alignItems: 'center' }}>
+          <IconButton onClick={() => navigate('/chat')} sx={{ mr: 1 }}>
+            <ArrowBackIcon />
+          </IconButton>
+          <Typography variant="h6">{chatRoomInfo?.roomName || (roomId ? `채팅방 ${roomId}` : '채팅방')}</Typography>
+          {isLoading && <CircularProgress size={20} sx={{ml: 2}} />}
+          {error && !chatRoomInfo && <Typography color="error" sx={{ml: 2}}> ({error})</Typography>}
+        </Box>
+        
+        <Box sx={{ flexGrow: 1, overflowY: 'auto', p: 2 }}>
+          {(!isLoading && !chatRoomInfo && !error) && (
+            <Typography>채팅방 정보를 불러오는 중이거나, 찾을 수 없습니다.</Typography>
+          )}
+          {messagesFromStore.map((message: ChatMessageDto) => {
+            const isCurrentUserMessage = message.senderId.toString() === currentUser?.id.toString();
+            const senderDisplayName = message.senderName || '익명';
+            const senderAvatar = message.senderName ? message.senderName[0] : 'U';
+
+            return (
+              <Box
+                key={message.id} 
                 sx={{
-                  p: 2,
-                  bgcolor: msg.senderId === currentUser?.id ? 'primary.main' : 'grey.100',
-                  color: msg.senderId === currentUser?.id ? 'white' : 'text.primary',
+                  display: 'flex',
+                  justifyContent: isCurrentUserMessage ? 'flex-end' : 'flex-start',
+                  mb: 2,
                 }}
               >
-                <Typography variant="body1">{msg.content}</Typography>
-                <Typography variant="caption" sx={{ mt: 1, display: 'block' }}>
-                  {formatMessageTime(msg.createdAt)}
-                </Typography>
-              </Paper>
-            </Box>
-          </ListItem>
-        ))}
-        <div ref={messagesEndRef} />
-      </List>
-      <Divider />
-      <Box
-        component="form"
-        onSubmit={handleSendMessage}
-        sx={{
-          p: 2,
-          display: 'flex',
-          gap: 1,
-        }}
-      >
-        <TextField
-          fullWidth
-          value={message}
-          onChange={(e) => setMessage(e.target.value)}
-          placeholder="메시지를 입력하세요"
-          variant="outlined"
-          size="small"
-        />
-        <IconButton
-          type="submit"
-          color="primary"
-          disabled={!message.trim()}
-        >
-          <SendIcon />
-        </IconButton>
-      </Box>
-    </Paper>
+                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, maxWidth: '70%' }}>
+                  {!isCurrentUserMessage && (
+                    <Avatar sx={{ width: 32, height: 32, fontSize: '0.8rem' }} >
+                      {senderAvatar}
+                    </Avatar>
+                  )}
+                  <Paper
+                    sx={{
+                      p: 1.5,
+                      backgroundColor: isCurrentUserMessage ? 'primary.main' : 'grey.200',
+                      color: isCurrentUserMessage ? 'primary.contrastText' : 'text.primary',
+                      borderRadius: isCurrentUserMessage 
+                        ? '20px 20px 5px 20px' 
+                        : '20px 20px 20px 5px',
+                    }}
+                  >
+                    {!isCurrentUserMessage && (
+                       <Typography variant="caption" sx={{ display: 'block', mb: 0.5, color: 'text.secondary' }}>
+                         {senderDisplayName}
+                       </Typography>
+                    )}
+                    <Typography variant="body1" sx={{ wordBreak: 'break-word' }}>{message.content}</Typography>
+                    <Typography variant="caption" sx={{ display: 'block', mt: 0.5, textAlign: 'right' }}>
+                      {formatMessageTime(message.createdAt)}
+                    </Typography>
+                  </Paper>
+                </Box>
+              </Box>
+            );
+          })}
+          <div ref={messagesEndRef} />
+        </Box>
+
+        <Box component="form" onSubmit={handleSendMessage} sx={{ p: 2, borderTop: 1, borderColor: 'divider', backgroundColor: 'background.paper' }}>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <TextField
+              fullWidth
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              placeholder="메시지를 입력하세요..."
+              variant="outlined"
+              size="small"
+              autoComplete="off"
+              disabled={!chatRoomInfo || isLoading}
+            />
+            <Button
+              type="submit"
+              variant="contained"
+              disabled={!newMessage.trim() || !chatRoomInfo || isLoading}
+              sx={{ px: 3 }}
+            >
+              전송
+            </Button>
+          </Box>
+           {error && chatRoomInfo && <Typography color="error" sx={{ mt: 1, fontSize: '0.9rem' }}>{error}</Typography>}
+        </Box>
+      </Paper>
+    </Container>
   );
 };
 

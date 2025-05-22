@@ -16,6 +16,8 @@ export interface ChatRoom {
   lastMessageTime?: string;
   createdAt?: string;
   updatedAt?: string;
+  unreadCount?: number;
+  participantCount?: number;
 }
 
 export interface Message {
@@ -40,7 +42,7 @@ export interface ChatMessageDto {
   isRead: boolean;
   createdAt: string;
   updatedAt?: string;
-  type?: MessageType;
+  type: MessageType;
   isDeleted?: boolean;
   readByUsers?: number[];
 }
@@ -70,7 +72,7 @@ export interface WebSocketMessage {
 export interface WebSocketResponse {
   id: string;
   type: MessageType;
-  chatRoomId: string;
+  roomId: string;
   senderId: number;
   senderName: string;
   content: string;

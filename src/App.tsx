@@ -117,10 +117,10 @@ const AppContent: React.FC = () => {
       <Router>
         <AuthInitializer>
           <Navbar />
-          <Routes>
-            <Route path="/" element={<Home />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
             <Route
               path="/matching"
               element={
@@ -161,7 +161,7 @@ const AppContent: React.FC = () => {
                 </ProtectedRoute>
               }
             />
-          </Routes>
+        </Routes>
         </AuthInitializer>
       </Router>
     </ThemeProvider>
