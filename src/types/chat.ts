@@ -11,7 +11,7 @@ export interface ChatRoom {
   roomName: string;
   type: ChatRoomType;
   creatorId: string;
-  participants: string[];
+  participantIds?: number[];
   lastMessage?: string;
   lastMessageTime?: string;
   createdAt?: string;

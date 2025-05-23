@@ -165,18 +165,26 @@ const ChatRoomList: React.FC = () => {
   // 사용자가 채팅방의 방장인지 확인
   const isRoomCreator = (room: ChatRoom) => {
     if (!currentUser || !room.creatorId) return false;
-    return room.creatorId === currentUser.id.toString();
+    // console.log(`isRoomCreator Check: room.id=${room.id}, room.creatorId=${room.creatorId} (type: ${typeof room.creatorId}), currentUser.id=${currentUser.id} (type: ${typeof currentUser.id})`);
+    return room.creatorId.toString() === currentUser.id.toString(); // creatorId와 currentUser.id 모두 문자열로 비교
   };
 
   // 사용자가 채팅방에 가입되어 있는지 확인
   const isUserMember = (room: ChatRoom) => {
     if (!currentUser) return false;
-    // 방장은 항상 멤버로 간주
-    if (isRoomCreator(room)) return true;
+    if (isRoomCreator(room)) return true; // 방장은 항상 멤버로 간주
     
-    if (!room.participants || !Array.isArray(room.participants)) return false;
+    // participantIds 필드가 존재하고 배열인지 확인
+    if (!room.participantIds || !Array.isArray(room.participantIds)) {
+      // console.log(`isUserMember Check: room.id=${room.id}, participantIds is missing or not an array. participants:`, room.participantIds);
+      return false;
+    }
     
-    return room.participants.includes(currentUser.id.toString());
+    // currentUser.id (문자열)와 room.participantIds (number 배열)의 요소를 비교
+    // room.participantIds의 각 숫자 ID를 문자열로 변환하여 currentUser.id와 비교
+    // console.log(`isUserMember Check: room.id=${room.id}, currentUser.id=${currentUser.id} (type: ${typeof currentUser.id}), participantIds=${JSON.stringify(room.participantIds)} (type of first participantId: ${room.participantIds.length > 0 ? typeof room.participantIds[0] : 'N/A'})`);
+    const currentUserIdStr = currentUser.id.toString();
+    return room.participantIds.map(id => id.toString()).includes(currentUserIdStr);
   };
 
   // 채팅방 가입하기
@@ -283,104 +291,145 @@ const ChatRoomList: React.FC = () => {
             <ListItem
               key={room.id}
               component="div"
-              onClick={() => handleRoomClick(room)}
+              disablePadding
               sx={{
-                cursor: 'pointer',
                 '&:hover': {
                   backgroundColor: 'action.hover',
                 },
                 borderBottom: '1px solid #eee',
-                py: 1.5,
               }}
-              secondaryAction={
-                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            >
+              <Box 
+                sx={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  width: '100%', 
+                  py: 1,
+                  px: 2 
+                }}
+                onClick={() => {
+                  if (isUserMember(room) || isRoomCreator(room)) {
+                    handleRoomClick(room);
+                  }
+                }}
+              >
+                <ListItemAvatar sx={{ mr: 1.5 }}>
+                  <Badge
+                    color="error"
+                    badgeContent={unreadCount[room.id] || 0}
+                    invisible={!(unreadCount[room.id] && unreadCount[room.id] > 0)}
+                  >
+                    <Avatar sx={{ bgcolor: 'primary.light' }}>
+                      {room.roomName && room.roomName.length > 0 ? room.roomName[0].toUpperCase() : '?'}
+                    </Avatar>
+                  </Badge>
+                </ListItemAvatar>
+
+                <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', cursor: 'pointer' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', overflow: 'hidden', flexGrow: 1, mr: 1 }}>
+                      <Typography
+                        variant="subtitle1"
+                        sx={{
+                          fontWeight: 500,
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}
+                        title={room.roomName}
+                      >
+                        {room.roomName || '채팅방'}
+                      </Typography>
+                      {room.type === 'GROUP' && typeof room.participantCount === 'number' && room.participantCount > 0 && (
+                        <Box sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary', ml: 0.75 }}>
+                          <GroupIcon sx={{ fontSize: '1rem', mr: 0.25 }} />
+                          <Typography variant="caption" sx={{ lineHeight: '1rem' }}>{room.participantCount}</Typography>
+                        </Box>
+                      )}
+                    </Box>
+                    {room.lastMessageTime && (
+                      <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap', ml: 1 }}>
+                        {formatLastMessageTime(room.lastMessageTime)}
+                      </Typography>
+                    )}
+                  </Box>
+                  <Typography
+                    variant="body2"
+                    color="text.secondary"
+                    sx={{
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      whiteSpace: 'nowrap',
+                      mt: 0.25,
+                    }}
+                    title={room.lastMessage}
+                  >
+                    {room.lastMessage || (room.type === 'GROUP' ? '그룹 채팅방입니다.' : '1:1 채팅방입니다.')}
+                  </Typography>
+                </Box>
+
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1.5 }}>
                   {isRoomCreator(room) ? (
                     <>
-                      <IconButton 
-                        color="primary" 
-                        onClick={(e) => handleLeaveRoom(room.id, e)}
-                        sx={{ mr: 1 }}
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRoomClick(room);
+                        }}
+                        sx={{ mr: 0.5 }}
                       >
-                        <LeaveIcon />
-                      </IconButton>
-                      <IconButton 
-                        color="error" 
-                        onClick={(e) => handleOpenDeleteDialog(room.id, e)}
+                        입장
+                      </Button>
+                      <IconButton
+                        color="error"
+                        size="small"
+                        onClick={(e) => {
+                            e.stopPropagation(); 
+                            handleOpenDeleteDialog(room.id, e);
+                        }}
                       >
-                        <DeleteIcon />
+                        <DeleteIcon fontSize="small" />
                       </IconButton>
                     </>
                   ) : isUserMember(room) ? (
-                    <IconButton 
-                      color="primary" 
-                      onClick={(e) => handleLeaveRoom(room.id, e)}
-                    >
-                      <LeaveIcon />
-                    </IconButton>
+                    <>
+                      <Button
+                        variant="contained"
+                        size="small"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRoomClick(room);
+                        }}
+                        sx={{ mr: 0.5 }}
+                      >
+                        입장
+                      </Button>
+                      <IconButton
+                        color="secondary"
+                        size="small"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            handleLeaveRoom(room.id, e);
+                        }}
+                      >
+                        <LeaveIcon fontSize="small" />
+                      </IconButton>
+                    </>
                   ) : (
                     <Button
                       variant="outlined"
                       size="small"
-                      onClick={(e) => handleJoinRoom(room.id, e)}
+                      onClick={(e) => {
+                          e.stopPropagation();
+                          handleJoinRoom(room.id, e);
+                      }}
                     >
                       가입하기
                     </Button>
                   )}
                 </Box>
-              }
-            >
-              <ListItemAvatar>
-                <Badge
-                  color="error"
-                  badgeContent={unreadCount[room.id] || 0}
-                  invisible={!(unreadCount[room.id] && unreadCount[room.id] > 0)}
-                >
-                  <Avatar sx={{ bgcolor: 'primary.light' }}>
-                    {room.roomName && room.roomName.length > 0 ? room.roomName[0].toUpperCase() : '?'}
-                  </Avatar>
-                </Badge>
-              </ListItemAvatar>
-              <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', overflow: 'hidden', flexGrow: 1, mr: 1 }}>
-                    <Typography 
-                      variant="subtitle1" 
-                      sx={{ 
-                        fontWeight: 500,
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                      }}
-                      title={room.roomName}
-                    >
-                      {room.roomName || '채팅방'}
-                    </Typography>
-                    {room.type === 'GROUP' && typeof room.participantCount === 'number' && room.participantCount > 0 && (
-                      <Box sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary', ml: 0.75 }}>
-                        <GroupIcon sx={{ fontSize: '1rem', mr: 0.25 }} />
-                        <Typography variant="caption" sx={{ lineHeight: '1rem' }}>{room.participantCount}</Typography>
-                      </Box>
-                    )}
-                  </Box>
-                  {room.lastMessageTime && (
-                    <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
-                      {formatLastMessageTime(room.lastMessageTime)}
-                    </Typography>
-                  )}
-                </Box>
-                <Typography
-                  variant="body2"
-                  color="text.secondary"
-                  sx={{
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                    mt: 0.25,
-                  }}
-                  title={room.lastMessage}
-                >
-                  {room.lastMessage || (room.type === 'GROUP' ? '그룹 채팅방입니다.' : '1:1 채팅방입니다.')}
-                </Typography>
               </Box>
             </ListItem>
           ))

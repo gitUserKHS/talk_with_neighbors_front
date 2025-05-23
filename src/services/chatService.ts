@@ -3,7 +3,7 @@ import { ChatRoom, Message, ChatMessageDto, MessageDto, MessageType, WebSocketRe
 import { websocketService } from './websocketService';
 import { store } from '../store';
 import { setMessages, markMessagesAsRead } from '../store/slices/chatSlice';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 import { setUser } from '../store/slices/authSlice';
 
 export interface CreateChatRoomDto {
@@ -116,7 +116,12 @@ class ChatService {
       websocketService.joinRoom(roomId);
     } catch (error) {
       console.error('채팅방 입장 중 오류 발생:', error);
-      throw error;
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        console.warn(`User may already be in room ${roomId} (received 409). Proceeding with WebSocket connection.`);
+        websocketService.joinRoom(roomId);
+      } else {
+        throw error;
+      }
     }
   }
 
