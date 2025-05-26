@@ -1,8 +1,7 @@
 import api from './api';
-import { ChatRoom, Message, ChatMessageDto, MessageDto, MessageType, WebSocketResponse, CreateRoomRequest, ChatRoomType, WebSocketMessage } from '../types/chat';
+import { ChatRoom, Message, ChatMessageDto, MessageDto, MessageType, WebSocketResponse, CreateRoomRequest, ChatRoomType, WebSocketMessage, Page } from '../types/chat';
 import { websocketService } from './websocketService';
 import { store } from '../store';
-import { setMessages, markMessagesAsRead } from '../store/slices/chatSlice';
 import axios, { AxiosError } from 'axios';
 import { setUser } from '../store/slices/authSlice';
 
@@ -81,15 +80,34 @@ class ChatService {
     }
   }
 
-  async searchRooms(keyword?: string, type?: string): Promise<ChatRoom[]> {
+  async searchRooms(keyword?: string, type?: string, page: number = 0, size: number = 10): Promise<Page<ChatRoom>> {
     try {
-      const response = await api.get<ChatRoom[]>('/chat/rooms/search/all', {
+      const response = await api.get<Page<ChatRoom>>('/chat/rooms/search/all', {
         params: {
           keyword,
-          type
+          type,
+          page,
+          size
         }
       });
-      return response.data;
+      if (response.data && Array.isArray(response.data.content)) {
+        return response.data;
+      } else {
+        console.warn('Search rooms API did not return a Page object:', response.data);
+        return {
+          content: [],
+          pageable: { pageNumber: page, pageSize: size, sort: { empty: true, sorted: false, unsorted: true }, offset: page * size, paged: true, unpaged: false },
+          totalPages: 0,
+          totalElements: 0,
+          last: true,
+          size: 0,
+          number: page,
+          sort: { empty: true, sorted: false, unsorted: true },
+          numberOfElements: 0,
+          first: true,
+          empty: true,
+        };
+      }
     } catch (error) {
       console.error('채팅방 검색 중 오류 발생:', error);
       throw error;
@@ -151,19 +169,32 @@ class ChatService {
     }
   }
 
-  async getRooms(): Promise<ChatRoom[]> {
+  async getRooms(page: number, size: number): Promise<Page<ChatRoom>> {
     try {
-      console.log('채팅방 목록 조회 시작');
-      const response = await api.get<ChatRoom[]>('/chat/rooms', {
-        timeout: 5000 // 5초 타임아웃 설정
+      console.log(`채팅방 목록 조회 시작 - 페이지: ${page}, 크기: ${size}`);
+      const response = await api.get<Page<ChatRoom>>('/chat/rooms', {
+        params: { page, size },
+        timeout: 5000
       });
       
-      if (!response.data) {
-        console.warn('채팅방 목록이 비어있습니다.');
-        return [];
+      if (response.data && Array.isArray(response.data.content) && typeof response.data.totalPages === 'number') {
+        return response.data;
+      } else {
+        console.warn('서버에서 예상치 못한 형태의 채팅방 목록 응답을 받았습니다:', response.data);
+        return {
+          content: [],
+          pageable: { pageNumber: page, pageSize: size, sort: { empty: true, sorted: false, unsorted: true }, offset: page * size, paged: true, unpaged: false },
+          totalPages: 0,
+          totalElements: 0,
+          last: true,
+          size: 0,
+          number: page,
+          sort: { empty: true, sorted: false, unsorted: true },
+          numberOfElements: 0,
+          first: true,
+          empty: true,
+        };
       }
-      
-      return response.data;
     } catch (error) {
       console.error('채팅방 목록 조회 중 오류 발생:', error);
       if (axios.isAxiosError(error)) {
@@ -173,21 +204,52 @@ class ChatService {
         if (error.response?.status === 401) {
           throw new Error('로그인이 필요합니다.');
         }
-        if (error.response?.status === 404) {
-          return [];
-        }
       }
       throw new Error('채팅방 목록을 불러오는데 실패했습니다.');
     }
   }
 
-  async getMessages(roomId: string): Promise<ChatMessageDto[]> {
+  async getMessages(roomId: string, page: number, size: number): Promise<Page<ChatMessageDto>> {
     try {
-      const response = await api.get<Message[]>(`/chat/rooms/${roomId}/messages`);
-      return response.data.map(convertToChatMessageDto);
+      console.log(`메시지 목록 조회 시작 - 방 ID: ${roomId}, 페이지: ${page}, 크기: ${size}`);
+      const response = await api.get<Page<Message>>(`/chat/rooms/${roomId}/messages`, {
+        params: { page, size }, 
+        timeout: 10000 
+      });
+      
+      if (response.data && Array.isArray(response.data.content)) {
+        const messagesDtoPage: Page<ChatMessageDto> = {
+          ...response.data,
+          content: response.data.content.map(convertToChatMessageDto)
+        };
+        return messagesDtoPage;
+      } else {
+        console.warn(`서버에서 예상치 못한 형태의 메시지 목록 응답 (방 ID: ${roomId}):`, response.data);
+        return {
+          content: [],
+          pageable: { pageNumber: page, pageSize: size, sort: { empty: true, sorted: false, unsorted: true }, offset: page * size, paged: true, unpaged: false },
+          totalPages: 0,
+          totalElements: 0,
+          last: true,
+          size: 0,
+          number: page,
+          sort: { empty: true, sorted: false, unsorted: true },
+          numberOfElements: 0,
+          first: true,
+          empty: true,
+        };
+      }
     } catch (error) {
-      console.error('메시지 로딩 중 오류 발생:', error);
-      throw error;
+      console.error(`메시지 목록 조회 중 오류 발생 (방 ID: ${roomId}):`, error);
+      if (axios.isAxiosError(error)) {
+        if (error.code === 'ECONNABORTED') {
+          throw new Error('서버 응답 시간이 초과되었습니다.');
+        }
+        if (error.response?.status === 401) {
+          throw new Error('로그인이 필요합니다.');
+        }
+      }
+      throw new Error('메시지 목록을 불러오는데 실패했습니다.');
     }
   }
 
@@ -218,26 +280,50 @@ class ChatService {
 
   // 메시지 전송 (API 호출 + 소켓 전송)
   async sendMessage(message: ChatMessageDto): Promise<void> {
+    console.log('[chatService.ts] sendMessage called with:', message);
+    if (!message.chatRoomId) {
+      console.error('[chatService.ts] chatRoomId is missing in the message object', message);
+      throw new Error('chatRoomId is required to send a message.');
+    }
     try {
-      // 1. API를 통해 메시지를 서버에 저장 (옵션) - 현재는 사용 안 함
-
-      // 2. 소켓을 통해 메시지 전송
-      // ChatMessageDto를 WebSocketMessage로 변환
-      const webSocketMessage: WebSocketMessage = {
-        type: message.type, // ChatMessageDto의 type은 필수임
-        chatRoomId: message.chatRoomId,
-        content: message.content,
-        senderId: message.senderId,
-        senderName: message.senderName,
-        // isRead는 서버에서 처리하거나, 수신 시 결정되므로 전송 시에는 포함하지 않거나 false로 설정
-        // isRead: message.isRead 
-      };
-      websocketService.sendMessage(webSocketMessage);
-
-      // 3. Redux 스토어에 메시지 추가 (Optimistic Update) - 현재는 websocketService에서 수신 시 처리
-
+      // URL 경로에 message.chatRoomId를 포함하도록 수정
+      // 요청 본문은 message 객체 전체를 보내는 것으로 유지 (백엔드가 @RequestBody ChatMessageDto로 받으므로)
+      console.log(`[chatService.ts] Attempting to POST to /chat/rooms/${message.chatRoomId}/messages`);
+      const response = await api.post<MessageDto>(`/chat/rooms/${message.chatRoomId}/messages`, message);
+      console.log('[chatService.ts] sendMessage POST request successful, response:', response.data);
+      // 필요하다면 response.data (MessageDto)를 반환하도록 함수의 반환 타입도 수정할 수 있습니다.
     } catch (error) {
-      console.error('메시지 전송 중 오류 발생:', error);
+      console.error('[chatService.ts] Error sending message via API:', error);
+      if (axios.isAxiosError(error)) {
+        console.error('[chatService.ts] Axios error details:', {
+          message: error.message,
+          code: error.code,
+          status: error.response?.status,
+          data: error.response?.data,
+        });
+      }
+      throw error;
+    }
+  }
+
+  // 특정 채팅방의 읽지 않은 메시지 수 조회
+  async getUnreadCount(roomId: string): Promise<number> {
+    try {
+      const response = await api.get<{ unreadCount: number }>(`/chat/rooms/${roomId}/unread-count`);
+      return response.data.unreadCount;
+    } catch (error) {
+      console.error('읽지 않은 메시지 수 조회 중 오류 발생:', error);
+      throw error;
+    }
+  }
+
+  // 모든 채팅방의 읽지 않은 메시지 수 조회
+  async getAllUnreadCounts(): Promise<{ [roomId: string]: number }> {
+    try {
+      const response = await api.get<{ unreadCounts: { [roomId: string]: number } }>('/chat/unread-counts');
+      return response.data.unreadCounts;
+    } catch (error) {
+      console.error('모든 채팅방 읽지 않은 메시지 수 조회 중 오류 발생:', error);
       throw error;
     }
   }

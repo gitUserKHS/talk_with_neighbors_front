@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import SearchIcon from '@mui/icons-material/Search';
+import { Location } from '../store/types';
 
 declare global {
   interface Window {
@@ -20,15 +21,10 @@ declare global {
   }
 }
 
-interface Location {
-  latitude: number;
-  longitude: number;
-  address: string;
-}
-
 interface LocationSelectorProps {
   onLocationSelect: (location: Location) => void;
   initialLocation?: Location;
+  disabled?: boolean;
 }
 
 const KAKAO_MAP_API_KEY = process.env.REACT_APP_KAKAO_MAP_API_KEY;
@@ -36,6 +32,7 @@ const KAKAO_MAP_API_KEY = process.env.REACT_APP_KAKAO_MAP_API_KEY;
 const LocationSelector: React.FC<LocationSelectorProps> = ({
   onLocationSelect,
   initialLocation,
+  disabled,
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<any>(null);
@@ -218,7 +215,10 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
 
   const handleConfirm = () => {
     if (selectedLocation) {
-      onLocationSelect(selectedLocation);
+      onLocationSelect({ 
+        ...selectedLocation,
+        address: selectedLocation.address || '주소 정보 없음'
+      });
       setIsDialogOpen(false);
     }
   };
@@ -229,8 +229,9 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
         variant="outlined"
         onClick={() => setIsDialogOpen(true)}
         startIcon={<MyLocationIcon />}
+        disabled={disabled}
       >
-        {selectedLocation ? selectedLocation.address : '위치 선택'}
+        {initialLocation?.address || selectedLocation?.address || '위치 선택'}
       </Button>
 
       <Dialog

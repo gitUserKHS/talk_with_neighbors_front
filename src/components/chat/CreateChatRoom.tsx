@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Container,
   TextField,
@@ -11,7 +11,8 @@ import {
   MenuItem,
   Alert,
   Snackbar,
-  Chip
+  Chip,
+  FormHelperText
 } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { chatService } from '../../services/chatService';
@@ -21,30 +22,55 @@ const CreateChatRoom = () => {
   const navigate = useNavigate();
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState('');
-  const [type, setType] = useState<string>('GROUP');
-  const [participants, setParticipants] = useState<number[]>([]);
-  const [newParticipant, setNewParticipant] = useState('');
+  const [type, setType] = useState<string>(ChatRoomType.GROUP);
+  const [participantNicknames, setParticipantNicknames] = useState<string[]>([]);
+  const [newParticipantNickname, setNewParticipantNickname] = useState('');
+  const [isRoomNameDisabled, setIsRoomNameDisabled] = useState(false);
+
+  useEffect(() => {
+    if (type === ChatRoomType.ONE_ON_ONE) {
+      setIsRoomNameDisabled(true);
+      // setName(''); // 1:1 채팅 시 방 이름은 서버에서 자동 생성, 이전 입력값 유지를 위해 주석 처리
+    } else {
+      setIsRoomNameDisabled(false);
+    }
+  }, [type]);
 
   const handleAddParticipant = () => {
-    const participantId = parseInt(newParticipant);
-    if (!isNaN(participantId) && !participants.includes(participantId)) {
-      setParticipants([...participants, participantId]);
-      setNewParticipant('');
+    const nickname = newParticipantNickname.trim();
+    if (nickname && !participantNicknames.includes(nickname)) {
+      if (type === ChatRoomType.ONE_ON_ONE && participantNicknames.length >= 1) {
+        setError('1:1 채팅에는 한 명의 참여자만 추가할 수 있습니다.');
+        return;
+      }
+      setParticipantNicknames([...participantNicknames, nickname]);
+      setNewParticipantNickname('');
+      setError(null);
     }
   };
 
-  const handleRemoveParticipant = (participantId: number) => {
-    setParticipants(participants.filter(id => id !== participantId));
+  const handleRemoveParticipant = (nicknameToRemove: string) => {
+    setParticipantNicknames(participantNicknames.filter(nickname => nickname !== nicknameToRemove));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    setError(null);
+
+    if (type === ChatRoomType.GROUP && !name.trim()) {
+      setError('그룹 채팅방의 이름을 입력해주세요.');
+      return;
+    }
+
+    if (type === ChatRoomType.ONE_ON_ONE && participantNicknames.length !== 1) {
+      setError('1:1 채팅방을 만들려면 정확히 한 명의 참여자 닉네임을 추가해야 합니다.');
+      return;
+    }
 
     const request: CreateRoomRequest = {
-      name: name.trim(),
+      name: type === ChatRoomType.ONE_ON_ONE ? '' : name.trim(),
       type,
-      participantIds: participants.length > 0 ? participants : undefined
+      participantNicknames: participantNicknames.length > 0 ? participantNicknames : undefined,
     };
 
     try {
@@ -64,11 +90,13 @@ const CreateChatRoom = () => {
         <form onSubmit={handleSubmit}>
           <TextField
             margin="normal"
-            required
+            required={type === ChatRoomType.GROUP}
             fullWidth
             label="방 제목"
             value={name}
             onChange={(e) => setName(e.target.value)}
+            disabled={isRoomNameDisabled}
+            helperText={isRoomNameDisabled ? '1:1 채팅방의 이름은 참여자 닉네임으로 자동 생성됩니다.' : ''}
           />
           
           <FormControl fullWidth margin="normal">
@@ -76,40 +104,55 @@ const CreateChatRoom = () => {
             <Select
               value={type}
               label="채팅방 유형"
-              onChange={(e) => setType(e.target.value)}
+              onChange={(e) => {
+                const newType = e.target.value;
+                setType(newType);
+                if (newType === ChatRoomType.ONE_ON_ONE && participantNicknames.length > 1) {
+                  setParticipantNicknames(participantNicknames.slice(0, 1));
+                  setError('1:1 채팅으로 변경되어 참여자 목록이 조정되었습니다. 한 명의 참여자만 유지됩니다.');
+                }
+              }}
             >
-              <MenuItem value="ONE_ON_ONE">1:1 채팅</MenuItem>
-              <MenuItem value="GROUP">그룹 채팅</MenuItem>
+              <MenuItem value={ChatRoomType.ONE_ON_ONE}>1:1 채팅</MenuItem>
+              <MenuItem value={ChatRoomType.GROUP}>그룹 채팅</MenuItem>
             </Select>
           </FormControl>
 
           <Box sx={{ mt: 2 }}>
             <Typography variant="subtitle1" gutterBottom>
-              참여자 추가 (선택사항)
+              {type === ChatRoomType.ONE_ON_ONE ? '상대방 닉네임 추가' : '참여자 추가 (선택사항)'}
             </Typography>
-            <Box sx={{ display: 'flex', gap: 1, mb: 2 }}>
-              <TextField
-                fullWidth
-                label="참여자 ID"
-                type="number"
-                value={newParticipant}
-                onChange={(e) => setNewParticipant(e.target.value)}
-                helperText="참여자를 추가하지 않으면 누구나 참여할 수 있는 채팅방이 됩니다"
-              />
-              <Button
-                variant="contained"
-                onClick={handleAddParticipant}
-                disabled={!newParticipant}
-              >
-                추가
-              </Button>
+            <Box sx={{ display: 'flex', gap: 1, mb: type === ChatRoomType.ONE_ON_ONE && participantNicknames.length >=1 ? 0 : 2 }}>
+              {!(type === ChatRoomType.ONE_ON_ONE && participantNicknames.length >= 1) && (
+                <>
+                  <TextField
+                    fullWidth
+                    label="참여자 닉네임"
+                    value={newParticipantNickname}
+                    onChange={(e) => setNewParticipantNickname(e.target.value)}
+                  />
+                  <Button
+                    variant="contained"
+                    onClick={handleAddParticipant}
+                    disabled={!newParticipantNickname.trim() || (type === ChatRoomType.ONE_ON_ONE && participantNicknames.length >=1 )}
+                  >
+                    추가
+                  </Button>
+                </>
+              )}
             </Box>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-              {participants.map((participant) => (
+            {type === ChatRoomType.ONE_ON_ONE && participantNicknames.length === 0 && (
+                 <FormHelperText sx={{mb:2}}>1:1 채팅을 시작할 상대방의 닉네임(사용자명)을 입력하세요.</FormHelperText>
+            )}
+            {type === ChatRoomType.GROUP && (
+                <FormHelperText sx={{mb:2}}>그룹 채팅에 참여할 사용자들의 닉네임(사용자명)을 입력하세요. (선택)</FormHelperText>
+            )}
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt:1 }}>
+              {participantNicknames.map((nickname) => (
                 <Chip
-                  key={participant}
-                  label={participant}
-                  onDelete={() => handleRemoveParticipant(participant)}
+                  key={nickname}
+                  label={nickname}
+                  onDelete={() => handleRemoveParticipant(nickname)}
                 />
               ))}
             </Box>
@@ -120,7 +163,6 @@ const CreateChatRoom = () => {
             fullWidth
             variant="contained"
             sx={{ mt: 3, mb: 2 }}
-            disabled={!name.trim()}
           >
             채팅방 만들기
           </Button>
@@ -131,8 +173,9 @@ const CreateChatRoom = () => {
         open={!!error}
         autoHideDuration={6000}
         onClose={() => setError(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity="error" onClose={() => setError(null)}>
+        <Alert severity="error" onClose={() => setError(null)} sx={{ width: '100%' }}>
           {error}
         </Alert>
       </Snackbar>

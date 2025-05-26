@@ -22,8 +22,9 @@ export const matchingService = {
     await api.post('/matching/preferences', preferences);
   },
 
-  async startMatching(preferences: MatchingPreferences): Promise<void> {
-    await api.post('/matching/start', preferences);
+  async startMatching(preferences: MatchingPreferences): Promise<MatchProfile[]> {
+    const response = await api.post<MatchProfile[]>('/matching/start', preferences);
+    return response.data;
   },
 
   async stopMatching(): Promise<void> {

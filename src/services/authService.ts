@@ -1,8 +1,8 @@
 import axios from 'axios';
 import api from './api';
 import { User } from '../types/user';
-import { store } from '../store';
 import { setUser } from '../store/slices/authSlice';
+import { websocketService } from './websocketService';
 
 interface LoginRequest {
   email: string;
@@ -25,13 +25,14 @@ interface DuplicateCheckResponse {
 }
 
 export interface IAuthService {
-  login(email: string, password: string): Promise<User>;
-  register(email: string, password: string, username: string): Promise<User>;
+  login(email: string, password: string): Promise<User | null>;
+  register(email: string, password: string, username: string): Promise<User | null>;
   logout(): Promise<void>;
   getCurrentUser(): Promise<User | null>;
   checkDuplicates(email?: string, username?: string): Promise<DuplicateCheckResponse>;
   isAuthenticated(): boolean;
-  updateProfile(profile: User): Promise<User>;
+  updateProfile(profileData: Partial<User>): Promise<User | null>;
+  getInitialUser(): User | null;
 }
 
 // 인증 서비스
@@ -54,19 +55,32 @@ class AuthService implements IAuthService {
     if (storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
       try {
         this.currentUser = JSON.parse(storedUser);
-        store.dispatch(setUser(this.currentUser));
         this.isInitialized = true;
         this.lastCheckTime = Date.now();
+        // 생성자 시점에서 websocketService에 userId를 설정할 수 있지만,
+        // websocketService.initialize() 호출 시점에 userId를 전달하는 것이 더 적절할 수 있음.
+        // 또는 여기서 websocketService.setCurrentUserId(this.currentUser?.id);
       } catch (error) {
         console.error('로컬 스토리지에서 사용자 정보 복원 중 오류 발생:', error);
         localStorage.removeItem('user');
         localStorage.removeItem('sessionId');
+        this.currentUser = null;
       }
     } else {
       // 유효하지 않은 값이 저장되어 있는 경우 제거
       localStorage.removeItem('user');
       localStorage.removeItem('sessionId');
+      this.currentUser = null;
     }
+  }
+
+  public getInitialUser(): User | null {
+    // 초기 사용자 정보 로드 시 websocketService에도 알려줌 (최초 1회)
+    // 이 시점에는 websocketService 인스턴스가 생성되어 있어야 함.
+    // if (this.currentUser) {
+    //   websocketService.setCurrentUserId(this.currentUser.id);
+    // } // App.tsx AuthInitializer에서 처리하는 것이 순서상 더 안전할 수 있음
+    return this.currentUser;
   }
 
   // 세션 유효성 검사
@@ -84,6 +98,10 @@ class AuthService implements IAuthService {
         const sessionId = localStorage.getItem('sessionId');
         if (!sessionId) {
           console.log('세션 ID가 없습니다.');
+          this.currentUser = null;
+          localStorage.removeItem('user');
+          localStorage.removeItem('sessionId');
+          websocketService.setCurrentUserId(undefined);
           return null;
         }
         
@@ -101,16 +119,14 @@ class AuthService implements IAuthService {
           this.currentUser = userData;
           // 로컬 스토리지에 사용자 정보 저장
           localStorage.setItem('user', JSON.stringify(this.currentUser));
-          // Redux 상태 업데이트
-          store.dispatch(setUser(this.currentUser));
+          websocketService.setCurrentUserId(this.currentUser.id);
           console.log('세션 유효함:', this.currentUser);
         } else {
           console.log('세션 응답에 사용자 정보 없음');
           this.currentUser = null;
           localStorage.removeItem('user');
           localStorage.removeItem('sessionId');
-          // Redux 상태 업데이트
-          store.dispatch(setUser(null));
+          websocketService.setCurrentUserId(undefined);
         }
       } catch (error) {
         console.error('세션 체크 중 오류 발생:', error);
@@ -124,8 +140,7 @@ class AuthService implements IAuthService {
         this.currentUser = null;
         localStorage.removeItem('user');
         localStorage.removeItem('sessionId');
-        // Redux 상태 업데이트
-        store.dispatch(setUser(null));
+        websocketService.setCurrentUserId(undefined);
       } finally {
         this.sessionCheckPromise = null;
         this.isInitialized = true;
@@ -139,7 +154,7 @@ class AuthService implements IAuthService {
   }
 
   // 로그인 처리
-  async login(email: string, password: string): Promise<User> {
+  async login(email: string, password: string): Promise<User | null> {
     try {
       console.log('로그인 시도:', { email });
       
@@ -175,11 +190,13 @@ class AuthService implements IAuthService {
       
       if (!this.currentUser || !this.currentUser.id) {
         console.error('유효하지 않은 사용자 정보:', this.currentUser);
+        this.currentUser = null;
+        websocketService.setCurrentUserId(undefined);
         throw new Error('유효하지 않은 사용자 정보가 반환되었습니다.');
       }
       
       localStorage.setItem('user', JSON.stringify(this.currentUser));
-      store.dispatch(setUser(this.currentUser));
+      websocketService.setCurrentUserId(this.currentUser.id);
       
       // 세션 체크 상태 초기화
       this.isInitialized = true;
@@ -190,12 +207,16 @@ class AuthService implements IAuthService {
       return this.currentUser;
     } catch (error) {
       console.error('로그인 중 오류 발생:', error);
+      this.currentUser = null;
+      localStorage.removeItem('user');
+      localStorage.removeItem('sessionId');
+      websocketService.setCurrentUserId(undefined);
       throw error;
     }
   }
 
   // 회원가입 처리
-  async register(email: string, password: string, username: string): Promise<User> {
+  async register(email: string, password: string, username: string): Promise<User | null> {
     try {
       const response = await api.post<LoginResponse>('/auth/register', { email, password, username });
       
@@ -205,83 +226,55 @@ class AuthService implements IAuthService {
       
       // 로컬 스토리지에 사용자 정보 저장
       localStorage.setItem('user', JSON.stringify(this.currentUser));
-      // Redux 상태 업데이트
-      store.dispatch(setUser(this.currentUser));
+      
+      if (!this.currentUser || !this.currentUser.id) {
+        this.currentUser = null;
+        websocketService.setCurrentUserId(undefined);
+        throw new Error('회원가입 후 유효하지 않은 사용자 정보가 반환되었습니다.');
+      }
+      
+      localStorage.setItem('user', JSON.stringify(this.currentUser));
+      websocketService.setCurrentUserId(this.currentUser.id);
       
       return this.currentUser;
     } catch (error) {
       console.error('회원가입 중 오류 발생:', error);
+      this.currentUser = null;
+      localStorage.removeItem('user');
+      localStorage.removeItem('sessionId');
+      websocketService.setCurrentUserId(undefined);
       throw error;
     }
   }
 
   // 로그아웃 처리
   async logout(): Promise<void> {
+    const currentUserIdForLogout = this.currentUser?.id;
     try {
-      // 로그아웃 요청 전에 현재 사용자 ID를 저장
-      const userId = this.currentUser?.id;
-      
-      // 로그아웃 요청
-      await api.post('/auth/logout', { userId });
-      
-      // 로컬 상태 초기화
-      this.currentUser = null;
-      localStorage.removeItem('user');
-      localStorage.removeItem('sessionId');
-      store.dispatch(setUser(null));
-      
-      console.log('로그아웃 성공');
+      await api.post('/auth/logout', { userId: currentUserIdForLogout });
     } catch (error) {
-      console.error('로그아웃 중 오류 발생:', error);
-      // 에러가 발생하더라도 로컬 상태는 초기화
+      console.error('API 로그아웃 호출 중 오류 발생:', error);
+    } finally {
       this.currentUser = null;
       localStorage.removeItem('user');
       localStorage.removeItem('sessionId');
-      store.dispatch(setUser(null));
-      throw error;
+      websocketService.setCurrentUserId(undefined);
+      websocketService.disconnect();
+      console.log('로컬 로그아웃 처리 완료 및 웹소켓 연결 해제');
     }
   }
 
   // 현재 사용자 정보 조회
   async getCurrentUser(): Promise<User | null> {
-    // 캐시가 유효한 경우 (1분 이내에 체크했고 currentUser가 있는 경우)
     const now = Date.now();
     if (this.isInitialized && this.currentUser && (now - this.lastCheckTime < this.CACHE_DURATION)) {
-      console.log('캐시된 사용자 정보 반환:', this.currentUser);
       return this.currentUser;
     }
-    
-    // 로컬 스토리지에서 사용자 정보 복원
-    const storedUser = localStorage.getItem('user');
-    if (storedUser && storedUser !== 'undefined' && storedUser !== 'null') {
-      try {
-        this.currentUser = JSON.parse(storedUser);
-        // Redux 상태 업데이트
-        store.dispatch(setUser(this.currentUser));
-        this.isInitialized = true;
-        this.lastCheckTime = now;
-        console.log('로컬 스토리지에서 사용자 정보 복원:', this.currentUser);
-        return this.currentUser;
-      } catch (error) {
-        console.error('로컬 스토리지에서 사용자 정보 복원 중 오류 발생:', error);
-        localStorage.removeItem('user');
-        localStorage.removeItem('sessionId');
-      }
+    if (!this.isInitialized || (now - this.lastCheckTime >= this.CACHE_DURATION)) {
+        console.log('캐시 만료 또는 미초기화, 세션 체크 실행');
+        return this.checkSession();
     }
-    
-    // 세션 ID가 없으면 바로 null 반환
-    const sessionId = localStorage.getItem('sessionId');
-    if (!sessionId) {
-      console.log('세션 ID가 없습니다.');
-      this.currentUser = null;
-      this.isInitialized = true;
-      this.lastCheckTime = now;
-      return null;
-    }
-    
-    // 로컬 스토리지에도 없을 때만 세션 체크
-    console.log('세션 체크 필요');
-    return this.checkSession();
+    return this.currentUser;
   }
 
   async checkDuplicates(email?: string, username?: string): Promise<DuplicateCheckResponse> {
@@ -298,17 +291,20 @@ class AuthService implements IAuthService {
   }
 
   // 프로필 업데이트 처리
-  async updateProfile(profile: User): Promise<User> {
+  async updateProfile(profileData: Partial<User>): Promise<User | null> {
+    if (!this.currentUser) {
+      throw new Error('프로필 업데이트를 위해서는 로그인이 필요합니다.');
+    }
     try {
       const sessionId = localStorage.getItem('sessionId');
-      const response = await api.put<User>('/auth/profile', profile, {
+      const response = await api.put<User>('/auth/profile', profileData, {
         headers: { 'X-Session-Id': sessionId || '' },
         withCredentials: true
       });
       const updatedUser = response.data;
       this.currentUser = updatedUser;
       localStorage.setItem('user', JSON.stringify(this.currentUser));
-      store.dispatch(setUser(this.currentUser));
+      websocketService.setCurrentUserId(this.currentUser.id);
       return this.currentUser;
     } catch (error) {
       console.error('프로필 업데이트 중 오류 발생:', error);

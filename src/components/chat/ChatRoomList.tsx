@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   List,
   ListItem,
+  ListItemButton,
   ListItemText,
   ListItemAvatar,
   Avatar,
@@ -25,107 +26,302 @@ import {
   DialogActions,
   Button,
   Snackbar,
-  Alert
+  Alert,
+  CircularProgress,
+  Tooltip,
+  Chip
 } from '@mui/material';
-import { Add as AddIcon, Search as SearchIcon, Delete as DeleteIcon, ExitToApp as LeaveIcon, Group as GroupIcon } from '@mui/icons-material';
+import { Add as AddIcon, Search as SearchIcon, Delete as DeleteIcon, ExitToApp as LeaveIcon, Group as GroupIcon, Clear as ClearIcon, PersonAdd as PersonAddIcon } from '@mui/icons-material';
 import { chatService } from '../../services/chatService';
-import { setRooms } from '../../store/slices/chatSlice';
-import { RootState } from '../../store/types';
-import { ChatRoom } from '../../types/chat';
+import { websocketService } from '../../services/websocketService';
+import { 
+  fetchChatRooms, 
+  clearChatRooms, 
+  fetchSearchedChatRooms, 
+  clearSearchedRooms, 
+  setSearchCriteria,
+  ChatState,
+  clearRoomsError,
+  clearSearchError,
+  fetchAllUnreadCounts,
+  moveChatRoomToTop,
+  updateRoomInfo
+} from '../../store/slices/chatSlice';
+import { 
+  addOfflineNotification, 
+  setConnectionStatus,
+  handleNotificationSummary 
+} from '../../store/slices/notificationSlice';
+import { RootState, AppDispatch } from '../../store/types';
+import { ChatRoom, ChatRoomType } from '../../types/chat';
 import { SelectChangeEvent } from '@mui/material/Select';
+import { store } from '../../store';
+import { authService } from '../../services/authService';
+
+const PAGE_SIZE = 20;
+
+// 임시 getAvatarColor 함수 정의
+const getAvatarColor = (roomId: string) => {
+  // 여기에 실제 색상 결정 로직이 필요하다면 추가합니다.
+  // 예시: roomId 해시 값 기반으로 색상 배열에서 선택 등
+  const colors = ['#FFC107', '#FF5722', '#4CAF50', '#2196F3', '#9C27B0'];
+  let hash = 0;
+  for (let i = 0; i < roomId.length; i++) {
+    hash = roomId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const index = Math.abs(hash % colors.length);
+  return colors[index] || '#bdbdbd';
+};
 
 const ChatRoomList: React.FC = () => {
-  console.log('ChatRoomList 컴포넌트 렌더링 시작');
-  
   const navigate = useNavigate();
-  const dispatch = useDispatch();
-  const rooms = useSelector((state: RootState) => state.chat.rooms);
-  const unreadCount = useSelector((state: RootState) => state.chat.unreadCount);
+  const dispatch = useDispatch<AppDispatch>();
+  
+  const chatState = useSelector((state: RootState) => state.chat) as ChatState;
+
+  const { 
+    rooms, 
+    unreadCount, 
+    currentPage,
+    totalPages,
+    hasMoreRooms, 
+    loadingRooms, 
+    initialLoading,
+    roomsError
+  } = chatState;
+  const {
+    searchedRooms,
+    searchKeyword: searchKeywordFromStore,
+    searchType: searchTypeFromStore,
+    searchedCurrentPage,
+    searchedTotalPages,
+    hasMoreSearchedRooms,
+    loadingSearchedRooms,
+    initialLoadingSearch,
+    searchError
+  } = chatState;
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
   const currentUser = useSelector((state: RootState) => state.auth.user);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [searchKeyword, setSearchKeyword] = useState('');
-  const [roomType, setRoomType] = useState<string>('');
-  const [filteredRooms, setFilteredRooms] = useState<ChatRoom[]>([]);
+  
+  const [localSearchKeyword, setLocalSearchKeyword] = useState('');
+  const [localRoomType, setLocalRoomType] = useState<string>('');
+
+  const [componentError, setComponentError] = useState<string | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  console.log('ChatRoomList 현재 상태:', { isLoading, error, roomsCount: rooms.length });
+  const isSearchMode = (typeof searchKeywordFromStore === 'string' && searchKeywordFromStore.length > 0) || 
+                     (typeof searchTypeFromStore === 'string' && searchTypeFromStore.length > 0);
 
-  const fetchRooms = async () => {
-    console.log('fetchRooms 함수 호출됨');
-    try {
-      setIsLoading(true);
-      setError(null);
-      console.log('채팅방 목록 조회 시작 - chatService.getRooms() 호출 전');
-      const fetchedRooms = await chatService.getRooms();
-      console.log('채팅방 목록 조회 성공:', fetchedRooms);
-      dispatch(setRooms(fetchedRooms));
-      setFilteredRooms(fetchedRooms);
-    } catch (error) {
-      console.error('채팅방 목록 조회 중 오류 발생:', error);
-      const errorMessage = error instanceof Error ? error.message : '채팅방 목록을 불러오는데 실패했습니다.';
-      setError(errorMessage);
-      if (errorMessage === '로그인이 필요합니다.') {
-        navigate('/login');
+  const currentRoomsToDisplay = isSearchMode ? searchedRooms : rooms;
+  const isLoadingCurrentList = isSearchMode ? loadingSearchedRooms : loadingRooms;
+  const hasMoreCurrentList = isSearchMode ? hasMoreSearchedRooms : hasMoreRooms;
+  const initialLoadingCurrentList = isSearchMode ? initialLoadingSearch : initialLoading;
+  const displayError = isSearchMode ? searchError : roomsError;
+  const combinedComponentError = componentError;
+
+  useEffect(() => {
+    console.log('[ChatRoomList] Unread counts updated:', unreadCount);
+  }, [unreadCount]);
+
+  const observer = useRef<IntersectionObserver | null>(null);
+  const lastRoomElementRef = useCallback((node: HTMLDivElement | null) => {
+    const isLoading = isSearchMode ? loadingSearchedRooms : loadingRooms;
+    if (isLoading) return;
+
+    if (observer.current) observer.current.disconnect();
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) {
+        if (isSearchMode && hasMoreSearchedRooms && !loadingSearchedRooms) {
+          dispatch(fetchSearchedChatRooms({ 
+            keyword: searchKeywordFromStore, 
+            type: searchTypeFromStore as string,
+            page: searchedCurrentPage + 1, 
+            size: PAGE_SIZE 
+          }));
+        } else if (!isSearchMode && hasMoreRooms && !loadingRooms) {
+          dispatch(fetchChatRooms({ page: currentPage + 1, size: PAGE_SIZE }));
+        }
       }
-    } finally {
-      console.log('fetchRooms 완료 - isLoading을 false로 설정');
-      setIsLoading(false);
-    }
-  };
+    });
+    if (node) observer.current.observe(node);
+  }, [
+    isSearchMode, 
+    loadingRooms, loadingSearchedRooms,
+    hasMoreRooms, hasMoreSearchedRooms,
+    dispatch, 
+    currentPage, searchedCurrentPage, 
+    searchKeywordFromStore, searchTypeFromStore
+  ]);
 
-  const searchRooms = async () => {
-    try {
-      setIsLoading(true);
-      const results = await chatService.searchRooms(searchKeyword, roomType);
-      setFilteredRooms(results);
-    } catch (error) {
-      console.error('채팅방 검색 중 오류 발생:', error);
-      setError('채팅방 검색 중 오류가 발생했습니다.');
-    } finally {
-      setIsLoading(false);
+  const loadInitialGeneralRooms = useCallback(() => {
+    if (!isAuthenticated) return;
+    setComponentError(null);
+    dispatch(clearChatRooms());
+    dispatch(fetchChatRooms({ page: 0, size: PAGE_SIZE }))
+      .unwrap()
+      .catch(err => {
+        setComponentError(typeof err === 'string' ? err : '채팅방 목록을 불러오는데 실패했습니다.');
+      });
+  }, [dispatch, isAuthenticated]);
+
+  // Effect for initial loading and reacting to isSearchMode changes
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login');
+    } else {
+      if (!isSearchMode) { 
+        loadInitialGeneralRooms();
+      }
+      dispatch(fetchAllUnreadCounts())
+        .unwrap()
+        .catch(err => {
+          console.error('읽지 않은 메시지 수 로드 실패:', err);
+        });
     }
-  };
+    // observer 관리는 여기서 계속합니다. (스크롤 관련)
+    // 이 useEffect는 isSearchMode가 바뀔 때도 실행되어야 할 수 있으므로, 
+    // observer 해제 로직은 여기에 두거나, 혹은 lastRoomElementRef 콜백 내부에서 관리합니다.
+    // 우선 현재 구조에서는 lastRoomElementRef에서 observer.current.disconnect()를 이미 하고 있으므로 중복을 피합니다.
+  }, [isAuthenticated, navigate, loadInitialGeneralRooms, dispatch, isSearchMode]);
+
+  // Effect SOLELY for cleaning up search state on component unmount
+  useEffect(() => {
+    return () => {
+      // 컴포넌트가 실제로 언마운트될 때만 실행됩니다.
+      const currentSearchKeyword = store.getState().chat.searchKeyword;
+      const currentSearchType = store.getState().chat.searchType;
+      const stillInSearchModeOnUnmount = 
+          (typeof currentSearchKeyword === 'string' && currentSearchKeyword.length > 0) || 
+          (typeof currentSearchType === 'string' && currentSearchType.length > 0);
+
+      if (stillInSearchModeOnUnmount) {
+        console.log('[ChatRoomList] Component unmounting in search mode. Clearing search state.');
+        dispatch(clearSearchedRooms());
+      }
+    };
+  }, [dispatch]); // dispatch는 일반적으로 안정적이므로, 이 useEffect는 마운트/언마운트 시에만 주로 동작합니다.
 
   const handleSearch = () => {
-    if (searchKeyword.trim() || roomType) {
-      searchRooms();
-    } else {
-      setFilteredRooms(rooms);
+    if (!localSearchKeyword.trim() && !localRoomType) {
+      if (isSearchMode) {
+        dispatch(clearSearchedRooms());
+        setLocalSearchKeyword('');
+        setLocalRoomType('');
+        if (rooms.length === 0 || initialLoading) { 
+            loadInitialGeneralRooms();
+        }
+      }
+      return;
+    }
+    setComponentError(null);
+    dispatch(setSearchCriteria({ keyword: localSearchKeyword, type: localRoomType }));
+    dispatch(fetchSearchedChatRooms({ 
+      keyword: localSearchKeyword, 
+      type: localRoomType, 
+      page: 0, 
+      size: PAGE_SIZE 
+    }))
+    .unwrap()
+    .catch(err => {
+        console.error('Search failed (in component):', err);
+    });
+  };
+
+  const handleClearSearch = () => {
+    dispatch(clearSearchedRooms());
+    setLocalSearchKeyword('');
+    setLocalRoomType('');
+    if (rooms.length === 0 || (currentPage === 0 && initialLoading && !loadingRooms )) {
+        loadInitialGeneralRooms();
     }
   };
 
   const handleSearchInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSearchKeyword(e.target.value);
-    if (!e.target.value.trim() && !roomType) {
-      setFilteredRooms(rooms);
-    }
+    setLocalSearchKeyword(e.target.value);
   };
 
   const handleRoomTypeChange = (e: SelectChangeEvent) => {
-    setRoomType(e.target.value as string);
+    setLocalRoomType(e.target.value as string);
   };
 
   const handleRoomClick = useCallback((room: ChatRoom) => {
+    if (unreadCount[room.id] && unreadCount[room.id] > 0) {
+      console.log(`[ChatRoomList] Entering room ${room.id} with ${unreadCount[room.id]} unread messages`);
+    }
     navigate(`/chat/${room.id}`);
-  }, [navigate]);
+  }, [navigate, unreadCount]);
 
   const handleCreateRoom = useCallback(() => {
     navigate('/chat/create');
   }, [navigate]);
+  
+  const isRoomCreator = useCallback((room: ChatRoom) => {
+    if (!currentUser || !room.creatorId) return false;
+    return room.creatorId.toString() === currentUser.id.toString();
+  }, [currentUser]);
+
+  const isUserMember = useCallback((room: ChatRoom) => {
+    if (!currentUser) return false;
+    if (isRoomCreator(room)) return true; 
+    if (!room.participantIds || !Array.isArray(room.participantIds)) {
+      return false;
+    }
+    return room.participantIds.map(String).includes(String(currentUser.id));
+  }, [currentUser, isRoomCreator]);
 
   const handleLeaveRoom = async (roomId: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    setComponentError(null);
     try {
       await chatService.leaveRoom(roomId);
       setSuccessMessage('채팅방에서 나갔습니다.');
-      fetchRooms();
-    } catch (error) {
+      afterRoomActionSuccess();
+    } catch (error: any) {
       console.error('채팅방 나가기 실패:', error);
-      setError('채팅방에서 나가는데 실패했습니다.');
+      setComponentError(error.message || '채팅방에서 나가는데 실패했습니다.');
+    }
+  };
+  
+  const handleJoinRoom = async (roomId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!currentUser) {
+      setComponentError("로그인이 필요합니다.");
+      return;
+    }
+    try {
+      setComponentError(null);
+      await chatService.joinRoom(roomId);
+      
+      setSuccessMessage('채팅방에 성공적으로 가입했습니다.');
+
+      console.log(`[ChatRoomList] Successfully joined room: ${roomId}. Attempting to refresh list.`);
+
+      if (isSearchMode) {
+        const resultAction = await dispatch(fetchSearchedChatRooms({ 
+          keyword: searchKeywordFromStore, 
+          type: searchTypeFromStore as string,
+          page: 0, 
+          size: PAGE_SIZE 
+        }));
+        if (fetchSearchedChatRooms.fulfilled.match(resultAction)) {
+            console.log('[ChatRoomList] Refreshed searched rooms after join (payload):', resultAction.payload);
+        } else if (fetchSearchedChatRooms.rejected.match(resultAction)) {
+            console.error('[ChatRoomList] Failed to refresh searched rooms after join:', resultAction.error);
+        }
+      } else {
+        const resultAction = await dispatch(fetchChatRooms({ page: 0, size: PAGE_SIZE }));
+        if (fetchChatRooms.fulfilled.match(resultAction)) {
+            console.log('[ChatRoomList] Refreshed rooms after join (payload):', resultAction.payload);
+        } else if (fetchChatRooms.rejected.match(resultAction)) {
+            console.error('[ChatRoomList] Failed to refresh rooms after join:', resultAction.error);
+        }
+      }
+      
+    } catch (error: any) {
+      console.error('Failed to join chat room:', error);
+      setComponentError(error.message || '채팅방 가입에 실패했습니다.');
     }
   };
 
@@ -137,309 +333,392 @@ const ChatRoomList: React.FC = () => {
 
   const handleDeleteRoom = async () => {
     if (!selectedRoomId) return;
-    
+    setComponentError(null);
     try {
       const success = await chatService.deleteRoom(selectedRoomId);
       if (success) {
-        setSuccessMessage('채팅방이 삭제되었습니다.');
-        fetchRooms();
+        setSuccessMessage('채팅방 삭제 요청이 처리되었습니다. 잠시 후 목록에서 제거됩니다.');
       } else {
-        setError('채팅방 삭제에 실패했습니다.');
+        setComponentError('채팅방 삭제에 실패했습니다.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('채팅방 삭제 실패:', error);
-      setError('채팅방 삭제 중 오류가 발생했습니다.');
+      setComponentError(error.message || '채팅방 삭제 중 오류가 발생했습니다.');
     } finally {
       setDeleteDialogOpen(false);
       setSelectedRoomId(null);
     }
   };
 
-  // 채팅방 타입 디버깅 로그
-  useEffect(() => {
-    if (filteredRooms.length > 0) {
-      console.log('첫번째 채팅방 데이터 구조:', JSON.stringify(filteredRooms[0], null, 2));
-    }
-  }, [filteredRooms]);
-
-  // 사용자가 채팅방의 방장인지 확인
-  const isRoomCreator = (room: ChatRoom) => {
-    if (!currentUser || !room.creatorId) return false;
-    // console.log(`isRoomCreator Check: room.id=${room.id}, room.creatorId=${room.creatorId} (type: ${typeof room.creatorId}), currentUser.id=${currentUser.id} (type: ${typeof currentUser.id})`);
-    return room.creatorId.toString() === currentUser.id.toString(); // creatorId와 currentUser.id 모두 문자열로 비교
-  };
-
-  // 사용자가 채팅방에 가입되어 있는지 확인
-  const isUserMember = (room: ChatRoom) => {
-    if (!currentUser) return false;
-    if (isRoomCreator(room)) return true; // 방장은 항상 멤버로 간주
+  // 카카오톡 스타일 실시간 채팅방 순서 업데이트 (백엔드 가이드 반영)
+  const refreshChatRoomOrder = useCallback((updatedRoomId: string) => {
+    console.log(`[ChatRoomList] Refreshing chat room order for room: ${updatedRoomId}`);
     
-    // participantIds 필드가 존재하고 배열인지 확인
-    if (!room.participantIds || !Array.isArray(room.participantIds)) {
-      // console.log(`isUserMember Check: room.id=${room.id}, participantIds is missing or not an array. participants:`, room.participantIds);
-      return false;
+    // 채팅방 목록 다시 로드하여 최신 순서 반영
+    if (isSearchMode) {
+      dispatch(fetchSearchedChatRooms({ 
+        keyword: searchKeywordFromStore, 
+        type: searchTypeFromStore as string, 
+        page: 0,
+        size: PAGE_SIZE 
+      }));
+    } else {
+      loadInitialGeneralRooms();
     }
     
-    // currentUser.id (문자열)와 room.participantIds (number 배열)의 요소를 비교
-    // room.participantIds의 각 숫자 ID를 문자열로 변환하여 currentUser.id와 비교
-    // console.log(`isUserMember Check: room.id=${room.id}, currentUser.id=${currentUser.id} (type: ${typeof currentUser.id}), participantIds=${JSON.stringify(room.participantIds)} (type of first participantId: ${room.participantIds.length > 0 ? typeof room.participantIds[0] : 'N/A'})`);
-    const currentUserIdStr = currentUser.id.toString();
-    return room.participantIds.map(id => id.toString()).includes(currentUserIdStr);
-  };
+    // 업데이트된 채팅방 하이라이트 효과 (3초간)
+    setTimeout(() => {
+      const roomElement = document.querySelector(`[data-room-id="${updatedRoomId}"]`);
+      if (roomElement) {
+        roomElement.classList.add('updated-room');
+        setTimeout(() => roomElement.classList.remove('updated-room'), 3000);
+      }
+    }, 100);
+  }, [isSearchMode, searchKeywordFromStore, searchTypeFromStore, loadInitialGeneralRooms, dispatch]);
 
-  // 채팅방 가입하기
-  const handleJoinRoom = async (roomId: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      await chatService.joinRoom(roomId);
-      setSuccessMessage('채팅방에 가입했습니다.');
-      fetchRooms();
-    } catch (error) {
-      console.error('채팅방 가입 실패:', error);
-      setError('채팅방 가입에 실패했습니다.');
-    }
-  };
-
+  // 실시간 채팅방 업데이트 감지 (백엔드 가이드 반영)
   useEffect(() => {
-    console.log('ChatRoomList useEffect 실행');
-    if (!isAuthenticated) {
-      setError('로그인이 필요합니다.');
-      setIsLoading(false);
-      navigate('/login');
-      return;
-    }
-    fetchRooms();
-    return () => {
-      console.log('ChatRoomList 컴포넌트 언마운트');
+    const handleChatRoomUpdate = () => {
+      // Redux 상태 변화를 감지하여 업데이트된 채팅방이 있는지 확인
+      const currentState = store.getState().chat as ChatState;
+      const currentRoomsFromState = isSearchMode ? currentState.searchedRooms : currentState.rooms;
+      
+      // 이전 순서와 비교하여 변경사항이 있으면 하이라이트
+      if (currentRoomsFromState.length > 0 && currentRoomsToDisplay.length > 0) {
+        const firstRoomId = currentRoomsFromState[0]?.id;
+        const wasFirstRoom = currentRoomsToDisplay[0]?.id;
+        
+        if (firstRoomId !== wasFirstRoom && firstRoomId) {
+          // 새로운 채팅방이 맨 위로 올라온 경우 하이라이트
+          setTimeout(() => {
+            const roomElement = document.querySelector(`[data-room-id="${firstRoomId}"]`);
+            if (roomElement) {
+              roomElement.classList.add('updated-room');
+              setTimeout(() => roomElement.classList.remove('updated-room'), 3000);
+            }
+          }, 100);
+        }
+      }
     };
-  }, [navigate, isAuthenticated]);
+
+    // Redux 상태 변화 감지를 위한 구독
+    const unsubscribe = store.subscribe(handleChatRoomUpdate);
+    
+    return () => {
+      unsubscribe();
+    };
+  }, [isSearchMode, currentRoomsToDisplay]);
 
   const formatLastMessageTime = (time?: string) => {
     if (!time) return '';
-    const date = new Date(time);
-    return date.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+    
+    const messageTime = new Date(time);
+    const now = new Date();
+    const diffMs = now.getTime() - messageTime.getTime();
+    const diffMinutes = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    // 카카오톡 스타일 시간 포맷팅 (백엔드 가이드 반영)
+    if (diffMinutes < 1) {
+      return '방금';
+    } else if (diffMinutes < 60) {
+      return `${diffMinutes}분 전`;
+    } else if (diffHours < 24) {
+      return `${diffHours}시간 전`;
+    } else if (diffDays < 7) {
+      return `${diffDays}일 전`;
+    } else {
+      // 일주일 이상 지난 경우 날짜 표시
+      return messageTime.toLocaleDateString('ko-KR', {
+        month: 'short',
+        day: 'numeric'
+      });
+    }
   };
 
-  if (isLoading) {
-    console.log('ChatRoomList 로딩 중 UI 반환');
+  const afterRoomActionSuccess = () => {
+    if (isSearchMode) {
+      dispatch(fetchSearchedChatRooms({ 
+        keyword: searchKeywordFromStore, 
+        type: searchTypeFromStore as string, 
+        page: 0,
+        size: PAGE_SIZE 
+      }));
+    } else {
+      loadInitialGeneralRooms();
+    }
+  }
+
+  // 🆕 백엔드 오프라인 알림 테스트 API 호출 함수들
+  const testBackendOfflineNotifications = async (testType: 'pending' | 'direct') => {
+    const currentUser = store.getState().auth.user;
+    if (!currentUser?.id) {
+      console.error('[ChatRoomList] No current user found for testing');
+      setComponentError('테스트를 위해서는 로그인이 필요합니다.');
+      return;
+    }
+
+    const userId = currentUser.id;
+    const endpoint = testType === 'pending' 
+      ? `/api/notifications/test/send-pending/${userId}`
+      : `/api/notifications/test/send-direct/${userId}`;
+
+    try {
+      console.log(`[ChatRoomList] Testing backend offline notifications: ${testType} for user ${userId}`);
+      
+      const sessionId = localStorage.getItem('sessionId');
+      if (!sessionId) {
+        throw new Error('세션 ID가 없습니다. 다시 로그인해주세요.');
+      }
+
+      const response = await fetch(`http://localhost:8080${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Session-Id': sessionId
+        },
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const result = await response.text();
+        console.log(`[ChatRoomList] Backend test ${testType} success:`, result);
+        setSuccessMessage(`백엔드 테스트 성공: ${result}`);
+      } else {
+        const errorText = await response.text();
+        console.error(`[ChatRoomList] Backend test ${testType} failed:`, response.status, errorText);
+        setComponentError(`백엔드 테스트 실패 (${response.status}): ${errorText}`);
+      }
+    } catch (error) {
+      console.error(`[ChatRoomList] Error calling backend test ${testType}:`, error);
+      setComponentError(`백엔드 테스트 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    }
+  };
+
+  // 백엔드 상태 확인 API 호출
+  const checkBackendStatus = async () => {
+    try {
+      console.log('[ChatRoomList] Checking backend status');
+      
+      const sessionId = localStorage.getItem('sessionId');
+      if (!sessionId) {
+        throw new Error('세션 ID가 없습니다. 다시 로그인해주세요.');
+      }
+
+      const response = await fetch('http://localhost:8080/api/notifications/test/status', {
+        method: 'GET',
+        headers: {
+          'X-Session-Id': sessionId
+        },
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const status = await response.text();
+        console.log('[ChatRoomList] Backend status:', status);
+        setSuccessMessage(`백엔드 상태: ${status}`);
+      } else {
+        const errorText = await response.text();
+        console.error('[ChatRoomList] Backend status check failed:', response.status, errorText);
+        setComponentError(`백엔드 상태 확인 실패: ${errorText}`);
+      }
+    } catch (error) {
+      console.error('[ChatRoomList] Error checking backend status:', error);
+      setComponentError(`백엔드 상태 확인 오류: ${error instanceof Error ? error.message : '알 수 없는 오류'}`);
+    }
+  };
+
+  if (initialLoadingCurrentList && currentRoomsToDisplay.length === 0 && !displayError && !combinedComponentError) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-        <Typography>로딩 중...</Typography>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 'calc(100vh - 64px)' }}>
+        <CircularProgress />
       </Box>
     );
   }
 
-  if (error) {
-    console.log('ChatRoomList 에러 UI 반환:', error);
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%' }}>
-        <Typography color="error">{error}</Typography>
-      </Box>
-    );
-  }
-
-  console.log('ChatRoomList 정상 UI 렌더링, 채팅방 수:', filteredRooms.length);
   return (
-    <Paper sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-      <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+    <Paper sx={{ height: 'calc(100vh - 64px)', display: 'flex', flexDirection: 'column' }}>
+      <Box sx={{ p: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee' }}>
         <Typography variant="h6">채팅방</Typography>
-        <IconButton onClick={handleCreateRoom} color="primary">
-          <AddIcon />
-        </IconButton>
+        <Box>
+          {isSearchMode && (
+            <Tooltip title="검색 초기화 및 전체 목록 보기">
+              <IconButton onClick={handleClearSearch} color="default" sx={{mr:1}}>
+                <ClearIcon />
+              </IconButton>
+            </Tooltip>
+          )}
+          <IconButton onClick={handleCreateRoom} color="primary">
+            <AddIcon />
+          </IconButton>
+        </Box>
       </Box>
 
-      <Box sx={{ px: 2, pb: 2 }}>
+      <Box sx={{ px: 2, py: 1.5, borderBottom: '1px solid #eee' }}>
         <Box sx={{ display: 'flex', gap: 1 }}>
           <TextField
             fullWidth
             placeholder="채팅방 검색"
-            value={searchKeyword}
+            value={localSearchKeyword}
             onChange={handleSearchInputChange}
+            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
             InputProps={{
               endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton onClick={handleSearch}>
+                  <IconButton onClick={handleSearch} size="small" disabled={loadingSearchedRooms || loadingRooms}>
                     <SearchIcon />
                   </IconButton>
                 </InputAdornment>
               ),
             }}
             size="small"
+            variant="outlined"
           />
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel>방 유형</InputLabel>
+          <FormControl size="small" sx={{ minWidth: 120 }} variant="outlined" disabled={loadingSearchedRooms || loadingRooms}>
+            <InputLabel>유형</InputLabel>
             <Select
-              value={roomType}
-              label="방 유형"
+              value={localRoomType}
+              label="유형"
               onChange={handleRoomTypeChange}
             >
               <MenuItem value="">전체</MenuItem>
-              <MenuItem value="ONE_ON_ONE">1:1 채팅</MenuItem>
-              <MenuItem value="GROUP">그룹 채팅</MenuItem>
+              <MenuItem value={ChatRoomType.ONE_ON_ONE}>1:1</MenuItem>
+              <MenuItem value={ChatRoomType.GROUP}>그룹</MenuItem>
             </Select>
           </FormControl>
+           <Button variant="outlined" onClick={handleSearch} size="medium" disabled={loadingSearchedRooms || loadingRooms}>
+             검색
+           </Button>
         </Box>
       </Box>
 
-      <List sx={{ flexGrow: 1, overflow: 'auto' }}>
-        {filteredRooms.length === 0 ? (
-          <Box sx={{ p: 2, textAlign: 'center' }}>
-            <Typography color="text.secondary">채팅방이 없습니다.</Typography>
-          </Box>
-        ) : (
-          filteredRooms.map((room) => (
-            <ListItem
-              key={room.id}
-              component="div"
-              disablePadding
+      {(displayError || combinedComponentError) && (
+        <Box sx={{ p: 2, textAlign: 'center' }}>
+          <Alert 
+            severity="error" 
+            onClose={() => {
+              if (combinedComponentError) setComponentError(null);
+              if (displayError) {
+                if (isSearchMode) {
+                  dispatch(clearSearchError());
+                } else {
+                  dispatch(clearRoomsError());
+                }
+              }
+            }}
+          >
+            {combinedComponentError || displayError}
+          </Alert>
+        </Box>
+      )}
+
+      <List sx={{ flexGrow: 1, overflowY: 'auto', width: '100%', bgcolor: 'background.paper' }}>
+        {currentRoomsToDisplay.map((room, index) => {
+          const isLastElement = index === currentRoomsToDisplay.length - 1;
+          const roomUnreadCount = unreadCount[room.id] || 0;
+          return (
+            <ListItemButton
+              key={room.id} 
+              ref={isLastElement ? lastRoomElementRef : null}
+              onClick={() => handleRoomClick(room)}
+              alignItems="flex-start"
               sx={{
+                mb: 1,
+                borderRadius: '8px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.24)',
+                transition: 'all 0.3s cubic-bezier(.25,.8,.25,1)',
                 '&:hover': {
-                  backgroundColor: 'action.hover',
+                  boxShadow: '0 3px 6px rgba(0,0,0,0.16), 0 3px 6px rgba(0,0,0,0.23)',
                 },
-                borderBottom: '1px solid #eee',
               }}
             >
-              <Box 
-                sx={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  width: '100%', 
-                  py: 1,
-                  px: 2 
-                }}
-                onClick={() => {
-                  if (isUserMember(room) || isRoomCreator(room)) {
-                    handleRoomClick(room);
-                  }
-                }}
-              >
-                <ListItemAvatar sx={{ mr: 1.5 }}>
-                  <Badge
-                    color="error"
-                    badgeContent={unreadCount[room.id] || 0}
-                    invisible={!(unreadCount[room.id] && unreadCount[room.id] > 0)}
-                  >
-                    <Avatar sx={{ bgcolor: 'primary.light' }}>
-                      {room.roomName && room.roomName.length > 0 ? room.roomName[0].toUpperCase() : '?'}
-                    </Avatar>
-                  </Badge>
-                </ListItemAvatar>
-
-                <Box sx={{ flexGrow: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', cursor: 'pointer' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', overflow: 'hidden', flexGrow: 1, mr: 1 }}>
-                      <Typography
-                        variant="subtitle1"
-                        sx={{
-                          fontWeight: 500,
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap',
-                        }}
-                        title={room.roomName}
-                      >
-                        {room.roomName || '채팅방'}
-                      </Typography>
-                      {room.type === 'GROUP' && typeof room.participantCount === 'number' && room.participantCount > 0 && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary', ml: 0.75 }}>
-                          <GroupIcon sx={{ fontSize: '1rem', mr: 0.25 }} />
-                          <Typography variant="caption" sx={{ lineHeight: '1rem' }}>{room.participantCount}</Typography>
-                        </Box>
-                      )}
-                    </Box>
-                    {room.lastMessageTime && (
-                      <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap', ml: 1 }}>
-                        {formatLastMessageTime(room.lastMessageTime)}
-                      </Typography>
-                    )}
-                  </Box>
-                  <Typography
-                    variant="body2"
-                    color="text.secondary"
-                    sx={{
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                      mt: 0.25,
-                    }}
-                    title={room.lastMessage}
-                  >
-                    {room.lastMessage || (room.type === 'GROUP' ? '그룹 채팅방입니다.' : '1:1 채팅방입니다.')}
+              <ListItemAvatar>
+                <Badge badgeContent={roomUnreadCount} color="error" overlap="circular">
+                  <Avatar sx={{ bgcolor: getAvatarColor(room.id) }}>
+                    {room.roomName?.charAt(0).toUpperCase() || 'R'}
+                  </Avatar>
+                </Badge>
+              </ListItemAvatar>
+              <ListItemText 
+                primary={<Typography variant="subtitle1" sx={{ fontWeight: 'medium' }}>{room.roomName || '이름 없는 방'}</Typography>}
+                secondary={
+                  <Typography variant="body2" color="text.secondary" sx={{ 
+                    whiteSpace: 'nowrap', 
+                    overflow: 'hidden', 
+                    textOverflow: 'ellipsis',
+                    maxWidth: 'calc(100% - 40px)' 
+                  }}>
+                    {room.lastMessage || '아직 메시지가 없습니다.'}
                   </Typography>
-                </Box>
-
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1.5 }}>
-                  {isRoomCreator(room) ? (
-                    <>
-                      <Button
-                        variant="contained"
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRoomClick(room);
-                        }}
-                        sx={{ mr: 0.5 }}
-                      >
-                        입장
-                      </Button>
-                      <IconButton
-                        color="error"
-                        size="small"
-                        onClick={(e) => {
-                            e.stopPropagation(); 
-                            handleOpenDeleteDialog(room.id, e);
-                        }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </>
-                  ) : isUserMember(room) ? (
-                    <>
-                      <Button
-                        variant="contained"
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRoomClick(room);
-                        }}
-                        sx={{ mr: 0.5 }}
-                      >
-                        입장
-                      </Button>
-                      <IconButton
-                        color="secondary"
-                        size="small"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            handleLeaveRoom(room.id, e);
-                        }}
-                      >
-                        <LeaveIcon fontSize="small" />
-                      </IconButton>
-                    </>
-                  ) : (
-                    <Button
-                      variant="outlined"
+                }
+              />
+              <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', ml: 1 }}>
+                {isRoomCreator(room) && (
+                  <Tooltip title="채팅방 삭제">
+                    <IconButton
+                      edge="end"
+                      aria-label="delete room"
+                      onClick={(e) => handleOpenDeleteDialog(room.id, e)}
                       size="small"
-                      onClick={(e) => {
-                          e.stopPropagation();
-                          handleJoinRoom(room.id, e);
-                      }}
+                      sx={{ mb: 0.5 }}
                     >
-                      가입하기
+                      <DeleteIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                {!isRoomCreator(room) && isUserMember(room) && (
+                  <Tooltip title="채팅방 나가기">
+                    <IconButton
+                      edge="end"
+                      aria-label="leave room"
+                      onClick={(e) => handleLeaveRoom(room.id, e)}
+                      size="small"
+                      sx={{ mb: 0.5 }}
+                    >
+                      <LeaveIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                {!isUserMember(room) && (
+                  <Tooltip title="채팅방 가입하기">
+                     <Button
+                      variant="contained"
+                      size="small"
+                      startIcon={<PersonAddIcon />}
+                      onClick={(e) => handleJoinRoom(room.id, e)}
+                      sx={{padding: '2px 8px', fontSize: '0.75rem'}}
+                    >
+                      가입
                     </Button>
-                  )}
-                </Box>
+                  </Tooltip>
+                )}
               </Box>
-            </ListItem>
-          ))
+              {room.lastMessageTime && (
+                <Typography variant="caption" color="text.secondary" sx={{ ml: 1, whiteSpace: 'nowrap', alignSelf: 'center' }}>
+                  {formatLastMessageTime(room.lastMessageTime)}
+                </Typography>
+              )}
+              <Box sx={{ display: 'flex', alignItems: 'center', mt: 0.5 }}>
+                <GroupIcon sx={{ fontSize: '1rem', mr: 0.5, color: 'text.secondary' }} />
+                <Typography variant="caption" color="text.secondary">
+                  {room.participantCount !== undefined ? `${room.participantCount}명` : '참여자 수 정보 없음'}
+                </Typography>
+              </Box>
+            </ListItemButton>
+          );
+        })}
+        {isLoadingCurrentList && (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 2}}><CircularProgress /></Box>
+        )}
+        {!isLoadingCurrentList && currentRoomsToDisplay.length === 0 && !displayError && (
+          <Typography sx={{ textAlign: 'center', py: 3, color: 'text.secondary' }}>
+            {isSearchMode ? '검색 결과가 없습니다.' : '활성화된 채팅방이 없습니다. 채팅방을 만들어보세요!'}
+          </Typography>
         )}
       </List>
 
-      <Dialog
-        open={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-      >
+      <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)}>
         <DialogTitle>채팅방 삭제</DialogTitle>
         <DialogContent>
           <DialogContentText>
@@ -448,29 +727,48 @@ const ChatRoomList: React.FC = () => {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setDeleteDialogOpen(false)}>취소</Button>
-          <Button onClick={handleDeleteRoom} color="error">삭제</Button>
+          <Button onClick={handleDeleteRoom} color="error">
+            삭제
+          </Button>
         </DialogActions>
       </Dialog>
 
-      <Snackbar
-        open={!!successMessage}
-        autoHideDuration={3000}
-        onClose={() => setSuccessMessage(null)}
-      >
-        <Alert onClose={() => setSuccessMessage(null)} severity="success">
-          {successMessage}
-        </Alert>
-      </Snackbar>
-
-      <Snackbar
-        open={!!error}
-        autoHideDuration={3000}
-        onClose={() => setError(null)}
-      >
-        <Alert onClose={() => setError(null)} severity="error">
-          {error}
-        </Alert>
-      </Snackbar>
+      {combinedComponentError && (
+        <Snackbar 
+          open={!!combinedComponentError} 
+          autoHideDuration={6000} 
+          onClose={() => {
+            setComponentError(null);
+            if (isSearchMode) dispatch(clearSearchError());
+            else dispatch(clearRoomsError());
+          }}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert 
+            onClose={() => {
+              setComponentError(null);
+              if (isSearchMode) dispatch(clearSearchError());
+              else dispatch(clearRoomsError());
+            }} 
+            severity="error" 
+            sx={{ width: '100%' }}
+          >
+            {combinedComponentError}
+          </Alert>
+        </Snackbar>
+      )}
+      {successMessage && (
+         <Snackbar 
+          open={!!successMessage} 
+          autoHideDuration={3000} 
+          onClose={() => setSuccessMessage(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert onClose={() => setSuccessMessage(null)} severity="success" sx={{ width: '100%' }}>
+            {successMessage}
+          </Alert>
+        </Snackbar>
+      )}
     </Paper>
   );
 };

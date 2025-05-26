@@ -13,6 +13,8 @@ import {
   Alert,
 } from '@mui/material';
 import { authService } from '../services/authService';
+import LocationSelector from '../components/LocationSelector';
+import { Location } from '../store/types';
 
 interface ProfileData {
   nickname: string;
@@ -21,6 +23,7 @@ interface ProfileData {
   age: string;
   interests: string[];
   bio: string;
+  location: Location | null;
 }
 
 const Profile: React.FC = () => {
@@ -31,6 +34,7 @@ const Profile: React.FC = () => {
     age: '25',
     interests: ['게임', '음악', '영화'],
     bio: '안녕하세요! 새로운 친구를 만나고 싶습니다.',
+    location: null,
   });
 
   const [isEditing, setIsEditing] = useState(false);
@@ -43,6 +47,13 @@ const Profile: React.FC = () => {
       ...profileData,
       [e.target.name]: e.target.value,
     });
+  };
+
+  const handleLocationSelect = (location: Location) => {
+    setProfileData((prev) => ({
+      ...prev,
+      location,
+    }));
   };
 
   const handleAddInterest = () => {
@@ -67,6 +78,9 @@ const Profile: React.FC = () => {
         age: Number(profileData.age),
         bio: profileData.bio,
         interests: profileData.interests,
+        latitude: profileData.location?.latitude,
+        longitude: profileData.location?.longitude,
+        address: profileData.location?.address,
       };
       await authService.updateProfile(toUpdate);
       setSuccess(true);
@@ -90,6 +104,11 @@ const Profile: React.FC = () => {
             age: user.age?.toString() || prev.age,
             interests: user.interests || prev.interests,
             bio: user.bio || prev.bio,
+            location: user.latitude && user.longitude && user.address ? {
+              latitude: user.latitude,
+              longitude: user.longitude,
+              address: user.address,
+            } : prev.location,
           }));
         }
       } catch (e) {
@@ -172,7 +191,22 @@ const Profile: React.FC = () => {
               />
             </Box>
             <Box sx={{ width: '100%' }}>
-              <Typography variant="subtitle1" gutterBottom>
+              <Typography variant="subtitle1" gutterBottom sx={{ mt: 2 }}>
+                위치 정보 (매칭에 사용됩니다)
+              </Typography>
+              <LocationSelector
+                onLocationSelect={handleLocationSelect}
+                initialLocation={profileData.location || undefined}
+                disabled={!isEditing}
+              />
+              {profileData.location && !isEditing && (
+                <Typography variant="body2" sx={{ mt: 1 }}>
+                  선택된 주소: {profileData.location.address}
+                </Typography>
+              )}
+            </Box>
+            <Box sx={{ width: '100%' }}>
+              <Typography variant="subtitle1" gutterBottom sx={{ mt: isEditing ? 2 : 0}}>
                 관심사
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>

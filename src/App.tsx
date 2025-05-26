@@ -19,6 +19,8 @@ import { CircularProgress, Box } from '@mui/material';
 import { setUser } from './store/slices/authSlice';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from './store/types';
+import { websocketService } from './services/websocketService';
+import NotificationHandler from './components/notifications/NotificationHandler';
 
 // 세션 체크 훅
 const useSessionCheck = () => {
@@ -30,15 +32,11 @@ const useSessionCheck = () => {
   useEffect(() => {
     const checkSession = async () => {
       try {
-        const user = await authService.getCurrentUser();
-        console.log('세션 체크 결과:', user);
-        if (user) {
-          dispatch(setUser(user));
-        } else {
-          dispatch(setUser(null));
-        }
+        const userFromSession = await authService.getCurrentUser();
+        console.log('세션 체크 결과 (useSessionCheck):', userFromSession);
+        dispatch(setUser(userFromSession)); 
       } catch (error) {
-        console.error('세션 체크 중 오류 발생:', error);
+        console.error('세션 체크 중 오류 발생 (useSessionCheck):', error);
         dispatch(setUser(null));
       } finally {
         setIsLoading(false);
@@ -75,31 +73,50 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
 
 // 인증 상태 초기화 컴포넌트
 const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingInitial, setIsLoadingInitial] = useState(true);
   const dispatch = useDispatch();
+  const user = useSelector((state: RootState) => state.auth.user);
 
   useEffect(() => {
-    const checkSession = async () => {
-      try {
-        const user = await authService.getCurrentUser();
-        console.log('세션 체크 결과:', user);
-        if (user) {
-          dispatch(setUser(user));
-        } else {
-          dispatch(setUser(null));
-        }
-      } catch (error) {
-        console.error('세션 체크 중 오류 발생:', error);
-        dispatch(setUser(null));
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    checkSession();
+    // 컴포넌트 마운트 시 로컬 스토리지에서 초기 사용자 정보 로드
+    const initialUser = authService.getInitialUser();
+    console.log('(AuthInitializer) Initial user from local storage:', initialUser);
+    if (initialUser) {
+      dispatch(setUser(initialUser));
+    }
+    setIsLoadingInitial(false);
   }, [dispatch]);
 
-  if (isLoading) {
+  // 사용자 상태 변화에 따른 WebSocket 관리 useEffect
+  useEffect(() => {
+    console.log('(AuthInitializer) User state changed:', user);
+    const currentWsUserId = websocketService.getCurrentUserId(); // websocketService에 getCurrentUserId() 메소드가 있다고 가정
+                                                              // 없다면 websocketService 내부의 currentUserId를 직접 참조하거나 getter를 만들어야 합니다.
+                                                              // 우선은 있다고 가정하고 진행합니다.
+
+    if (user && user.id) {
+      // 사용자가 있고 ID가 존재할 때
+      if (user.id !== currentWsUserId || !websocketService.getIsConnected()) {
+        console.log(`(AuthInitializer) User detected (ID: ${user.id}). Current WS User ID: ${currentWsUserId}, Connected: ${websocketService.getIsConnected()}. Initializing WebSocket.`);
+        // 사용자 ID가 다르거나, 연결되지 않은 경우에만 초기화 진행
+        // websocketService.disconnect(); // 필요하다면 이전 연결을 명시적으로 해제
+        websocketService.setCurrentUserId(user.id);
+        websocketService.initialize(user.id); 
+      } else {
+        console.log(`(AuthInitializer) User (ID: ${user.id}) already processed or WebSocket connected. WS User ID: ${currentWsUserId}, Connected: ${websocketService.getIsConnected()}. Skipping WebSocket re-initialization.`);
+      }
+    } else if (!user && currentWsUserId) {
+      // 사용자가 없고, 웹소켓에는 사용자 ID가 설정되어 있는 경우 (로그아웃)
+      console.log(`(AuthInitializer) User logged out. Current WS User ID: ${currentWsUserId}. Disconnecting WebSocket.`);
+      websocketService.setCurrentUserId(undefined);
+      websocketService.disconnect();
+    } else if (!user && !currentWsUserId){
+      console.log('(AuthInitializer) No user and WebSocket already has no user. No action needed.');
+    }
+
+  }, [user]); // user 객체 자체가 변경될 때만 실행
+
+  if (isLoadingInitial) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
         <CircularProgress />
@@ -117,10 +134,11 @@ const AppContent: React.FC = () => {
       <Router>
         <AuthInitializer>
           <Navbar />
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+          <NotificationHandler />
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
             <Route
               path="/matching"
               element={
@@ -161,7 +179,7 @@ const AppContent: React.FC = () => {
                 </ProtectedRoute>
               }
             />
-        </Routes>
+          </Routes>
         </AuthInitializer>
       </Router>
     </ThemeProvider>

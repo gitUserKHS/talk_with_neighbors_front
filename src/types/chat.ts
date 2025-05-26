@@ -13,6 +13,7 @@ export interface ChatRoom {
   creatorId: string;
   participantIds?: number[];
   lastMessage?: string;
+  lastSenderName?: string;
   lastMessageTime?: string;
   createdAt?: string;
   updatedAt?: string;
@@ -83,18 +84,42 @@ export interface WebSocketResponse {
   readByUsers?: number[];
 }
 
-export interface ChatState {
-  rooms: ChatRoom[];
-  currentRoom: ChatRoom | null;
-  messages: { [roomId: string]: ChatMessageDto[] };
-  unreadCount: { [roomId: string]: number };
-  loading: boolean;
-  error: string | null;
-}
-
 export interface CreateRoomRequest {
   name: string;
   type: string;
-  participantIds?: number[];
+  participantNicknames?: string[];
   description?: string;
+}
+
+// Pageable 인터페이스 (Spring Data JPA Pageable 객체 구조)
+export interface Pageable {
+  pageNumber: number;
+  pageSize: number;
+  sort: {
+    empty: boolean;
+    sorted: boolean;
+    unsorted: boolean;
+  };
+  offset: number;
+  paged: boolean;
+  unpaged: boolean;
+}
+
+// Page 인터페이스 (Spring Data JPA Page 객체 구조)
+export interface Page<T> {
+  content: T[];
+  pageable: Pageable;
+  totalPages: number;
+  totalElements: number;
+  last: boolean;
+  size: number;
+  number: number; // 현재 페이지 번호 (0부터 시작)
+  sort: {
+    empty: boolean;
+    sorted: boolean;
+    unsorted: boolean;
+  };
+  numberOfElements: number;
+  first: boolean;
+  empty: boolean;
 } 
