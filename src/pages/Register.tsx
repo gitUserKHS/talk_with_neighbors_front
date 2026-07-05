@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Container, TextField, Button, Box, Typography } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Alert, Box, Button, Container, Paper, Stack, TextField, Typography } from '@mui/material';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { authService } from '../services/authService';
 
 const Register: React.FC = () => {
@@ -12,129 +12,70 @@ const Register: React.FC = () => {
     username: '',
   });
   const [error, setError] = useState('');
-  const [duplicateErrors, setDuplicateErrors] = useState({
-    email: '',
-    username: '',
-  });
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value,
-    }));
-    // 입력 필드가 변경되면 해당 필드의 중복 에러 메시지를 초기화
-    setDuplicateErrors(prev => ({
-      ...prev,
-      [name]: '',
-    }));
+  const handleChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = event.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const checkDuplicates = async () => {
-    try {
-      const response = await authService.checkDuplicates(formData.email, formData.username);
-      const newErrors = {
-        email: response.emailExists ? '이미 사용 중인 이메일입니다.' : '',
-        username: response.usernameExists ? '이미 사용 중인 사용자 이름입니다.' : '',
-      };
-      setDuplicateErrors(newErrors);
-      return !response.emailExists && !response.usernameExists;
-    } catch (err) {
-      setError('중복 확인 중 오류가 발생했습니다.');
-      return false;
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
     setError('');
 
     if (formData.password !== formData.confirmPassword) {
-      setError('비밀번호가 일치하지 않습니다.');
+      setError('비밀번호가 서로 달라.');
       return;
     }
 
-    // 중복 체크
-    const isAvailable = await checkDuplicates();
-    if (!isAvailable) {
-      return;
-    }
-
+    setIsLoading(true);
     try {
+      const duplicate = await authService.checkDuplicates(formData.email, formData.username);
+      if (duplicate.emailExists) {
+        setError('이미 사용 중인 이메일이야.');
+        return;
+      }
+      if (duplicate.usernameExists) {
+        setError('이미 사용 중인 닉네임이야.');
+        return;
+      }
+
       await authService.register(formData.email, formData.password, formData.username);
-      navigate('/');
-    } catch (err) {
-      setError('회원가입에 실패했습니다. 다시 시도해주세요.');
+      navigate('/feed', { replace: true });
+    } catch {
+      setError('회원가입에 실패했어. 잠시 뒤 다시 시도해줘.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <Container maxWidth="sm">
-      <Box sx={{ mt: 8, mb: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom align="center">
-          회원가입
-        </Typography>
-        <form onSubmit={handleSubmit}>
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            label="이메일"
-            name="email"
-            type="email"
-            value={formData.email}
-            onChange={handleChange}
-            error={!!duplicateErrors.email}
-            helperText={duplicateErrors.email}
-          />
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            label="사용자 이름"
-            name="username"
-            value={formData.username}
-            onChange={handleChange}
-            error={!!duplicateErrors.username}
-            helperText={duplicateErrors.username}
-          />
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            label="비밀번호"
-            name="password"
-            type="password"
-            value={formData.password}
-            onChange={handleChange}
-          />
-          <TextField
-            margin="normal"
-            required
-            fullWidth
-            label="비밀번호 확인"
-            name="confirmPassword"
-            type="password"
-            value={formData.confirmPassword}
-            onChange={handleChange}
-          />
-          {error && (
-            <Typography color="error" sx={{ mt: 2 }}>
-              {error}
+    <Container maxWidth="xs" sx={{ py: 6 }}>
+      <Paper variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
+        <Stack spacing={2.5} component="form" onSubmit={handleSubmit}>
+          <Box textAlign="center">
+            <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }}>
+              회원가입
             </Typography>
-          )}
-          <Button
-            type="submit"
-            fullWidth
-            variant="contained"
-            sx={{ mt: 3, mb: 2 }}
-          >
-            회원가입
+            <Typography variant="body2" color="text.secondary">
+              관심사가 통하는 이웃을 만나보자.
+            </Typography>
+          </Box>
+          {error && <Alert severity="error">{error}</Alert>}
+          <TextField required fullWidth label="이메일" name="email" type="email" value={formData.email} onChange={handleChange} />
+          <TextField required fullWidth label="닉네임" name="username" value={formData.username} onChange={handleChange} />
+          <TextField required fullWidth label="비밀번호" name="password" type="password" value={formData.password} onChange={handleChange} />
+          <TextField required fullWidth label="비밀번호 확인" name="confirmPassword" type="password" value={formData.confirmPassword} onChange={handleChange} />
+          <Button type="submit" variant="contained" disabled={isLoading} fullWidth>
+            {isLoading ? '가입 중...' : '회원가입'}
           </Button>
-        </form>
-      </Box>
+          <Button component={RouterLink} to="/login" fullWidth>
+            이미 계정이 있어
+          </Button>
+        </Stack>
+      </Paper>
     </Container>
   );
 };
 
-export default Register; 
+export default Register;

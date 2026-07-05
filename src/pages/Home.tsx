@@ -1,90 +1,38 @@
 import React from 'react';
-import { Container, Typography, Box, Button, Chip } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import { Box, Button, Container, Stack, Typography } from '@mui/material';
 import { useSelector } from 'react-redux';
-import { authService } from '../services/authService';
+import { Link as RouterLink } from 'react-router-dom';
 import { RootState } from '../store/types';
+import Feed from './Feed';
 
 const Home: React.FC = () => {
-  const navigate = useNavigate();
   const user = useSelector((state: RootState) => state.auth.user);
-  const { unreadOfflineCount, connectionStatus } = useSelector(
-    (state: RootState) => state.notifications
-  );
 
-  const handleNavigate = (path: string) => {
-    if (!authService.isAuthenticated()) {
-      navigate('/login');
-    } else {
-      navigate(path);
-    }
-  };
+  if (user) {
+    return <Feed />;
+  }
 
   return (
-    <Container>
-      <Box sx={{ my: 4 }}>
-        <Typography variant="h4" component="h1" gutterBottom align="center">
-          Talk With Neighbors
-        </Typography>
-        
-        {/* 🎯 사용자 상태 및 알림 현황 */}
-        {user && (
-          <Box sx={{ textAlign: 'center', mb: 3 }}>
-            <Typography variant="h6" sx={{ mb: 1 }}>
-              안녕하세요, {user.username}님! 👋
-            </Typography>
-            <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1, mb: 2 }}>
-              <Chip 
-                label={connectionStatus.isOnline ? '🟢 온라인' : '🔴 오프라인'} 
-                size="small" 
-                color={connectionStatus.isOnline ? 'success' : 'error'}
-              />
-              {unreadOfflineCount > 0 && (
-                <Chip 
-                  label={`📬 ${unreadOfflineCount}개 알림`} 
-                  size="small" 
-                  color="warning"
-                  onClick={() => navigate('/chat')}
-                  sx={{ cursor: 'pointer' }}
-                />
-              )}
-            </Box>
-          </Box>
-        )}
-        
-        <Typography variant="body1" align="center" sx={{ mb: 4 }}>
-          주변 이웃과 대화를 나누고 새로운 친구를 만나보세요.
-          <br />
-          <Typography component="span" variant="body2" color="text.secondary" sx={{ mt: 1 }}>
-            💬 실시간 채팅 · 📱 스마트 알림 · 🤝 매칭 시스템
+    <Container maxWidth="md" sx={{ py: { xs: 6, md: 10 } }}>
+      <Stack spacing={4} alignItems="center" textAlign="center">
+        <Box>
+          <Typography variant="h3" component="h1" sx={{ fontWeight: 800, mb: 2 }}>
+            관심사가 통하는 이웃을 만나는 곳
           </Typography>
-        </Typography>
-
-        <Box sx={{ display: 'flex', gap: 3, justifyContent: 'center', flexWrap: 'wrap' }}>
-          <Box sx={{ width: { xs: '100%', sm: '45%', md: '30%' } }}>
-            <Button
-              fullWidth
-              variant="contained"
-              size="large"
-              onClick={() => handleNavigate('/matching')}
-              sx={{ height: '100px', fontSize: '1.2rem' }}
-            >
-              🤝 랜덤 매칭 시작하기
-            </Button>
-          </Box>
-          <Box sx={{ width: { xs: '100%', sm: '45%', md: '30%' } }}>
-            <Button
-              fullWidth
-              variant="contained"
-              size="large"
-              onClick={() => handleNavigate('/chat')}
-              sx={{ height: '100px', fontSize: '1.2rem' }}
-            >
-              💬 채팅방 검색
-            </Button>
-          </Box>
+          <Typography variant="h6" color="text.secondary" sx={{ maxWidth: 640 }}>
+            이웃톡은 피드에서 취향을 나누고, 관심사 점수가 잘 맞는 사람에게 매칭 요청을 보내
+            1:1 채팅으로 이어지는 소셜 앱이야.
+          </Typography>
         </Box>
-      </Box>
+        <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+          <Button component={RouterLink} to="/login" size="large" variant="contained">
+            로그인
+          </Button>
+          <Button component={RouterLink} to="/register" size="large" variant="outlined">
+            회원가입
+          </Button>
+        </Stack>
+      </Stack>
     </Container>
   );
 };

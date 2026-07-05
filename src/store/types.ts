@@ -24,7 +24,7 @@ export interface Location {
 }
 
 export interface MatchingPreferences {
-  location: Location;
+  location?: Location;
   maxDistance: number;
   ageRange: [number, number];
   gender?: string;
@@ -35,12 +35,15 @@ export interface MatchProfile {
   id: string;
   matchId?: string;
   username: string;
-  age: number;
-  gender: string;
+  age?: number;
+  gender?: string;
   interests: string[];
   bio?: string;
   profileImage?: string;
-  distance: number;
+  imageUrl?: string;
+  distance?: number;
+  compatibilityScore?: number;
+  sharedInterests?: string[];
 }
 
 export interface NotificationMessage {
