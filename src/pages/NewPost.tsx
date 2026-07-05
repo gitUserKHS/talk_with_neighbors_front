@@ -66,7 +66,11 @@ const NewPost: React.FC = () => {
             v1에서는 파일 업로드 대신 이미지 URL을 저장해.
           </Typography>
         </Box>
-        {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
+        {error && (
+          <Alert severity="error" onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
         <Card variant="outlined" sx={{ borderRadius: 2 }}>
           {imageUrl && (
             <CardMedia

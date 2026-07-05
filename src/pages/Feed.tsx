@@ -32,13 +32,16 @@ import matchingService from '../services/matchingService';
 import { FeedComment, FeedPost } from '../types/feed';
 import { RootState } from '../store/types';
 
-const formatDate = (value: string) =>
-  new Intl.DateTimeFormat('ko-KR', {
+const formatDate = (value?: string | null) => {
+  if (!value) return '';
+
+  return new Intl.DateTimeFormat('ko-KR', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
+};
 
 const Feed: React.FC = () => {
   const currentUser = useSelector((state: RootState) => state.auth.user);
@@ -57,9 +60,9 @@ const Feed: React.FC = () => {
 
     try {
       const page = await feedService.getFeed();
-      setPosts(page.content);
+      setPosts(page.content ?? []);
     } catch {
-      setError('피드를 불러오지 못했어. 잠시 뒤 다시 시도해줘.');
+      setError('피드를 불러오지 못했어. 잠시 후 다시 시도해줘.');
     } finally {
       setLoading(false);
     }
@@ -71,9 +74,7 @@ const Feed: React.FC = () => {
 
   const emptyMessage = useMemo(() => {
     if (loading) return '';
-    return posts.length === 0
-      ? '아직 올라온 게시글이 없어. 첫 취향을 남겨볼까?'
-      : '';
+    return posts.length === 0 ? '아직 올라온 게시글이 없어. 첫 취향을 공유해볼까?' : '';
   }, [loading, posts.length]);
 
   const handleToggleLike = async (post: FeedPost) => {
@@ -84,8 +85,8 @@ const Feed: React.FC = () => {
               ...item,
               likedByCurrentUser: !item.likedByCurrentUser,
               likeCount: item.likedByCurrentUser
-                ? Math.max(0, item.likeCount - 1)
-                : item.likeCount + 1,
+                ? Math.max(0, (item.likeCount ?? 0) - 1)
+                : (item.likeCount ?? 0) + 1,
             }
           : item
       )
@@ -98,7 +99,7 @@ const Feed: React.FC = () => {
         await feedService.likePost(post.id);
       }
     } catch {
-      setError('좋아요 처리에 실패했어.');
+      setError('좋아요 처리를 실패했어.');
       loadFeed();
     }
   };
@@ -130,11 +131,11 @@ const Feed: React.FC = () => {
       setCommentInputs((prev) => ({ ...prev, [postId]: '' }));
       setPosts((prev) =>
         prev.map((post) =>
-          post.id === postId ? { ...post, commentCount: post.commentCount + 1 } : post
+          post.id === postId ? { ...post, commentCount: (post.commentCount ?? 0) + 1 } : post
         )
       );
     } catch {
-      setError('댓글 작성에 실패했어.');
+      setError('댓글 작성을 실패했어.');
     }
   };
 
@@ -146,7 +147,7 @@ const Feed: React.FC = () => {
       await matchingService.requestMatch(post.authorId);
       setSuccess(`${post.authorUsername}님에게 매칭 요청을 보냈어.`);
     } catch (err: any) {
-      setError(err.response?.data?.message || '매칭 요청을 보낼 수 없어.');
+      setError(err.response?.data?.message || '매칭 요청을 보낼 수 없었어.');
     } finally {
       setRequestingMatch((prev) => ({ ...prev, [post.id]: false }));
     }
@@ -161,12 +162,12 @@ const Feed: React.FC = () => {
               이웃 피드
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              취향이 닮은 사람들의 순간을 최신순으로 보여줘.
+              취향이 맞는 사람들의 순간을 최신순으로 보여줘.
             </Typography>
           </Box>
           <Stack direction="row" spacing={1}>
             <Tooltip title="새로고침">
-              <IconButton onClick={loadFeed}>
+              <IconButton aria-label="새로고침" onClick={loadFeed}>
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
@@ -181,8 +182,16 @@ const Feed: React.FC = () => {
           </Stack>
         </Box>
 
-        {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
-        {success && <Alert severity="success" onClose={() => setSuccess(null)}>{success}</Alert>}
+        {error && (
+          <Alert severity="error" onClose={() => setError(null)}>
+            {error}
+          </Alert>
+        )}
+        {success && (
+          <Alert severity="success" onClose={() => setSuccess(null)}>
+            {success}
+          </Alert>
+        )}
 
         {loading && (
           <Box sx={{ display: 'grid', placeItems: 'center', py: 8 }}>
@@ -201,6 +210,10 @@ const Feed: React.FC = () => {
         {posts.map((post) => {
           const isOwnPost = String(post.authorId) === String(currentUser?.id);
           const score = Math.round(post.compatibilityScore || 0);
+          const interestTags = post.interestTags ?? [];
+          const sharedInterests = post.sharedInterests ?? [];
+          const likeCount = post.likeCount ?? 0;
+          const commentCount = post.commentCount ?? 0;
 
           return (
             <Card key={post.id} variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
@@ -225,10 +238,14 @@ const Feed: React.FC = () => {
                 sx={{ aspectRatio: '1 / 1', objectFit: 'cover', bgcolor: 'grey.100' }}
               />
               <CardActions disableSpacing sx={{ px: 1.5 }}>
-                <IconButton onClick={() => handleToggleLike(post)} color={post.likedByCurrentUser ? 'error' : 'default'}>
+                <IconButton
+                  aria-label="좋아요"
+                  onClick={() => handleToggleLike(post)}
+                  color={post.likedByCurrentUser ? 'error' : 'default'}
+                >
                   {post.likedByCurrentUser ? <FavoriteIcon /> : <FavoriteBorderIcon />}
                 </IconButton>
-                <IconButton onClick={() => handleToggleComments(post.id)}>
+                <IconButton aria-label="댓글 보기" onClick={() => handleToggleComments(post.id)}>
                   <ChatBubbleOutlineIcon />
                 </IconButton>
                 <Box sx={{ flexGrow: 1 }} />
@@ -245,19 +262,19 @@ const Feed: React.FC = () => {
               </CardActions>
               <CardContent sx={{ pt: 0 }}>
                 <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
-                  좋아요 {post.likeCount.toLocaleString()}개
+                  좋아요 {likeCount.toLocaleString()}개
                 </Typography>
                 <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
                   {post.caption}
                 </Typography>
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
-                  {post.interestTags.map((tag) => (
+                  {interestTags.map((tag) => (
                     <Chip key={tag} size="small" label={`#${tag}`} />
                   ))}
                 </Stack>
-                {post.sharedInterests.length > 0 && (
+                {sharedInterests.length > 0 && (
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                    함께 좋아하는 관심사: {post.sharedInterests.join(', ')}
+                    함께 좋아하는 관심사: {sharedInterests.join(', ')}
                   </Typography>
                 )}
                 <Button
@@ -265,7 +282,7 @@ const Feed: React.FC = () => {
                   sx={{ mt: 1, px: 0 }}
                   onClick={() => handleToggleComments(post.id)}
                 >
-                  댓글 {post.commentCount}개 보기
+                  댓글 {commentCount}개 보기
                 </Button>
 
                 {expandedComments[post.id] && (
@@ -291,7 +308,7 @@ const Feed: React.FC = () => {
                         <TextField
                           fullWidth
                           size="small"
-                          placeholder="댓글 달기"
+                          placeholder="댓글 쓰기"
                           value={commentInputs[post.id] || ''}
                           onChange={(event) =>
                             setCommentInputs((prev) => ({
