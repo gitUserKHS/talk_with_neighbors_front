@@ -2,6 +2,7 @@
 // React 앱을 초기화하고 DOM에 마운트
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import './polyfills';
 import './index.css';
 import App from './App';
 
