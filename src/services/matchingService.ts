@@ -1,5 +1,6 @@
 import api from './api';
 import { MatchProfile, MatchingPreferences } from '../store/types';
+import { ChatRoom } from '../types/chat';
 
 export const matchingService = {
   async saveMatchingPreferences(preferences: MatchingPreferences): Promise<void> {
@@ -16,6 +17,11 @@ export const matchingService = {
     return response.data;
   },
 
+  async getIncomingRequests(): Promise<MatchProfile[]> {
+    const response = await api.get<MatchProfile[]>('/matching/requests/incoming');
+    return response.data;
+  },
+
   async requestMatch(targetUserId: string | number): Promise<MatchProfile> {
     const response = await api.post<MatchProfile>(`/matching/users/${targetUserId}/request`);
     return response.data;
@@ -25,8 +31,9 @@ export const matchingService = {
     await api.post('/matching/stop');
   },
 
-  async acceptMatch(matchId: string): Promise<void> {
-    await api.post(`/matching/${matchId}/accept`);
+  async acceptMatch(matchId: string): Promise<ChatRoom | null> {
+    const response = await api.post<ChatRoom | null>(`/matching/${matchId}/accept`);
+    return response.data;
   },
 
   async rejectMatch(matchId: string): Promise<void> {

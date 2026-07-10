@@ -91,21 +91,24 @@ class AuthService {
   async getCurrentUser(): Promise<User | null> {
     const sessionId = localStorage.getItem('sessionId');
     if (!sessionId) {
-      this.currentUser = null;
-      localStorage.removeItem('user');
+      this.clearCurrentUser();
       return null;
     }
 
-    const response = await api.get<LoginResponse>('/auth/me');
-    const user = this.extractUser(response.data);
+    try {
+      const response = await api.get<LoginResponse>('/auth/me');
+      const user = this.extractUser(response.data);
 
-    if (user?.id) {
-      this.setCurrentUser(user);
-      return user;
+      if (user?.id) {
+        this.setCurrentUser(user);
+        return user;
+      }
+    } catch (error) {
+      this.clearCurrentUser();
+      throw error;
     }
 
-    this.currentUser = null;
-    localStorage.removeItem('user');
+    this.clearCurrentUser();
     return null;
   }
 
@@ -128,7 +131,19 @@ class AuthService {
     websocketService.setCurrentUserId(user.id);
   }
 
+  private clearCurrentUser(): void {
+    this.currentUser = null;
+    localStorage.removeItem('user');
+    localStorage.removeItem('sessionId');
+    websocketService.setCurrentUserId(undefined);
+    websocketService.disconnect();
+  }
+
   private extractUser(payload: LoginResponse): User | null {
+    if (!payload) {
+      return null;
+    }
+
     if (payload.user) {
       return payload.user;
     }

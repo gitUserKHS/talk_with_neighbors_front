@@ -17,6 +17,7 @@ import {
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
+import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import SearchIcon from '@mui/icons-material/Search';
 import { useNavigate } from 'react-router-dom';
 import { chatService } from '../../services/chatService';
@@ -69,9 +70,14 @@ const ChatRoomList: React.FC = () => {
             </Typography>
             <Typography color="text.secondary">매칭되었거나 참여 중인 대화를 이어가.</Typography>
           </Box>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/chat/create')}>
-            방 만들기
-          </Button>
+          <Stack direction="row" spacing={1}>
+            <Button variant="outlined" startIcon={<GroupsOutlinedIcon />} onClick={() => navigate('/meetups')}>
+              취미 모임
+            </Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/chat/create')}>
+              대화 만들기
+            </Button>
+          </Stack>
         </Box>
 
         <TextField

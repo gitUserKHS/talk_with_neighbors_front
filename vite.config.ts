@@ -2,7 +2,11 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
+  base: process.env.GITHUB_ACTIONS ? '/talk_with_neighbors_front/' : '/',
   plugins: [react()],
+  build: {
+    reportCompressedSize: false,
+  },
   server: {
     port: 3000,
     proxy: {

@@ -279,7 +279,7 @@ class ChatService {
   // }
 
   // 메시지 전송 (API 호출 + 소켓 전송)
-  async sendMessage(message: ChatMessageDto): Promise<void> {
+  async sendMessage(message: ChatMessageDto): Promise<ChatMessageDto> {
     console.log('[chatService.ts] sendMessage called with:', message);
     if (!message.chatRoomId) {
       console.error('[chatService.ts] chatRoomId is missing in the message object', message);
@@ -291,7 +291,7 @@ class ChatService {
       console.log(`[chatService.ts] Attempting to POST to /chat/rooms/${message.chatRoomId}/messages`);
       const response = await api.post<MessageDto>(`/chat/rooms/${message.chatRoomId}/messages`, message);
       console.log('[chatService.ts] sendMessage POST request successful, response:', response.data);
-      // 필요하다면 response.data (MessageDto)를 반환하도록 함수의 반환 타입도 수정할 수 있습니다.
+      return convertToChatMessageDto(response.data as Message);
     } catch (error) {
       console.error('[chatService.ts] Error sending message via API:', error);
       if (axios.isAxiosError(error)) {

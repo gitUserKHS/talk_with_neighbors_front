@@ -10,6 +10,11 @@ export interface ChatRoom {
   id: string;
   roomName: string;
   type: ChatRoomType;
+  publicRoom?: boolean;
+  description?: string;
+  interestTags?: string[];
+  location?: string;
+  maxParticipants?: number;
   creatorId: string;
   participantIds?: number[];
   lastMessage?: string;

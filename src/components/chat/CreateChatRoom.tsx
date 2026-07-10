@@ -75,9 +75,9 @@ const CreateChatRoom: React.FC = () => {
         <Stack component="form" spacing={2.5} onSubmit={handleSubmit}>
           <Box>
             <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }}>
-              채팅방 만들기
+              대화 만들기
             </Typography>
-            <Typography color="text.secondary">닉네임으로 참여자를 초대할 수 있어.</Typography>
+            <Typography color="text.secondary">닉네임으로 이웃을 초대할 수 있어.</Typography>
           </Box>
           {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
           <FormControl fullWidth>

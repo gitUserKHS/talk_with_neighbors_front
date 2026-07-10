@@ -23,6 +23,8 @@ import {
 } from '@mui/material';
 import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import CloseIcon from '@mui/icons-material/Close';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import matchingService from '../services/matchingService';
@@ -42,6 +44,7 @@ const Matching: React.FC = () => {
     (state: RootState) => state.notifications
   );
   const [recommendations, setRecommendations] = useState<MatchProfile[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<MatchProfile[]>([]);
   const [preferences, setPreferences] = useState<MatchingPreferences>({
     maxDistance: 10,
     ageRange: [20, 35],
@@ -64,6 +67,7 @@ const Matching: React.FC = () => {
 
   useEffect(() => {
     loadRecommendations();
+    loadIncomingRequests();
   }, []);
 
   useEffect(() => {
@@ -108,6 +112,15 @@ const Matching: React.FC = () => {
     }
   };
 
+  const loadIncomingRequests = async () => {
+    try {
+      const result = await matchingService.getIncomingRequests();
+      setIncomingRequests(result);
+    } catch {
+      setError('받은 매칭 요청을 불러오지 못했어.');
+    }
+  };
+
   const handleSavePreferences = async () => {
     setLoading(true);
     setError(null);
@@ -141,7 +154,12 @@ const Matching: React.FC = () => {
     if (!pendingMatchOffer?.matchId) return;
 
     try {
-      await matchingService.acceptMatch(pendingMatchOffer.matchId);
+      const chatRoom = await matchingService.acceptMatch(pendingMatchOffer.matchId);
+      if (chatRoom?.id) {
+        dispatch(clearPendingMatchOffer());
+        navigate(`/chat/${chatRoom.id}`);
+        return;
+      }
       dispatch(setMatchStatusMessage('수락했어. 상대방 응답을 기다리는 중이야.'));
     } catch (err: any) {
       setError(err.response?.data?.message || '매칭 수락에 실패했어.');
@@ -157,6 +175,43 @@ const Matching: React.FC = () => {
       dispatch(setMatchStatusMessage(null));
     } catch (err: any) {
       setError(err.response?.data?.message || '매칭 거절에 실패했어.');
+    }
+  };
+
+  const handleAcceptIncoming = async (request: MatchProfile) => {
+    if (!request.matchId) return;
+    const requestKey = `incoming-${request.matchId}`;
+    setRequesting((prev) => ({ ...prev, [requestKey]: true }));
+    setError(null);
+
+    try {
+      const chatRoom = await matchingService.acceptMatch(request.matchId);
+      setIncomingRequests((prev) => prev.filter((item) => item.matchId !== request.matchId));
+      if (chatRoom?.id) {
+        navigate(`/chat/${chatRoom.id}`);
+      } else {
+        setSuccess('매칭을 수락했어. 상대방의 응답을 기다리는 중이야.');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || '매칭 수락에 실패했어.');
+    } finally {
+      setRequesting((prev) => ({ ...prev, [requestKey]: false }));
+    }
+  };
+
+  const handleRejectIncoming = async (request: MatchProfile) => {
+    if (!request.matchId) return;
+    const requestKey = `incoming-${request.matchId}`;
+    setRequesting((prev) => ({ ...prev, [requestKey]: true }));
+    setError(null);
+
+    try {
+      await matchingService.rejectMatch(request.matchId);
+      setIncomingRequests((prev) => prev.filter((item) => item.matchId !== request.matchId));
+    } catch (err: any) {
+      setError(err.response?.data?.message || '매칭 거절에 실패했어.');
+    } finally {
+      setRequesting((prev) => ({ ...prev, [requestKey]: false }));
     }
   };
 
@@ -246,6 +301,69 @@ const Matching: React.FC = () => {
             </Stack>
           </CardContent>
         </Card>
+
+        {incomingRequests.length > 0 && (
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+              받은 매칭 요청
+            </Typography>
+            <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+              {incomingRequests.map((request) => {
+                const requestKey = `incoming-${request.matchId}`;
+                return (
+                  <Card key={request.matchId} variant="outlined" sx={{ borderRadius: 2 }}>
+                    <CardContent>
+                      <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={2}
+                        alignItems={{ sm: 'center' }}
+                      >
+                        <Avatar src={request.profileImage || request.imageUrl} sx={{ width: 56, height: 56 }}>
+                          {request.username?.[0]}
+                        </Avatar>
+                        <Box sx={{ flexGrow: 1 }}>
+                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                              {request.username}
+                            </Typography>
+                            <Chip
+                              size="small"
+                              color="primary"
+                              label={`궁합 ${Math.round(request.compatibilityScore || 0)}점`}
+                            />
+                          </Stack>
+                          {request.bio && <Typography sx={{ mt: 0.75 }}>{request.bio}</Typography>}
+                          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                            {(request.sharedInterests || []).map((interest) => (
+                              <Chip key={interest} size="small" label={interest} />
+                            ))}
+                          </Stack>
+                        </Box>
+                        <Stack direction="row" spacing={1}>
+                          <Button
+                            startIcon={<CloseIcon />}
+                            disabled={requesting[requestKey]}
+                            onClick={() => handleRejectIncoming(request)}
+                          >
+                            거절
+                          </Button>
+                          <Button
+                            variant="contained"
+                            startIcon={<CheckCircleOutlineIcon />}
+                            disabled={requesting[requestKey]}
+                            onClick={() => handleAcceptIncoming(request)}
+                          >
+                            수락하고 채팅하기
+                          </Button>
+                        </Stack>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </Stack>
+          </Box>
+        )}
 
         <Stack spacing={2}>
           {recommendations.map((profile) => (

@@ -11,13 +11,19 @@ interface CreateRoomModalProps {
 export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ isOpen, onClose, onRoomCreated }) => {
   const [name, setName] = useState('');
   const [type, setType] = useState<ChatRoomType>(ChatRoomType.GROUP);
-  const [participantIds, setParticipantIds] = useState<number[]>([]);
-  const [description, setDescription] = useState('');
+  const [participantInput, setParticipantInput] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await chatService.createRoom(name, type, participantIds, description);
+      await chatService.createRoom({
+        name,
+        type,
+        participantNicknames: participantInput
+          .split(',')
+          .map((nickname) => nickname.trim())
+          .filter(Boolean),
+      });
       onRoomCreated();
       onClose();
     } catch (error) {
@@ -52,10 +58,12 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ isOpen, onClos
             </select>
           </div>
           <div>
-            <label>설명:</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+            <label>참여자 닉네임:</label>
+            <input
+              type="text"
+              value={participantInput}
+              onChange={(e) => setParticipantInput(e.target.value)}
+              placeholder="쉼표로 구분"
             />
           </div>
           <div className="modal-buttons">

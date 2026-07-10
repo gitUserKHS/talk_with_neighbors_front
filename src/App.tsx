@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { Suspense, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
@@ -12,16 +12,18 @@ import { authService } from './services/authService';
 import { websocketService } from './services/websocketService';
 import Navbar from './components/Navbar';
 import NotificationHandler from './components/notifications/NotificationHandler';
-import Home from './pages/Home';
-import Feed from './pages/Feed';
-import NewPost from './pages/NewPost';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import Matching from './pages/Matching';
-import ChatRoomList from './components/chat/ChatRoomList';
-import ChatRoom from './components/chat/ChatRoom';
-import CreateChatRoom from './components/chat/CreateChatRoom';
-import Profile from './pages/Profile';
+
+const Home = React.lazy(() => import('./pages/Home'));
+const Feed = React.lazy(() => import('./pages/Feed'));
+const NewPost = React.lazy(() => import('./pages/NewPost'));
+const Login = React.lazy(() => import('./pages/Login'));
+const Register = React.lazy(() => import('./pages/Register'));
+const Matching = React.lazy(() => import('./pages/Matching'));
+const Meetups = React.lazy(() => import('./pages/Meetups'));
+const ChatRoomList = React.lazy(() => import('./components/chat/ChatRoomList'));
+const ChatRoom = React.lazy(() => import('./components/chat/ChatRoom'));
+const CreateChatRoom = React.lazy(() => import('./components/chat/CreateChatRoom'));
+const Profile = React.lazy(() => import('./pages/Profile'));
 
 const FullPageLoader = () => (
   <Box sx={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}>
@@ -101,7 +103,8 @@ const AppContent: React.FC = () => (
       <AuthInitializer>
         <Navbar />
         <NotificationHandler />
-        <Routes>
+        <Suspense fallback={<FullPageLoader />}>
+          <Routes>
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
@@ -126,6 +129,14 @@ const AppContent: React.FC = () => (
             element={
               <ProtectedRoute>
                 <Matching />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/meetups"
+            element={
+              <ProtectedRoute>
+                <Meetups />
               </ProtectedRoute>
             }
           />
@@ -161,7 +172,8 @@ const AppContent: React.FC = () => (
               </ProtectedRoute>
             }
           />
-        </Routes>
+          </Routes>
+        </Suspense>
       </AuthInitializer>
     </Router>
   </ThemeProvider>

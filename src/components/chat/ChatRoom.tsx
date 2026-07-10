@@ -4,15 +4,22 @@ import {
   Avatar,
   Box,
   Button,
+  Chip,
   CircularProgress,
   Container,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
   IconButton,
   Paper,
   Stack,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import SendIcon from '@mui/icons-material/Send';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
@@ -20,6 +27,7 @@ import { chatService } from '../../services/chatService';
 import { websocketService } from '../../services/websocketService';
 import { ChatMessageDto, ChatRoom as ChatRoomType, WebSocketResponse } from '../../types/chat';
 import { RootState } from '../../store/types';
+import { meetupService } from '../../services/meetupService';
 
 const formatTime = (value: string) =>
   new Intl.DateTimeFormat('ko-KR', {
@@ -50,6 +58,8 @@ const ChatRoom: React.FC = () => {
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -116,11 +126,28 @@ const ChatRoom: React.FC = () => {
     setMessages((prev) => [...prev, optimisticMessage]);
 
     try {
-      await chatService.sendMessage(optimisticMessage);
+      const savedMessage = await chatService.sendMessage(optimisticMessage);
+      setMessages((prev) => prev.map((message) => (
+        message.id === optimisticMessage.id ? savedMessage : message
+      )));
     } catch {
       setError('메시지 전송에 실패했어.');
       setMessages((prev) => prev.filter((item) => item.id !== optimisticMessage.id));
       setNewMessage(content);
+    }
+  };
+
+  const handleLeaveMeetup = async () => {
+    if (!roomId) return;
+    setLeaving(true);
+    try {
+      await meetupService.leaveMeetup(roomId);
+      navigate('/meetups');
+    } catch (err: any) {
+      setError(err.response?.data?.message || '모임에서 나가지 못했어.');
+    } finally {
+      setLeaving(false);
+      setLeaveDialogOpen(false);
     }
   };
 
@@ -156,7 +183,21 @@ const ChatRoom: React.FC = () => {
             <Typography variant="caption" color="text.secondary">
               {room?.participantCount || 0}명 참여 중
             </Typography>
+            {room?.publicRoom && (
+              <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
+                {(room.interestTags ?? []).map((tag) => (
+                  <Chip key={tag} label={tag} size="small" variant="outlined" />
+                ))}
+              </Stack>
+            )}
           </Box>
+          {room?.publicRoom && (
+            <Tooltip title="모임 나가기">
+              <IconButton aria-label="모임 나가기" onClick={() => setLeaveDialogOpen(true)} sx={{ ml: 'auto' }}>
+                <ExitToAppIcon />
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
 
         <Box sx={{ overflowY: 'auto', p: 2, bgcolor: 'grey.50' }}>
@@ -216,6 +257,19 @@ const ChatRoom: React.FC = () => {
           </Stack>
         </Box>
       </Paper>
+
+      <Dialog open={leaveDialogOpen} onClose={() => !leaving && setLeaveDialogOpen(false)}>
+        <DialogTitle>모임에서 나갈까?</DialogTitle>
+        <DialogContent>
+          <Typography>나가면 이 모임의 대화를 더 이상 볼 수 없어.</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLeaveDialogOpen(false)} disabled={leaving}>취소</Button>
+          <Button color="error" onClick={handleLeaveMeetup} disabled={leaving}>
+            {leaving ? '나가는 중' : '나가기'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
