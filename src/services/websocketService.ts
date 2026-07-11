@@ -38,7 +38,7 @@ class WebSocketService {
       return;
     }
 
-    const socketUrl = import.meta.env.VITE_SOCKET_URL || 'http://localhost:8080';
+    const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin;
     this.client = new Client({
       webSocketFactory: () => new SockJS(`${socketUrl}/ws?sessionId=${sessionId}`),
       reconnectDelay: 5000,

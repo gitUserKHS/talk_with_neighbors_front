@@ -24,6 +24,8 @@ jobs:
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
+      - name: Build production container
+        run: docker build --build-arg VITE_API_URL=/api --build-arg VITE_SOCKET_URL= -t talk-with-neighbors-frontend:ci .
       - uses: actions/upload-artifact@v4
         with:
           name: frontend-dist
