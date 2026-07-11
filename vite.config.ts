@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig({
   base: process.env.GITHUB_ACTIONS ? '/talk_with_neighbors_front/' : '/',
+  define: {
+    global: 'globalThis',
+  },
   plugins: [react()],
   build: {
     reportCompressedSize: false,
