@@ -32,3 +32,14 @@ export interface BlockedUser {
   profileImage?: string;
   blockedAt: string;
 }
+
+export interface HiddenContent {
+  id: number;
+  targetType: SafetyTargetType;
+  targetId: string;
+  title: string;
+  preview?: string;
+  imageUrl?: string;
+  available: boolean;
+  hiddenAt: string;
+}

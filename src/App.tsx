@@ -187,6 +187,14 @@ const AppContent: React.FC = () => (
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/mypage"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
           </Routes>
         </Suspense>
       </AuthInitializer>

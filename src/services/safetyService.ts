@@ -1,5 +1,5 @@
 import api from './api';
-import { BlockedUser, CreateReportRequest, SafetyReport, SafetyTargetType } from '../types/safety';
+import { BlockedUser, CreateReportRequest, HiddenContent, SafetyReport, SafetyTargetType } from '../types/safety';
 
 export const safetyService = {
   async blockUser(userId: number): Promise<BlockedUser> {
@@ -27,6 +27,14 @@ export const safetyService = {
 
   async unhide(targetType: SafetyTargetType, targetId: string): Promise<void> {
     await api.delete(`/safety/hidden/${targetType}/${encodeURIComponent(targetId)}`);
+  },
+
+  async getHiddenContents(): Promise<HiddenContent[]> {
+    return (await api.get<HiddenContent[]>('/safety/hidden')).data;
+  },
+
+  async getMyReports(): Promise<SafetyReport[]> {
+    return (await api.get<SafetyReport[]>('/safety/reports/mine')).data;
   },
 };
 

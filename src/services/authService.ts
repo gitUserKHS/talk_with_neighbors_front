@@ -125,6 +125,10 @@ class AuthService {
     return response.data;
   }
 
+  clearLocalSession(): void {
+    this.clearCurrentUser();
+  }
+
   private setCurrentUser(user: User): void {
     this.currentUser = user;
     localStorage.setItem('user', JSON.stringify(user));

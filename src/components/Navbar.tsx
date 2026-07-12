@@ -154,7 +154,7 @@ const Navbar: React.FC = () => {
               </IconButton>
             </Tooltip>
             <Tooltip title="프로필">
-              <IconButton component={RouterLink} to="/profile" aria-label="프로필" sx={{ p: 0.5 }}>
+              <IconButton component={RouterLink} to="/mypage" aria-label="마이페이지" sx={{ p: 0.5 }}>
                 <Avatar src={user.profileImage} sx={{ width: 34, height: 34, bgcolor: 'secondary.main', fontSize: 15 }}>
                   {user.username?.[0]}
                 </Avatar>

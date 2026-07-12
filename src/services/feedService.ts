@@ -50,6 +50,14 @@ export const feedService = {
     const response = await api.post<FeedComment>(`/feed/${postId}/comments`, { content });
     return response.data;
   },
+
+  async deletePost(postId: string): Promise<void> {
+    await api.delete(`/feed/${postId}`);
+  },
+
+  async deleteComment(commentId: string): Promise<void> {
+    await api.delete(`/feed/comments/${commentId}`);
+  },
 };
 
 export default feedService;
