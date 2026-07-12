@@ -55,7 +55,7 @@ class ChatService {
     }
   }
 
-  async updateRoom(roomId: number, updateDto: UpdateChatRoomDto): Promise<ChatRoom> {
+  async updateRoom(roomId: string, updateDto: UpdateChatRoomDto): Promise<ChatRoom> {
     const response = await api.patch<ChatRoom>(`/chat/rooms/${roomId}`, updateDto);
     return response.data;
   }
@@ -153,7 +153,7 @@ class ChatService {
     }
   }
 
-  async closeRoom(roomId: number): Promise<void> {
+  async closeRoom(roomId: string): Promise<void> {
     await api.patch(`/chat/rooms/${roomId}`, {
       status: 'CLOSED'
     });

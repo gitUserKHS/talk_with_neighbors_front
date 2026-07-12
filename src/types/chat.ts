@@ -10,6 +10,7 @@ export interface ChatRoom {
   id: string;
   roomName: string;
   type: ChatRoomType;
+  status?: 'ACTIVE' | 'CLOSED';
   publicRoom?: boolean;
   description?: string;
   interestTags?: string[];
@@ -127,4 +128,4 @@ export interface Page<T> {
   numberOfElements: number;
   first: boolean;
   empty: boolean;
-} 
+}
