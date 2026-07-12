@@ -44,6 +44,7 @@ export interface MatchProfile {
   distance?: number;
   compatibilityScore?: number;
   sharedInterests?: string[];
+  explanationReasons?: string[];
 }
 
 export interface NotificationMessage {

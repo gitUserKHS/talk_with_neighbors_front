@@ -14,6 +14,11 @@ export interface HobbyMeetup {
   creatorUsername?: string;
   lastMessage?: string;
   lastMessageTime?: string;
+  scheduledAt?: string;
+  durationMinutes?: number;
+  registrationDeadline?: string;
+  waitlisted: boolean;
+  waitlistCount: number;
 }
 
 export interface CreateHobbyMeetupRequest {
@@ -22,6 +27,9 @@ export interface CreateHobbyMeetupRequest {
   interestTags: string[];
   location?: string;
   maxParticipants: number;
+  scheduledAt?: string;
+  durationMinutes?: number;
+  registrationDeadline?: string;
 }
 
 export type HobbyMeetupPage = Page<HobbyMeetup>;

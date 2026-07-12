@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   AppBar,
   Avatar,
@@ -27,11 +27,8 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { authService } from '../services/authService';
 import { setUser } from '../store/slices/authSlice';
-import {
-  markAllOfflineNotificationsAsRead,
-  markOfflineNotificationAsRead,
-} from '../store/slices/notificationSlice';
 import { RootState } from '../store/types';
+import notificationService, { InboxNotification } from '../services/notificationService';
 
 const navItems = [
   { label: '피드', path: '/feed', icon: <HomeIcon /> },
@@ -46,10 +43,29 @@ const Navbar: React.FC = () => {
   const location = useLocation();
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
-  const { offlineNotifications, unreadOfflineCount } = useSelector(
-    (state: RootState) => state.notifications
-  );
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [inboxNotifications, setInboxNotifications] = useState<InboxNotification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  const loadNotifications = useCallback(async () => {
+    if (!user) return;
+    try {
+      const [page, count] = await Promise.all([
+        notificationService.getNotifications(0, 8),
+        notificationService.unreadCount(),
+      ]);
+      setInboxNotifications(page.content);
+      setUnreadCount(count);
+    } catch {
+      // 알림 조회 실패가 전체 내비게이션을 막지 않도록 유지한다.
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadNotifications();
+    window.addEventListener('notifications:changed', loadNotifications);
+    return () => window.removeEventListener('notifications:changed', loadNotifications);
+  }, [loadNotifications]);
 
   const handleLogout = async () => {
     await authService.logout();
@@ -58,12 +74,19 @@ const Navbar: React.FC = () => {
     window.location.reload();
   };
 
-  const handleNotificationClick = (id: string, navigateTo?: string) => {
-    dispatch(markOfflineNotificationAsRead(id));
-    setAnchorEl(null);
-    if (navigateTo) {
-      navigate(navigateTo);
+  const handleNotificationClick = async (notification: InboxNotification) => {
+    if (!notification.readAt) {
+      await notificationService.markRead(notification.id);
     }
+    setAnchorEl(null);
+    if (notification.actionUrl) {
+      navigate(notification.actionUrl);
+    }
+  };
+
+  const markAllNotificationsRead = async () => {
+    await notificationService.markAllRead();
+    await loadNotifications();
   };
 
   const isActive = (path: string) =>
@@ -124,8 +147,8 @@ const Navbar: React.FC = () => {
             </Box>
             <Divider orientation="vertical" flexItem sx={{ mx: 0.25, display: { xs: 'none', sm: 'block' } }} />
             <Tooltip title="알림">
-              <IconButton aria-label="알림" onClick={(event) => setAnchorEl(event.currentTarget)}>
-                <Badge badgeContent={unreadOfflineCount} color="error">
+              <IconButton aria-label="알림" onClick={(event) => { setAnchorEl(event.currentTarget); loadNotifications(); }}>
+                <Badge badgeContent={unreadCount} color="error">
                   <NotificationsIcon />
                 </Badge>
               </IconButton>
@@ -206,32 +229,36 @@ const Navbar: React.FC = () => {
           <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
             알림
           </Typography>
-          {offlineNotifications.length > 0 && (
-            <Button size="small" onClick={() => dispatch(markAllOfflineNotificationsAsRead())}>
+          {inboxNotifications.length > 0 && (
+            <Button size="small" onClick={markAllNotificationsRead}>
               모두 읽음
             </Button>
           )}
         </Box>
         <Divider />
-        {offlineNotifications.length === 0 ? (
+        {inboxNotifications.length === 0 ? (
           <MenuItem disabled>
             <ListItemText primary="새 알림이 없어." />
           </MenuItem>
         ) : (
-          offlineNotifications.slice(0, 8).map((notification) => (
+          inboxNotifications.map((notification) => (
             <MenuItem
               key={notification.id}
-              onClick={() => handleNotificationClick(notification.id, notification.data?.navigateTo)}
-              sx={{ alignItems: 'flex-start', bgcolor: notification.isRead ? 'transparent' : 'action.hover' }}
+              onClick={() => handleNotificationClick(notification)}
+              sx={{ alignItems: 'flex-start', bgcolor: notification.readAt ? 'transparent' : 'action.hover' }}
             >
               <ListItemText
-                primary={notification.title}
+                primary={notification.type.replaceAll('_', ' ')}
                 secondary={notification.message}
-                primaryTypographyProps={{ fontWeight: notification.isRead ? 500 : 800 }}
+                primaryTypographyProps={{ fontWeight: notification.readAt ? 500 : 800 }}
               />
             </MenuItem>
           ))
         )}
+        <Divider />
+        <MenuItem component={RouterLink} to="/notifications" onClick={() => setAnchorEl(null)}>
+          <ListItemText primary="전체 알림 보기" primaryTypographyProps={{ textAlign: 'center', fontWeight: 700 }} />
+        </MenuItem>
       </Menu>
     </AppBar>
   );

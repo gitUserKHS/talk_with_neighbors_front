@@ -50,6 +50,14 @@ export const matchingService = {
     });
     return response.data;
   },
+
+  async sendRecommendationFeedback(
+    candidateId: string | number,
+    sentiment: 'POSITIVE' | 'NEGATIVE',
+    reason?: string
+  ): Promise<void> {
+    await api.post(`/matching/recommendations/${candidateId}/feedback`, { sentiment, reason });
+  },
 };
 
 export default matchingService;

@@ -24,6 +24,8 @@ const ChatRoomList = React.lazy(() => import('./components/chat/ChatRoomList'));
 const ChatRoom = React.lazy(() => import('./components/chat/ChatRoom'));
 const CreateChatRoom = React.lazy(() => import('./components/chat/CreateChatRoom'));
 const Profile = React.lazy(() => import('./pages/Profile'));
+const Notifications = React.lazy(() => import('./pages/Notifications'));
+const Onboarding = React.lazy(() => import('./pages/Onboarding'));
 
 const FullPageLoader = () => (
   <Box sx={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}>
@@ -34,9 +36,14 @@ const FullPageLoader = () => (
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const location = useLocation();
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
+  const user = useSelector((state: RootState) => state.auth.user);
 
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (user && user.profileComplete === false && location.pathname !== '/onboarding') {
+    return <Navigate to="/onboarding" replace />;
   }
 
   return <>{children}</>;
@@ -163,6 +170,14 @@ const AppContent: React.FC = () => (
                 <ChatRoom />
               </ProtectedRoute>
             }
+          />
+          <Route
+            path="/onboarding"
+            element={<ProtectedRoute><Onboarding /></ProtectedRoute>}
+          />
+          <Route
+            path="/notifications"
+            element={<ProtectedRoute><Notifications /></ProtectedRoute>}
           />
           <Route
             path="/profile"

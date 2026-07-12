@@ -51,7 +51,7 @@ const Register: React.FC = () => {
       }
 
       dispatch(setUser(user));
-      navigate('/feed', { replace: true });
+      navigate('/onboarding', { replace: true });
     } catch {
       setError('회원가입에 실패했어. 잠시 뒤 다시 시도해줘.');
     } finally {

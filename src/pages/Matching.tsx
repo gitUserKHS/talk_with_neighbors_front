@@ -25,6 +25,8 @@ import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import CloseIcon from '@mui/icons-material/Close';
+import ThumbUpAltOutlinedIcon from '@mui/icons-material/ThumbUpAltOutlined';
+import ThumbDownAltOutlinedIcon from '@mui/icons-material/ThumbDownAltOutlined';
 import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
 import matchingService from '../services/matchingService';
@@ -147,6 +149,18 @@ const Matching: React.FC = () => {
       setError(err.response?.data?.message || '매칭 요청을 보낼 수 없어.');
     } finally {
       setRequesting((prev) => ({ ...prev, [profile.id]: false }));
+    }
+  };
+
+  const handleFeedback = async (profile: MatchProfile, sentiment: 'POSITIVE' | 'NEGATIVE') => {
+    try {
+      await matchingService.sendRecommendationFeedback(profile.id, sentiment);
+      if (sentiment === 'NEGATIVE') {
+        setRecommendations((items) => items.filter((item) => item.id !== profile.id));
+      }
+      setSuccess(sentiment === 'POSITIVE' ? '좋은 추천으로 기억할게.' : '다음 추천에 반영할게.');
+    } catch {
+      setError('추천 피드백을 저장하지 못했어.');
     }
   };
 
@@ -393,6 +407,15 @@ const Matching: React.FC = () => {
                           <Chip key={interest} size="small" label={interest} />
                         )
                       )}
+                    </Stack>
+                    {(profile.explanationReasons || []).length > 0 && (
+                      <Alert severity="info" icon={false} sx={{ mt: 1.5, py: 0.5 }}>
+                        추천한 이유 · {profile.explanationReasons?.join(' · ')}
+                      </Alert>
+                    )}
+                    <Stack direction="row" spacing={0.5} sx={{ mt: 1 }}>
+                      <Button size="small" startIcon={<ThumbUpAltOutlinedIcon />} onClick={() => handleFeedback(profile, 'POSITIVE')}>잘 맞아요</Button>
+                      <Button size="small" color="inherit" startIcon={<ThumbDownAltOutlinedIcon />} onClick={() => handleFeedback(profile, 'NEGATIVE')}>다른 추천</Button>
                     </Stack>
                   </Box>
                   <Button

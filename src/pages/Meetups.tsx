@@ -27,6 +27,7 @@ import HowToRegOutlinedIcon from '@mui/icons-material/HowToRegOutlined';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutline';
 import SearchIcon from '@mui/icons-material/Search';
+import EventOutlinedIcon from '@mui/icons-material/EventOutlined';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { meetupService } from '../services/meetupService';
@@ -39,6 +40,9 @@ const EMPTY_FORM: CreateHobbyMeetupRequest = {
   interestTags: [],
   location: '',
   maxParticipants: 6,
+  durationMinutes: 120,
+  scheduledAt: '',
+  registrationDeadline: '',
 };
 
 const toTags = (value: string) =>
@@ -72,6 +76,7 @@ const MeetupCard: React.FC<{
                 />
               )}
               {meetup.joined && <Chip color="success" size="small" label="참여 중" />}
+              {meetup.waitlisted && <Chip color="warning" size="small" label={`대기 중 · ${meetup.waitlistCount}명`} />}
             </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {meetup.creatorUsername ? `${meetup.creatorUsername}님이 만들었어` : '이웃이 만든 모임'}
@@ -81,11 +86,11 @@ const MeetupCard: React.FC<{
             variant={meetup.joined ? 'outlined' : 'contained'}
             color={meetup.joined ? 'inherit' : 'primary'}
             startIcon={meetup.joined ? <ForumOutlinedIcon /> : <HowToRegOutlinedIcon />}
-            disabled={busy || (!meetup.joined && meetup.full)}
+            disabled={busy || meetup.waitlisted}
             onClick={() => (meetup.joined ? onOpen(meetup.roomId) : onJoin(meetup))}
             sx={{ flexShrink: 0 }}
           >
-            {meetup.joined ? '채팅 열기' : meetup.full ? '마감' : '참여하기'}
+            {meetup.joined ? '채팅 열기' : meetup.waitlisted ? '대기 등록됨' : meetup.full ? '대기 등록' : '참여하기'}
           </Button>
         </Stack>
 
@@ -109,6 +114,12 @@ const MeetupCard: React.FC<{
             <Stack direction="row" spacing={0.5} alignItems="center">
               <LocationOnOutlinedIcon fontSize="small" />
               <Typography variant="body2">{meetup.location}</Typography>
+            </Stack>
+          )}
+          {meetup.scheduledAt && (
+            <Stack direction="row" spacing={0.5} alignItems="center">
+              <EventOutlinedIcon fontSize="small" />
+              <Typography variant="body2">{new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(meetup.scheduledAt))}</Typography>
             </Stack>
           )}
         </Stack>
@@ -186,6 +197,8 @@ const Meetups: React.FC = () => {
         title: form.title.trim(),
         description: form.description?.trim() || undefined,
         location: form.location?.trim() || undefined,
+        scheduledAt: form.scheduledAt || undefined,
+        registrationDeadline: form.registrationDeadline || undefined,
         interestTags,
       });
       setCreateOpen(false);
@@ -203,7 +216,9 @@ const Meetups: React.FC = () => {
     try {
       const joinedMeetup = await meetupService.joinMeetup(meetup.roomId);
       setMeetups((items) => items.map((item) => (item.roomId === joinedMeetup.roomId ? joinedMeetup : item)));
-      navigate(`/chat/${joinedMeetup.roomId}`);
+      if (joinedMeetup.joined) {
+        navigate(`/chat/${joinedMeetup.roomId}`);
+      }
     } catch (err: any) {
       setError(err.response?.data?.message || '모임에 참여하지 못했어.');
     } finally {
@@ -345,6 +360,33 @@ const Meetups: React.FC = () => {
                   required
                 />
               </Stack>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                <TextField
+                  label="모임 일정"
+                  type="datetime-local"
+                  value={form.scheduledAt || ''}
+                  onChange={(event) => setForm((current) => ({ ...current, scheduledAt: event.target.value }))}
+                  InputLabelProps={{ shrink: true }}
+                  fullWidth
+                />
+                <TextField
+                  label="예상 시간(분)"
+                  type="number"
+                  value={form.durationMinutes || 120}
+                  onChange={(event) => setForm((current) => ({ ...current, durationMinutes: Number(event.target.value) }))}
+                  inputProps={{ min: 30, max: 1440, step: 30 }}
+                  sx={{ width: { sm: 180 } }}
+                />
+              </Stack>
+              <TextField
+                label="신청 마감"
+                type="datetime-local"
+                value={form.registrationDeadline || ''}
+                onChange={(event) => setForm((current) => ({ ...current, registrationDeadline: event.target.value }))}
+                InputLabelProps={{ shrink: true }}
+                helperText="비워두면 모임 시작 전까지 신청할 수 있어."
+                fullWidth
+              />
             </Stack>
           </DialogContent>
           <DialogActions>
