@@ -9,12 +9,21 @@ import {
   setMatchRejected,
   setPendingMatchOffer,
 } from '../store/slices/notificationSlice';
+import {
+  moveChatRoomToTop,
+  removeRoom,
+  updateMessageReadStatus,
+  updateUnreadCount,
+} from '../store/slices/chatSlice';
 
 interface WebSocketNotification<T = any> {
   type: string;
   data?: T;
   message?: string;
   navigateTo?: string;
+  actionUrl?: string;
+  createdAt?: string;
+  priority?: number;
 }
 
 class WebSocketService {
@@ -22,6 +31,7 @@ class WebSocketService {
   private currentUserId: number | string | undefined;
   private isConnected = false;
   private roomSubscriptions = new Map<string, StompSubscription>();
+  private readStatusSubscriptions = new Map<string, StompSubscription>();
   private connectionCallbacks: Array<(connected: boolean) => void> = [];
 
   initialize(currentUserId?: number | string): void {
@@ -49,6 +59,7 @@ class WebSocketService {
         this.isConnected = true;
         this.emitConnectionState(true);
         this.subscribeToGlobalTopics();
+        this.client?.publish({ destination: '/app/client/ready', body: '{}' });
       },
       onDisconnect: () => {
         this.isConnected = false;
@@ -70,6 +81,8 @@ class WebSocketService {
   disconnect(): void {
     this.roomSubscriptions.forEach((subscription) => subscription.unsubscribe());
     this.roomSubscriptions.clear();
+    this.readStatusSubscriptions.forEach((subscription) => subscription.unsubscribe());
+    this.readStatusSubscriptions.clear();
     this.client?.deactivate();
     this.client = null;
     this.isConnected = false;
@@ -107,11 +120,31 @@ class WebSocketService {
       }
     });
     this.roomSubscriptions.set(roomId, subscription);
+
+    const readStatusSubscription = this.client.subscribe(
+      `/topic/chat/room/${roomId}/read-status`,
+      (message) => {
+        const notification = this.parseMessage<WebSocketNotification>(message);
+        const data = notification?.data;
+        if (notification?.type === 'MESSAGE_READ_STATUS_UPDATE' && data) {
+          store.dispatch(
+            updateMessageReadStatus({
+              messageId: String(data.messageId),
+              roomId: String(data.chatRoomId),
+              readByUserId: data.readByUserId,
+            })
+          );
+        }
+      }
+    );
+    this.readStatusSubscriptions.set(roomId, readStatusSubscription);
   }
 
   unsubscribeFromRoom(roomId: string): void {
     this.roomSubscriptions.get(roomId)?.unsubscribe();
     this.roomSubscriptions.delete(roomId);
+    this.readStatusSubscriptions.get(roomId)?.unsubscribe();
+    this.readStatusSubscriptions.delete(roomId);
   }
 
   joinRoom(roomId: string): void {
@@ -167,16 +200,41 @@ class WebSocketService {
           addNotification({
             type: 'info',
             message: notification.message,
-            navigateTo: notification.navigateTo,
+            navigateTo: notification.navigateTo || notification.actionUrl,
           })
         );
+      }
+    });
+
+    this.client.subscribe('/user/queue/chat-updates', (message) => {
+      const notification = this.parseMessage<WebSocketNotification>(message);
+      const data = notification?.data;
+      if (!notification || !data) return;
+
+      if (notification.type === 'CHAT_ROOM_LIST_UPDATE' && data.chatRoomId) {
+        store.dispatch(moveChatRoomToTop(String(data.chatRoomId)));
+      } else if (notification.type === 'UNREAD_COUNT_UPDATE' && data.chatRoomId) {
+        store.dispatch(
+          updateUnreadCount({
+            roomId: String(data.chatRoomId),
+            count: Number(data.unreadCount || 0),
+          })
+        );
+      } else if (notification.type === 'ROOM_DELETED' && data.chatRoomId) {
+        store.dispatch(removeRoom(String(data.chatRoomId)));
       }
     });
 
     this.client.subscribe('/user/queue/system-notifications', (message) => {
       const notification = this.parseMessage<WebSocketNotification>(message);
       if (notification?.message) {
-        store.dispatch(addNotification({ type: 'info', message: notification.message }));
+        store.dispatch(
+          addNotification({
+            type: 'info',
+            message: notification.message,
+            navigateTo: notification.navigateTo || notification.actionUrl,
+          })
+        );
       }
     });
   }
@@ -194,9 +252,10 @@ class WebSocketService {
         );
         break;
       case 'MATCH_COMPLETED_AND_CHAT_CREATED':
+        const roomId = notification.data?.chatRoomId || notification.data?.id;
         store.dispatch(
           setMatchCompleted({
-            id: String(notification.data?.id),
+            id: String(roomId || ''),
             name: notification.data?.roomName || notification.data?.name || '1:1 채팅',
             message: notification.message,
           })
