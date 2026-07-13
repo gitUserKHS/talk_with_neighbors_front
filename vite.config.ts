@@ -2,7 +2,9 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  base: process.env.GITHUB_ACTIONS ? '/talk_with_neighbors_front/' : '/',
+  // Deployment workflows must choose their base explicitly. Inferring it from
+  // GITHUB_ACTIONS also changes container builds that happen to run in CI.
+  base: process.env.VITE_BASE_PATH || '/',
   define: {
     global: 'globalThis',
   },
