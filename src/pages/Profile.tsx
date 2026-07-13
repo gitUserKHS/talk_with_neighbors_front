@@ -1,12 +1,13 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Alert, Avatar, Box, Button, Card, CardContent, Chip, CircularProgress, Container,
   Divider, FormControlLabel, LinearProgress, List, ListItem, ListItemAvatar,
-  ListItemText, Paper, Snackbar, Stack, Switch, Tab, Tabs, TextField, Typography,
+  ListItemText, IconButton, Paper, Snackbar, Stack, Switch, Tab, Tabs, TextField, Tooltip, Typography,
 } from '@mui/material';
 import {
   ArticleOutlined, BlockOutlined, CommentOutlined, FavoriteBorder, GroupsOutlined,
-  LockOutlined, NotificationsOutlined, PersonOutline, SettingsOutlined, VisibilityOffOutlined,
+  DeleteOutline, LockOutlined, NotificationsOutlined, PersonOutline, PhotoCameraOutlined,
+  SettingsOutlined, VisibilityOffOutlined,
 } from '@mui/icons-material';
 import { useDispatch } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
@@ -63,11 +64,14 @@ const Profile: React.FC = () => {
   const [preferences, setPreferences] = useState<UserPreferences>(emptyPreferences);
   const [activityKind, setActivityKind] = useState<'posts' | 'comments' | 'likes' | 'meetups'>('posts');
   const [editing, setEditing] = useState(false);
+  const [profileUploading, setProfileUploading] = useState(false);
+  const [profileUploadProgress, setProfileUploadProgress] = useState(0);
   const [newInterest, setNewInterest] = useState('');
   const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' });
   const [profile, setProfile] = useState<ProfileForm>({
     username: '', email: '', gender: '', age: '', interests: [], bio: '', profileImage: '', location: null,
   });
+  const profileImageInputRef = useRef<HTMLInputElement>(null);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -100,11 +104,52 @@ const Profile: React.FC = () => {
     try {
       const updated = await authService.updateProfile({
         username: profile.username, gender: profile.gender || undefined, age: profile.age ? Number(profile.age) : undefined,
-        bio: profile.bio, interests: profile.interests, profileImage: profile.profileImage || undefined,
+        bio: profile.bio, interests: profile.interests,
         latitude: profile.location?.latitude, longitude: profile.location?.longitude, address: profile.location?.address,
       });
       dispatch(setUser(updated)); setEditing(false); setMessage('프로필을 저장했어.'); await loadAll();
     } catch { setError('프로필 저장에 실패했어.'); }
+  };
+
+  const uploadProfileImage = async (file?: File) => {
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+      setError('프로필 사진은 JPG, PNG, GIF, WebP 형식만 사용할 수 있어.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      setError('프로필 사진은 10MB를 넘을 수 없어.');
+      return;
+    }
+    setProfileUploading(true);
+    setProfileUploadProgress(0);
+    setError(null);
+    try {
+      const updated = await authService.uploadProfileImage(file, setProfileUploadProgress);
+      dispatch(setUser(updated));
+      setProfile((current) => ({ ...current, profileImage: updated.profileImage || '' }));
+      setMessage('프로필 사진을 예쁘게 최적화해서 저장했어.');
+    } catch (err: any) {
+      setError(err.response?.data?.message || '프로필 사진을 올리지 못했어.');
+    } finally {
+      setProfileUploading(false);
+      setProfileUploadProgress(0);
+    }
+  };
+
+  const deleteProfileImage = async () => {
+    setProfileUploading(true);
+    setError(null);
+    try {
+      const updated = await authService.deleteProfileImage();
+      dispatch(setUser(updated));
+      setProfile((current) => ({ ...current, profileImage: '' }));
+      setMessage('프로필 사진을 삭제했어.');
+    } catch (err: any) {
+      setError(err.response?.data?.message || '프로필 사진을 삭제하지 못했어.');
+    } finally {
+      setProfileUploading(false);
+    }
   };
 
   const addInterest = () => {
@@ -141,9 +186,15 @@ const Profile: React.FC = () => {
     <Container maxWidth="lg" sx={{ py: { xs: 2, md: 4 } }}>
       <Paper sx={{ p: { xs: 2, md: 3 }, borderRadius: 3, mb: 2 }}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
-          <Avatar src={profile.profileImage} sx={{ width: 76, height: 76, bgcolor: 'secondary.main', fontSize: 28 }}>
-            {profile.username?.[0]}
-          </Avatar>
+          <Box sx={{ position: 'relative', flexShrink: 0 }}>
+            <Avatar src={profile.profileImage} sx={{ width: 88, height: 88, bgcolor: 'secondary.main', fontSize: 30 }}>
+              {profile.username?.[0]}
+            </Avatar>
+            <input ref={profileImageInputRef} type="file" hidden accept="image/jpeg,image/png,image/gif,image/webp" onChange={(event) => { void uploadProfileImage(event.target.files?.[0]); event.target.value = ''; }} />
+            <Tooltip title="프로필 사진 바꾸기">
+              <span><IconButton aria-label="프로필 사진 바꾸기" size="small" disabled={profileUploading} onClick={() => profileImageInputRef.current?.click()} sx={{ position: 'absolute', right: -4, bottom: -4, bgcolor: 'primary.main', color: 'primary.contrastText', boxShadow: 2, '&:hover': { bgcolor: 'primary.dark' } }}><PhotoCameraOutlined fontSize="small" /></IconButton></span>
+            </Tooltip>
+          </Box>
           <Box sx={{ flex: 1 }}>
             <Typography variant="h4">{profile.username || '내 마이페이지'}</Typography>
             <Typography color="text.secondary">내 활동과 공개 범위를 한곳에서 관리해.</Typography>
@@ -151,6 +202,7 @@ const Profile: React.FC = () => {
               <LinearProgress variant="determinate" value={overview?.profileCompletion || 0} sx={{ width: 180, height: 8, borderRadius: 8 }} />
               <Typography variant="caption" fontWeight={800}>프로필 {overview?.profileCompletion || 0}%</Typography>
             </Stack>
+            {profileUploading && <LinearProgress variant={profileUploadProgress > 0 ? 'determinate' : 'indeterminate'} value={profileUploadProgress || undefined} sx={{ mt: 1, maxWidth: 280 }} />}
           </Box>
         </Stack>
       </Paper>
@@ -180,7 +232,14 @@ const Profile: React.FC = () => {
               <TextField label="나이" type="number" value={profile.age} disabled={!editing} onChange={(e) => setProfile({ ...profile, age: e.target.value })} />
               <TextField label="성별" value={profile.gender} disabled={!editing} onChange={(e) => setProfile({ ...profile, gender: e.target.value })} placeholder="female / male" />
             </Box>
-            <TextField label="프로필 이미지 URL" value={profile.profileImage} disabled={!editing} onChange={(e) => setProfile({ ...profile, profileImage: e.target.value })} />
+            <Box sx={{ p: 2, border: 1, borderColor: 'divider', borderRadius: 2 }}>
+              <Typography fontWeight={800}>프로필 사진</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>사진을 올리면 WebP로 압축해 선명하고 가볍게 저장해.</Typography>
+              <Stack direction="row" spacing={1}>
+                <Button variant="outlined" startIcon={<PhotoCameraOutlined />} disabled={profileUploading} onClick={() => profileImageInputRef.current?.click()}>사진 선택</Button>
+                {profile.profileImage && <Button color="error" startIcon={<DeleteOutline />} disabled={profileUploading} onClick={() => void deleteProfileImage()}>사진 삭제</Button>}
+              </Stack>
+            </Box>
             <TextField label="자기소개" value={profile.bio} disabled={!editing} multiline minRows={3} onChange={(e) => setProfile({ ...profile, bio: e.target.value })} />
             <Box><Typography fontWeight={800} sx={{ mb: 1 }}>동네</Typography><LocationSelector disabled={!editing} initialLocation={profile.location || undefined} onLocationSelect={(location) => setProfile({ ...profile, location })} />{profile.location?.address && <Typography color="text.secondary" sx={{ mt: 1 }}>{profile.location.address}</Typography>}</Box>
             <Box><Typography fontWeight={800} sx={{ mb: 1 }}>관심사</Typography><Stack direction="row" gap={1} flexWrap="wrap">{profile.interests.map((item) => <Chip key={item} label={item} onDelete={editing ? () => setProfile({ ...profile, interests: profile.interests.filter((value) => value !== item) }) : undefined} />)}</Stack>{editing && <Stack direction="row" spacing={1} sx={{ mt: 2 }}><TextField size="small" label="관심사 추가" value={newInterest} onChange={(e) => setNewInterest(e.target.value)} /><Button variant="outlined" onClick={addInterest}>추가</Button></Stack>}</Box>
