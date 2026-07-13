@@ -35,7 +35,8 @@
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck",
-    "check": "npm run typecheck && npm run build"
+    "check": "npm run typecheck && npm run build",
+    "test:load": "node scripts/realistic-load-test.mjs"
   },
   "browserslist": {
     "production": [
