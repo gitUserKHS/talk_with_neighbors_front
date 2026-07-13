@@ -14,6 +14,7 @@ ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 RUN npm run build
 
 FROM nginx:1.30-alpine@sha256:0d3b80406a13a767339fbe2f41406d6c7da727ab89cf8fae399e81f780f814d1
+RUN apk upgrade --no-cache
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 
