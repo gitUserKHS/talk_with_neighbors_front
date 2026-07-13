@@ -35,7 +35,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit && npm run test:contracts",
-    "test:unit": "vitest run",
+    "test:unit": "vitest run src",
     "test:contracts": "node --experimental-strip-types --test scripts/*.test.ts",
     "test:watch": "vitest",
     "check": "npm run typecheck && npm run build",
