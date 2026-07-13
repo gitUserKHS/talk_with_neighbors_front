@@ -34,8 +34,10 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:unit && npm run typecheck",
-    "test:unit": "node --experimental-strip-types --test scripts/*.test.ts",
+    "test": "npm run test:unit && npm run test:contracts",
+    "test:unit": "vitest run",
+    "test:contracts": "node --experimental-strip-types --test scripts/*.test.ts",
+    "test:watch": "vitest",
     "check": "npm run typecheck && npm run build",
     "test:load": "node scripts/realistic-load-test.mjs"
   },
@@ -56,6 +58,7 @@
     "@types/sockjs-client": "^1.5.4",
     "@vitejs/plugin-react": "^6.0.3",
     "typescript": "^5.9.3",
-    "vite": "^8.1.3"
+    "vite": "^8.1.3",
+    "vitest": "^4.1.10"
   }
 }
