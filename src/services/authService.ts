@@ -1,6 +1,7 @@
 import api from './api';
 import { User } from '../types/user';
 import { websocketService } from './websocketService';
+import type { AxiosProgressEvent } from 'axios';
 
 interface LoginResponse {
   user?: User;
@@ -121,6 +122,29 @@ class AuthService {
 
   async updateProfile(profileData: Partial<User>): Promise<User | null> {
     const response = await api.put<User>('/auth/profile', profileData);
+    this.setCurrentUser(response.data);
+    return response.data;
+  }
+
+  async uploadProfileImage(
+    file: File,
+    onProgress?: (percentage: number) => void
+  ): Promise<User> {
+    const formData = new FormData();
+    formData.append('file', file);
+    const response = await api.post<User>('/auth/profile/image', formData, {
+      onUploadProgress: (event: AxiosProgressEvent) => {
+        if (event.total && onProgress) {
+          onProgress(Math.min(100, Math.round((event.loaded * 100) / event.total)));
+        }
+      },
+    });
+    this.setCurrentUser(response.data);
+    return response.data;
+  }
+
+  async deleteProfileImage(): Promise<User> {
+    const response = await api.delete<User>('/auth/profile/image');
     this.setCurrentUser(response.data);
     return response.data;
   }

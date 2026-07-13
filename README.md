@@ -26,8 +26,8 @@ npm run typecheck
 npm run build
 ```
 
-PR과 `main`, `codex/**` 브랜치 푸시에서는 GitHub Actions가 타입 검사와 프로덕션 빌드를 실행해. `main`에 병합되면 GitHub Pages 배포가 진행돼.
+PR과 `main`, `codex/**` 브랜치 푸시에서는 GitHub Actions가 타입 검사와 프로덕션 빌드를 실행해.
 
-CI는 Nginx 기반 프로덕션 컨테이너 빌드도 검증해. `main` 또는 `v*` 태그가 푸시되면 동일한 이미지를 GHCR에도 게시해.
+현재 프로젝트는 로컬 전용이야. GitHub Pages와 GHCR 이미지 게시 워크플로는 수동 비활성화 상태이며, CI는 Nginx 기반 컨테이너 빌드까지만 검증해.
 
-Pages 배포 전에 저장소 Variables에 `VITE_API_URL`, `VITE_SOCKET_URL`을 등록하고, Kakao 지도가 필요하면 Actions Secret에 `VITE_KAKAO_MAP_API_KEY`를 등록해줘.
+게시글 미디어는 같은 출처의 `/uploads` 경로를 통해 백엔드 로컬 저장소에서 제공돼.

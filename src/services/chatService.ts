@@ -2,7 +2,7 @@ import api from './api';
 import { ChatRoom, Message, ChatMessageDto, MessageDto, MessageType, WebSocketResponse, CreateRoomRequest, ChatRoomType, WebSocketMessage, Page } from '../types/chat';
 import { websocketService } from './websocketService';
 import { store } from '../store';
-import axios, { AxiosError } from 'axios';
+import axios, { AxiosError, AxiosProgressEvent } from 'axios';
 import { setUser } from '../store/slices/authSlice';
 
 export interface CreateChatRoomDto {
@@ -40,7 +40,10 @@ const convertToChatMessageDto = (message: Message | WebSocketResponse): ChatMess
     isRead: 'isRead' in message ? message.isRead : false,
     createdAt: message.createdAt,
     updatedAt: message.updatedAt || message.createdAt,
-    type: message.type
+    type: message.type,
+    isDeleted: msg.isDeleted,
+    readByUsers: msg.readByUsers,
+    attachments: msg.attachments ?? [],
   };
 };
 
@@ -279,7 +282,11 @@ class ChatService {
   // }
 
   // 메시지 전송 (API 호출 + 소켓 전송)
-  async sendMessage(message: ChatMessageDto): Promise<ChatMessageDto> {
+  async sendMessage(
+    message: ChatMessageDto,
+    files: File[] = [],
+    onProgress?: (percentage: number) => void
+  ): Promise<ChatMessageDto> {
     console.log('[chatService.ts] sendMessage called with:', message);
     if (!message.chatRoomId) {
       console.error('[chatService.ts] chatRoomId is missing in the message object', message);
@@ -289,7 +296,27 @@ class ChatService {
       // URL 경로에 message.chatRoomId를 포함하도록 수정
       // 요청 본문은 message 객체 전체를 보내는 것으로 유지 (백엔드가 @RequestBody ChatMessageDto로 받으므로)
       console.log(`[chatService.ts] Attempting to POST to /chat/rooms/${message.chatRoomId}/messages`);
-      const response = await api.post<MessageDto>(`/chat/rooms/${message.chatRoomId}/messages`, message);
+      let response;
+      if (files.length > 0) {
+        const formData = new FormData();
+        formData.append('message', new Blob([JSON.stringify({ content: message.content })], {
+          type: 'application/json',
+        }));
+        files.forEach((file) => formData.append('files', file));
+        response = await api.post<MessageDto>(
+          `/chat/rooms/${message.chatRoomId}/messages`,
+          formData,
+          {
+            onUploadProgress: (event: AxiosProgressEvent) => {
+              if (event.total && onProgress) {
+                onProgress(Math.min(100, Math.round((event.loaded * 100) / event.total)));
+              }
+            },
+          }
+        );
+      } else {
+        response = await api.post<MessageDto>(`/chat/rooms/${message.chatRoomId}/messages`, message);
+      }
       console.log('[chatService.ts] sendMessage POST request successful, response:', response.data);
       return convertToChatMessageDto(response.data as Message);
     } catch (error) {

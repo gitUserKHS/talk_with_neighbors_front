@@ -48,6 +48,7 @@ import { FeedComment, FeedPost } from '../types/feed';
 import { RootState } from '../store/types';
 import safetyService from '../services/safetyService';
 import { ReportReason } from '../types/safety';
+import PostMediaCarousel from '../components/feed/PostMediaCarousel';
 
 const formatDate = (value?: string | null) => {
   if (!value) return '';
@@ -323,12 +324,16 @@ const Feed: React.FC = () => {
                   </IconButton>
                 ) : undefined}
               />
+              {post.media?.length ? (
+                <PostMediaCarousel post={post} />
+              ) : (
               <CardMedia
                 component="img"
                 image={post.imageUrl}
                 alt={post.caption || '피드 이미지'}
                 sx={{ aspectRatio: '1 / 1', objectFit: 'cover', bgcolor: 'grey.100' }}
               />
+              )}
               <CardActions disableSpacing sx={{ px: 1.5 }}>
                 <IconButton
                   aria-label="좋아요"

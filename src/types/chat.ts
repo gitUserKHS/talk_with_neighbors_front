@@ -1,6 +1,20 @@
 import { User } from './user';
 
-export type MessageType = 'ENTER' | 'LEAVE' | 'TEXT' | 'IMAGE' | 'FILE' | 'SYSTEM';
+export type MessageType = 'ENTER' | 'LEAVE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'SYSTEM';
+export type ChatAttachmentType = 'IMAGE' | 'VIDEO' | 'FILE';
+
+export interface ChatAttachment {
+  url: string;
+  thumbnailUrl?: string;
+  type: ChatAttachmentType;
+  contentType: string;
+  originalName: string;
+  sizeBytes: number;
+  width?: number;
+  height?: number;
+  durationSeconds?: number;
+  sortOrder: number;
+}
 export enum ChatRoomType {
   ONE_ON_ONE = 'ONE_ON_ONE',
   GROUP = 'GROUP'
@@ -38,6 +52,7 @@ export interface Message {
   updatedAt?: string;
   isDeleted: boolean;
   readByUsers: number[];
+  attachments?: ChatAttachment[];
 }
 
 export interface ChatMessageDto {
@@ -52,6 +67,7 @@ export interface ChatMessageDto {
   type: MessageType;
   isDeleted?: boolean;
   readByUsers?: number[];
+  attachments?: ChatAttachment[];
 }
 
 export interface MessageDto {
@@ -65,6 +81,7 @@ export interface MessageDto {
   type: MessageType;
   isDeleted: boolean;
   readByUsers: number[];
+  attachments?: ChatAttachment[];
 }
 
 export interface WebSocketMessage {
@@ -88,6 +105,7 @@ export interface WebSocketResponse {
   isRead: boolean;
   isDeleted?: boolean;
   readByUsers?: number[];
+  attachments?: ChatAttachment[];
 }
 
 export interface CreateRoomRequest {

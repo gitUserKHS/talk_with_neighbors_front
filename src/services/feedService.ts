@@ -1,5 +1,6 @@
 import api from './api';
 import { CreateFeedPostRequest, FeedComment, FeedPost } from '../types/feed';
+import type { AxiosProgressEvent } from 'axios';
 
 interface PageResponse<T> {
   content: T[];
@@ -28,8 +29,25 @@ export const feedService = {
     return response.data;
   },
 
-  async createPost(request: CreateFeedPostRequest): Promise<FeedPost> {
-    const response = await api.post<FeedPost>('/feed', request);
+  async createPost(
+    request: CreateFeedPostRequest,
+    files: File[],
+    onProgress?: (percentage: number) => void
+  ): Promise<FeedPost> {
+    const formData = new FormData();
+    formData.append(
+      'post',
+      new Blob([JSON.stringify(request)], { type: 'application/json' })
+    );
+    files.forEach((file) => formData.append('files', file));
+
+    const response = await api.post<FeedPost>('/feed', formData, {
+      onUploadProgress: (event: AxiosProgressEvent) => {
+        if (event.total && onProgress) {
+          onProgress(Math.min(100, Math.round((event.loaded * 100) / event.total)));
+        }
+      },
+    });
     return response.data;
   },
 

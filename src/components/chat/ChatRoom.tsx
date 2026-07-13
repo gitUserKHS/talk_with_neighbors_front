@@ -12,6 +12,7 @@ import {
   DialogContent,
   DialogTitle,
   IconButton,
+  LinearProgress,
   Paper,
   Stack,
   TextField,
@@ -19,21 +20,66 @@ import {
   Typography,
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import AttachFileIcon from '@mui/icons-material/AttachFile';
+import CloseIcon from '@mui/icons-material/Close';
+import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
+import MovieOutlinedIcon from '@mui/icons-material/MovieOutlined';
 import SendIcon from '@mui/icons-material/Send';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { chatService } from '../../services/chatService';
 import { websocketService } from '../../services/websocketService';
-import { ChatMessageDto, ChatRoom as ChatRoomType, WebSocketResponse } from '../../types/chat';
+import {
+  ChatAttachment,
+  ChatAttachmentType,
+  ChatMessageDto,
+  ChatRoom as ChatRoomType,
+  WebSocketResponse,
+} from '../../types/chat';
 import { RootState } from '../../store/types';
 import { meetupService } from '../../services/meetupService';
 
+const MAX_ATTACHMENT_COUNT = 5;
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
+const MAX_FILE_BYTES = 25 * 1024 * 1024;
+const MAX_TOTAL_BYTES = 120 * 1024 * 1024;
+const ACCEPTED_MIME_TYPES = new Set([
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp',
+  'video/mp4', 'video/webm', 'video/quicktime',
+  'application/pdf', 'application/zip',
+  'application/msword', 'application/vnd.ms-excel', 'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain', 'text/csv', 'application/json', 'text/markdown',
+]);
+const ACCEPTED_EXTENSIONS = new Set([
+  '.jpg', '.jpeg', '.png', '.gif', '.webp', '.mp4', '.webm', '.mov',
+  '.pdf', '.zip', '.doc', '.xls', '.ppt', '.docx', '.xlsx', '.pptx',
+  '.txt', '.csv', '.json', '.md',
+]);
+const ACCEPT_ATTRIBUTE = [
+  'image/jpeg,image/png,image/gif,image/webp',
+  'video/mp4,video/webm,video/quicktime',
+  '.pdf,.zip,.doc,.xls,.ppt,.docx,.xlsx,.pptx,.txt,.csv,.json,.md',
+].join(',');
+
+interface PendingAttachment {
+  id: string;
+  file: File;
+  type: ChatAttachmentType;
+  previewUrl: string;
+}
+
 const formatTime = (value: string) =>
-  new Intl.DateTimeFormat('ko-KR', {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
+  new Intl.DateTimeFormat('ko-KR', { hour: '2-digit', minute: '2-digit' }).format(new Date(value));
+
+const formatBytes = (bytes: number) => {
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))}KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)}MB`;
+};
 
 const toChatMessage = (message: WebSocketResponse): ChatMessageDto => ({
   id: message.id,
@@ -47,7 +93,19 @@ const toChatMessage = (message: WebSocketResponse): ChatMessageDto => ({
   type: message.type,
   isDeleted: message.isDeleted,
   readByUsers: message.readByUsers,
+  attachments: message.attachments ?? [],
 });
+
+const extensionOf = (name: string) => {
+  const index = name.lastIndexOf('.');
+  return index < 0 ? '' : name.slice(index).toLowerCase();
+};
+
+const attachmentTypeOf = (file: File): ChatAttachmentType => {
+  if (file.type.startsWith('image/')) return 'IMAGE';
+  if (file.type.startsWith('video/')) return 'VIDEO';
+  return 'FILE';
+};
 
 const ChatRoom: React.FC = () => {
   const { roomId } = useParams<{ roomId: string }>();
@@ -56,19 +114,30 @@ const ChatRoom: React.FC = () => {
   const [room, setRoom] = useState<ChatRoomType | null>(null);
   const [messages, setMessages] = useState<ChatMessageDto[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+  const [sending, setSending] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const endRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const pendingRef = useRef<PendingAttachment[]>([]);
+
+  useEffect(() => {
+    pendingRef.current = pendingAttachments;
+  }, [pendingAttachments]);
+
+  useEffect(() => () => {
+    pendingRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+  }, []);
 
   useEffect(() => {
     if (!roomId) return;
-
     const loadRoom = async () => {
       setLoading(true);
       setError(null);
-
       try {
         const [roomData, messagePage] = await Promise.all([
           chatService.getRoom(roomId),
@@ -78,25 +147,21 @@ const ChatRoom: React.FC = () => {
         setMessages([...messagePage.content].reverse());
         chatService.markMessagesAsRead(roomId).catch(() => undefined);
       } catch {
-        setError('채팅방을 불러오지 못했어.');
+        setError('채팅방을 불러오지 못했어. 잠시 후 다시 시도해줘.');
       } finally {
         setLoading(false);
       }
     };
-
-    loadRoom();
+    void loadRoom();
   }, [roomId]);
 
   useEffect(() => {
     if (!roomId || !websocketService.getIsConnected()) return;
-
     websocketService.subscribeToRoom(roomId, (message) => {
-      setMessages((prev) => {
-        if (prev.some((item) => item.id === message.id)) return prev;
-        return [...prev, toChatMessage(message)];
-      });
+      setMessages((current) => current.some((item) => item.id === message.id)
+        ? current
+        : [...current, toChatMessage(message)]);
     });
-
     return () => websocketService.unsubscribeFromRoom(roomId);
   }, [roomId]);
 
@@ -104,11 +169,75 @@ const ChatRoom: React.FC = () => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  const addFiles = (files: File[]) => {
+    const available = MAX_ATTACHMENT_COUNT - pendingAttachments.length;
+    if (available <= 0) {
+      setError('첨부 파일은 메시지마다 최대 5개까지 보낼 수 있어.');
+      return;
+    }
+
+    const accepted: PendingAttachment[] = [];
+    const errors: string[] = [];
+    const knownIds = new Set(pendingAttachments.map((item) => item.id));
+    for (const file of files) {
+      if (accepted.length >= available) {
+        errors.push('최대 5개까지만 추가했어.');
+        break;
+      }
+      const extension = extensionOf(file.name);
+      if (!ACCEPTED_MIME_TYPES.has(file.type) && !ACCEPTED_EXTENSIONS.has(extension)) {
+        errors.push(`${file.name}: 지원하지 않는 파일 형식이야.`);
+        continue;
+      }
+      const type = attachmentTypeOf(file);
+      const limit = type === 'IMAGE' ? MAX_IMAGE_BYTES : type === 'VIDEO' ? MAX_VIDEO_BYTES : MAX_FILE_BYTES;
+      if (file.size > limit) {
+        errors.push(`${file.name}: ${type === 'IMAGE' ? '10MB' : type === 'VIDEO' ? '100MB' : '25MB'}를 넘을 수 없어.`);
+        continue;
+      }
+      const id = `${file.name}-${file.size}-${file.lastModified}`;
+      if (knownIds.has(id)) {
+        errors.push(`${file.name}: 이미 선택한 파일이야.`);
+        continue;
+      }
+      knownIds.add(id);
+      accepted.push({ id, file, type, previewUrl: URL.createObjectURL(file) });
+    }
+
+    const total = [...pendingAttachments, ...accepted]
+      .reduce((sum, item) => sum + item.file.size, 0);
+    if (total > MAX_TOTAL_BYTES) {
+      accepted.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      setError('한 메시지의 첨부 파일 전체 크기는 120MB를 넘을 수 없어.');
+      return;
+    }
+    if (accepted.length > 0) setPendingAttachments((current) => [...current, ...accepted]);
+    setError(errors.length > 0 ? errors.join(' ') : null);
+  };
+
+  const removePendingAttachment = (id: string) => {
+    setPendingAttachments((current) => {
+      const removed = current.find((item) => item.id === id);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return current.filter((item) => item.id !== id);
+    });
+  };
+
   const handleSendMessage = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!roomId || !currentUser || !newMessage.trim()) return;
-
+    if (!roomId || !currentUser || sending) return;
     const content = newMessage.trim();
+    if (!content && pendingAttachments.length === 0) return;
+
+    const selected = pendingAttachments;
+    const optimisticAttachments: ChatAttachment[] = selected.map((item, index) => ({
+      url: item.previewUrl,
+      type: item.type,
+      contentType: item.file.type || 'application/octet-stream',
+      originalName: item.file.name,
+      sizeBytes: item.file.size,
+      sortOrder: index,
+    }));
     const optimisticMessage: ChatMessageDto = {
       id: `temp-${Date.now()}`,
       chatRoomId: roomId,
@@ -118,22 +247,33 @@ const ChatRoom: React.FC = () => {
       isRead: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      type: 'TEXT',
+      type: content ? 'TEXT' : selected[0]?.type ?? 'TEXT',
       readByUsers: [currentUser.id],
+      attachments: optimisticAttachments,
     };
 
+    setSending(true);
+    setUploadProgress(0);
     setNewMessage('');
-    setMessages((prev) => [...prev, optimisticMessage]);
-
+    setPendingAttachments([]);
+    setMessages((current) => [...current, optimisticMessage]);
     try {
-      const savedMessage = await chatService.sendMessage(optimisticMessage);
-      setMessages((prev) => prev.map((message) => (
-        message.id === optimisticMessage.id ? savedMessage : message
-      )));
-    } catch {
-      setError('메시지 전송에 실패했어.');
-      setMessages((prev) => prev.filter((item) => item.id !== optimisticMessage.id));
+      const savedMessage = await chatService.sendMessage(
+        optimisticMessage,
+        selected.map((item) => item.file),
+        setUploadProgress
+      );
+      setMessages((current) => current.map((message) =>
+        message.id === optimisticMessage.id ? savedMessage : message));
+      selected.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    } catch (err: any) {
+      setError(err.response?.data?.message || '메시지와 첨부 파일을 보내지 못했어. 다시 시도해줘.');
+      setMessages((current) => current.filter((item) => item.id !== optimisticMessage.id));
       setNewMessage(content);
+      setPendingAttachments(selected);
+    } finally {
+      setSending(false);
+      setUploadProgress(0);
     }
   };
 
@@ -152,50 +292,27 @@ const ChatRoom: React.FC = () => {
   };
 
   if (loading) {
-    return (
-      <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 'calc(100vh - 64px)' }}>
-        <CircularProgress />
-      </Box>
-    );
+    return <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 'calc(100vh - 64px)' }}><CircularProgress /></Box>;
   }
 
   return (
     <Container maxWidth="md" sx={{ py: 0, height: 'calc(100vh - 64px)' }}>
-      <Paper
-        variant="outlined"
-        sx={{
-          height: '100%',
-          display: 'grid',
-          gridTemplateRows: 'auto 1fr auto',
-          borderRadius: 0,
-          overflow: 'hidden',
-        }}
-      >
+      <Paper variant="outlined" sx={{ height: '100%', display: 'grid', gridTemplateRows: 'auto 1fr auto', borderRadius: 0, overflow: 'hidden' }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
-          <IconButton onClick={() => navigate('/chat')}>
-            <ArrowBackIcon />
-          </IconButton>
+          <IconButton aria-label="채팅 목록으로" onClick={() => navigate('/chat')}><ArrowBackIcon /></IconButton>
           <Avatar>{room?.roomName?.[0] || '채'}</Avatar>
           <Box sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800 }} noWrap>
-              {room?.roomName || '채팅방'}
-            </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {room?.participantCount || 0}명 참여 중
-            </Typography>
+            <Typography variant="subtitle1" sx={{ fontWeight: 800 }} noWrap>{room?.roomName || '채팅방'}</Typography>
+            <Typography variant="caption" color="text.secondary">{room?.participantCount || 0}명 참여 중</Typography>
             {room?.publicRoom && (
               <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
-                {(room.interestTags ?? []).map((tag) => (
-                  <Chip key={tag} label={tag} size="small" variant="outlined" />
-                ))}
+                {(room.interestTags ?? []).map((tag) => <Chip key={tag} label={tag} size="small" variant="outlined" />)}
               </Stack>
             )}
           </Box>
           {room?.publicRoom && (
             <Tooltip title="모임 나가기">
-              <IconButton aria-label="모임 나가기" onClick={() => setLeaveDialogOpen(true)} sx={{ ml: 'auto' }}>
-                <ExitToAppIcon />
-              </IconButton>
+              <IconButton aria-label="모임 나가기" onClick={() => setLeaveDialogOpen(true)} sx={{ ml: 'auto' }}><ExitToAppIcon /></IconButton>
             </Tooltip>
           )}
         </Box>
@@ -206,34 +323,12 @@ const ChatRoom: React.FC = () => {
             {messages.map((message) => {
               const isMine = String(message.senderId) === String(currentUser?.id);
               return (
-                <Box
-                  key={message.id}
-                  sx={{
-                    display: 'flex',
-                    justifyContent: isMine ? 'flex-end' : 'flex-start',
-                  }}
-                >
-                  <Box
-                    sx={{
-                      maxWidth: '72%',
-                      px: 1.5,
-                      py: 1,
-                      borderRadius: 2,
-                      bgcolor: isMine ? 'primary.main' : 'background.paper',
-                      color: isMine ? 'primary.contrastText' : 'text.primary',
-                      border: isMine ? 0 : 1,
-                      borderColor: 'divider',
-                    }}
-                  >
-                    {!isMine && (
-                      <Typography variant="caption" sx={{ fontWeight: 700 }}>
-                        {message.senderName}
-                      </Typography>
-                    )}
-                    <Typography sx={{ whiteSpace: 'pre-wrap' }}>{message.content}</Typography>
-                    <Typography variant="caption" sx={{ display: 'block', opacity: 0.75, textAlign: 'right' }}>
-                      {formatTime(message.createdAt)}
-                    </Typography>
+                <Box key={message.id} sx={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start' }}>
+                  <Box sx={{ maxWidth: { xs: '88%', sm: '76%' }, px: 1.25, py: 1, borderRadius: 2.5, bgcolor: isMine ? 'primary.main' : 'background.paper', color: isMine ? 'primary.contrastText' : 'text.primary', border: isMine ? 0 : 1, borderColor: 'divider' }}>
+                    {!isMine && <Typography variant="caption" sx={{ fontWeight: 700 }}>{message.senderName}</Typography>}
+                    <AttachmentGallery attachments={message.attachments ?? []} />
+                    {message.content && <Typography sx={{ whiteSpace: 'pre-wrap', mt: message.attachments?.length ? 0.75 : 0 }}>{message.content}</Typography>}
+                    <Typography variant="caption" sx={{ display: 'block', opacity: 0.75, textAlign: 'right', mt: 0.5 }}>{formatTime(message.createdAt)}</Typography>
                   </Box>
                 </Box>
               );
@@ -242,35 +337,83 @@ const ChatRoom: React.FC = () => {
           </Stack>
         </Box>
 
-        <Box component="form" onSubmit={handleSendMessage} sx={{ p: 1.5, borderTop: 1, borderColor: 'divider' }}>
-          <Stack direction="row" spacing={1}>
+        <Box component="form" onSubmit={handleSendMessage} sx={{ borderTop: 1, borderColor: 'divider' }}>
+          {pendingAttachments.length > 0 && (
+            <Stack direction="row" spacing={1} sx={{ px: 1.5, pt: 1.25, overflowX: 'auto' }}>
+              {pendingAttachments.map((item) => (
+                <Paper key={item.id} variant="outlined" sx={{ position: 'relative', flex: '0 0 92px', width: 92, height: 76, display: 'grid', placeItems: 'center', overflow: 'hidden' }}>
+                  {item.type === 'IMAGE' && <Box component="img" src={item.previewUrl} alt={item.file.name} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                  {item.type === 'VIDEO' && <MovieOutlinedIcon color="action" />}
+                  {item.type === 'FILE' && <DescriptionOutlinedIcon color="action" />}
+                  <IconButton aria-label={`${item.file.name} 제거`} size="small" onClick={() => removePendingAttachment(item.id)} sx={{ position: 'absolute', top: 2, right: 2, bgcolor: 'rgba(255,255,255,.9)', '&:hover': { bgcolor: 'white' } }}><CloseIcon fontSize="small" /></IconButton>
+                  {item.type !== 'IMAGE' && <Typography variant="caption" noWrap sx={{ position: 'absolute', bottom: 2, left: 4, right: 4, textAlign: 'center' }}>{item.file.name}</Typography>}
+                </Paper>
+              ))}
+            </Stack>
+          )}
+          {sending && pendingAttachments.length === 0 && uploadProgress > 0 && <LinearProgress variant="determinate" value={uploadProgress} />}
+          <Stack direction="row" spacing={0.75} alignItems="flex-end" sx={{ p: 1.5 }}>
+            <input ref={fileInputRef} type="file" hidden multiple accept={ACCEPT_ATTRIBUTE} onChange={(event) => { addFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
+            <Tooltip title="사진·동영상·파일 첨부 (최대 5개)">
+              <span><IconButton aria-label="파일 첨부" disabled={sending || pendingAttachments.length >= MAX_ATTACHMENT_COUNT} onClick={() => fileInputRef.current?.click()}><AttachFileIcon /></IconButton></span>
+            </Tooltip>
             <TextField
               value={newMessage}
               onChange={(event) => setNewMessage(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && !event.shiftKey) {
+                  event.preventDefault();
+                  event.currentTarget.closest('form')?.requestSubmit();
+                }
+              }}
               placeholder="메시지를 입력해줘"
               size="small"
+              multiline
+              maxRows={4}
               fullWidth
+              disabled={sending}
             />
-            <Button type="submit" variant="contained" endIcon={<SendIcon />} disabled={!newMessage.trim()}>
-              전송
-            </Button>
+            <Button type="submit" variant="contained" endIcon={sending ? <CircularProgress size={16} color="inherit" /> : <SendIcon />} disabled={sending || (!newMessage.trim() && pendingAttachments.length === 0)}>전송</Button>
           </Stack>
         </Box>
       </Paper>
 
       <Dialog open={leaveDialogOpen} onClose={() => !leaving && setLeaveDialogOpen(false)}>
         <DialogTitle>모임에서 나갈까?</DialogTitle>
-        <DialogContent>
-          <Typography>나가면 이 모임의 대화를 더 이상 볼 수 없어.</Typography>
-        </DialogContent>
+        <DialogContent><Typography>나가면 이 모임의 대화를 더 이상 볼 수 없어.</Typography></DialogContent>
         <DialogActions>
           <Button onClick={() => setLeaveDialogOpen(false)} disabled={leaving}>취소</Button>
-          <Button color="error" onClick={handleLeaveMeetup} disabled={leaving}>
-            {leaving ? '나가는 중' : '나가기'}
-          </Button>
+          <Button color="error" onClick={handleLeaveMeetup} disabled={leaving}>{leaving ? '나가는 중' : '나가기'}</Button>
         </DialogActions>
       </Dialog>
     </Container>
+  );
+};
+
+const AttachmentGallery = ({ attachments }: { attachments: ChatAttachment[] }) => {
+  if (attachments.length === 0) return null;
+  const ordered = [...attachments].sort((left, right) => left.sortOrder - right.sortOrder);
+  return (
+    <Stack spacing={0.75} sx={{ mt: 0.5 }}>
+      {ordered.map((attachment, index) => {
+        if (attachment.type === 'IMAGE') {
+          return (
+            <Box component="a" key={`${attachment.url}-${index}`} href={attachment.url} target="_blank" rel="noreferrer" sx={{ display: 'block' }}>
+              <Box component="img" src={attachment.thumbnailUrl || attachment.url} alt={attachment.originalName} loading="lazy" sx={{ display: 'block', width: '100%', maxWidth: 360, maxHeight: 360, objectFit: 'cover', borderRadius: 1.5 }} />
+            </Box>
+          );
+        }
+        if (attachment.type === 'VIDEO') {
+          return <Box component="video" key={`${attachment.url}-${index}`} src={attachment.url} poster={attachment.thumbnailUrl} controls playsInline preload="metadata" sx={{ display: 'block', width: '100%', maxWidth: 420, maxHeight: 420, bgcolor: 'black', borderRadius: 1.5 }} />;
+        }
+        return (
+          <Paper component="a" key={`${attachment.url}-${index}`} href={attachment.url} target="_blank" rel="noreferrer" download={attachment.originalName} variant="outlined" sx={{ p: 1, display: 'flex', gap: 1, alignItems: 'center', color: 'inherit', textDecoration: 'none', bgcolor: 'rgba(255,255,255,.12)' }}>
+            <DescriptionOutlinedIcon />
+            <Box sx={{ minWidth: 0 }}><Typography variant="body2" noWrap>{attachment.originalName}</Typography><Typography variant="caption" sx={{ opacity: 0.75 }}>{formatBytes(attachment.sizeBytes)}</Typography></Box>
+          </Paper>
+        );
+      })}
+    </Stack>
   );
 };
 
