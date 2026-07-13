@@ -13,4 +13,6 @@ export interface User {
   latitude?: number;
   longitude?: number;
   interests?: string[];
+  profileComplete?: boolean;
+  profileCompletion?: number;
 }

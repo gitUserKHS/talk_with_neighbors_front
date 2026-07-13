@@ -1,15 +1,54 @@
+html {
+  scroll-behavior: smooth;
+}
+
 body {
   margin: 0;
+  min-width: 320px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
     'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+::selection {
+  color: #29211f;
+  background: #ffd9d1;
+}
+
+a {
+  color: inherit;
+}
+
+:focus-visible {
+  outline: 3px solid rgba(35, 133, 121, 0.38);
+  outline-offset: 3px;
 }
 
 code {
   font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
     monospace;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }
 
 /* 카카오톡 스타일 채팅방 업데이트 하이라이트 애니메이션 */

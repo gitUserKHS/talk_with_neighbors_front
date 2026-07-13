@@ -1,46 +1,33 @@
-# Getting Started with Create React App
+# 이웃톡 프런트엔드
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+관심사와 거리를 바탕으로 가까운 이웃을 연결하는 React 19 + Vite 애플리케이션이야.
 
-## Available Scripts
+## 시작하기
 
-In the project directory, you can run:
+Node.js 22를 권장해.
 
-### `npm start`
+```bash
+npm ci
+npm run dev
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in the browser.
+전체 스택은 상위 폴더에서 한 명령으로 실행할 수 있어.
 
-The page will reload if you make edits.\
-You will also see any lint errors in the console.
+```bash
+docker compose up --build -d
+```
 
-### `npm test`
+브라우저는 `http://localhost:3000`, 백엔드 API는 `http://localhost:8080`에서 확인해. 종료는 상위 폴더에서 `docker compose down`을 실행하면 돼.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## 검증
 
-### `npm run build`
+```bash
+npm run typecheck
+npm run build
+```
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+PR과 `main`, `codex/**` 브랜치 푸시에서는 GitHub Actions가 타입 검사와 프로덕션 빌드를 실행해. `main`에 병합되면 GitHub Pages 배포가 진행돼.
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+CI는 Nginx 기반 프로덕션 컨테이너 빌드도 검증해. `main` 또는 `v*` 태그가 푸시되면 동일한 이미지를 GHCR에도 게시해.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can’t go back!**
-
-If you aren’t satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you’re on your own.
-
-You don’t have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn’t feel obligated to use this feature. However we understand that this tool wouldn’t be useful if you couldn’t customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
+Pages 배포 전에 저장소 Variables에 `VITE_API_URL`, `VITE_SOCKET_URL`을 등록하고, Kakao 지도가 필요하면 Actions Secret에 `VITE_KAKAO_MAP_API_KEY`를 등록해줘.

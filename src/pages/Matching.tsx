@@ -1,253 +1,294 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  Alert,
+  Avatar,
   Box,
-  Container,
-  Paper,
-  Typography,
   Button,
+  Card,
+  CardContent,
   Chip,
+  Container,
   Dialog,
-  DialogTitle,
-  DialogContent,
   DialogActions,
-  Slider,
+  DialogContent,
+  DialogTitle,
   FormControl,
   InputLabel,
-  Select,
   MenuItem,
+  Select,
+  Slider,
+  Stack,
   TextField,
-  Alert,
-  CircularProgress,
+  Typography,
 } from '@mui/material';
-import { useSelector, useDispatch } from 'react-redux';
+import PersonAddAltIcon from '@mui/icons-material/PersonAddAlt';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import CloseIcon from '@mui/icons-material/Close';
+import ThumbUpAltOutlinedIcon from '@mui/icons-material/ThumbUpAltOutlined';
+import ThumbDownAltOutlinedIcon from '@mui/icons-material/ThumbDownAltOutlined';
+import { useDispatch, useSelector } from 'react-redux';
 import { useNavigate } from 'react-router-dom';
-
-import { RootState, AppDispatch } from '../store';
-import { MatchProfile, MatchingPreferences, Location, ActiveMatchRoomInfo } from '../store/types';
+import matchingService from '../services/matchingService';
+import { AppDispatch, MatchProfile, MatchingPreferences, RootState } from '../store/types';
 import {
-  setPendingMatchOffer,
-  clearPendingMatchOffer,
-  setMatchCompleted,
+  addNotification,
   clearActiveMatchRoomInfo,
+  clearPendingMatchOffer,
   setMatchStatusMessage,
-  addNotification
 } from '../store/slices/notificationSlice';
 
-import matchingService from '../services/matchingService';
-import { websocketService } from '../services/websocketService';
-
-const Matching = (): React.ReactElement => {
+const Matching: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
-  const dispatch: AppDispatch = useDispatch();
-
   const currentUser = useSelector((state: RootState) => state.auth.user);
-  const {
-    pendingMatchOffer, 
-    activeMatchRoomInfo: reduxActiveMatchRoomInfo,
-    matchStatusMessage: reduxMatchStatusMessage 
-  } = useSelector((state: RootState) => state.notifications);
-  
-  const [isWsConnectedLocal, setIsWsConnectedLocal] = useState<boolean>(websocketService.getIsConnected());
-  const [isRequestingAPI, setIsRequestingAPI] = useState(false);
-  const [preferences, setPreferences] = useState<Omit<MatchingPreferences, 'location'>>({
+  const { pendingMatchOffer, activeMatchRoomInfo, matchStatusMessage } = useSelector(
+    (state: RootState) => state.notifications
+  );
+  const [recommendations, setRecommendations] = useState<MatchProfile[]>([]);
+  const [incomingRequests, setIncomingRequests] = useState<MatchProfile[]>([]);
+  const [preferences, setPreferences] = useState<MatchingPreferences>({
     maxDistance: 10,
     ageRange: [20, 35],
     gender: 'any',
-    interests: [],
+    interests: currentUser?.interests || [],
   });
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [userClickedAccept, setUserClickedAccept] = useState<boolean>(false);
+  const [interestInput, setInterestInput] = useState((currentUser?.interests || []).join(', '));
+  const [loading, setLoading] = useState(false);
+  const [requesting, setRequesting] = useState<Record<string, boolean>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    const unregister = websocketService.registerConnectionStateChangeCallback(setIsWsConnectedLocal);
-    return () => unregister?.();
-  }, []);
-
-  useEffect(() => {
-    if (currentUser && (!currentUser.latitude || !currentUser.longitude || !currentUser.address)) {
-      setLocationError('매칭을 시작하려면 프로필에서 위치 정보를 설정해야 합니다. 프로필 페이지로 이동하여 위치를 설정해주세요.');
-    } else {
-      setLocationError(null);
-    }
+    setPreferences((prev) => ({
+      ...prev,
+      interests: currentUser?.interests || prev.interests,
+    }));
+    setInterestInput((currentUser?.interests || []).join(', '));
   }, [currentUser]);
 
   useEffect(() => {
-    if (reduxActiveMatchRoomInfo?.id && reduxActiveMatchRoomInfo?.name) {
-      const message = reduxMatchStatusMessage || `매칭 성공! '${reduxActiveMatchRoomInfo.name}' 채팅방으로 이동합니다.`;
-      dispatch(addNotification({
-        type: 'success',
-        message: message,
-        navigateTo: `/chat/room/${reduxActiveMatchRoomInfo.id}`
-      }));
-      dispatch(setMatchStatusMessage(message));
-    }
-  }, [reduxActiveMatchRoomInfo, dispatch, navigate, reduxMatchStatusMessage]);
+    loadRecommendations();
+    loadIncomingRequests();
+  }, []);
 
-  const resetMatchingProcessStates = useCallback(() => {
-    dispatch(clearPendingMatchOffer());
-    dispatch(clearActiveMatchRoomInfo());
-    dispatch(setMatchStatusMessage(null));
-    setUserClickedAccept(false);
-    setIsRequestingAPI(false);
-  }, [dispatch]);
-
-  const handleStartMatching = async () => {
-    if (!currentUser || !currentUser.latitude || !currentUser.longitude || !currentUser.address) {
-      setLocationError('프로필에 위치 정보가 설정되어 있지 않습니다. 먼저 프로필에서 위치를 설정해주세요.');
-      dispatch(addNotification({type: 'warning', message: '프로필에 위치 정보가 설정되어 있지 않습니다. 프로필 수정 페이지로 이동하여 위치를 설정해주세요.', navigateTo: '/profile'}));
-      navigate('/profile');
-      return;
+  useEffect(() => {
+    if (activeMatchRoomInfo?.id) {
+      dispatch(
+        addNotification({
+          type: 'success',
+          message: matchStatusMessage || '매칭이 성사되어 채팅방이 만들어졌어.',
+          navigateTo: `/chat/${activeMatchRoomInfo.id}`,
+        })
+      );
     }
-    setLocationError(null);
-    resetMatchingProcessStates();
-    setIsRequestingAPI(true);
-    dispatch(setMatchStatusMessage('매칭 상대를 찾고 있습니다...'));
+  }, [activeMatchRoomInfo, dispatch, matchStatusMessage]);
+
+  const buildPreferences = (): MatchingPreferences => ({
+    ...preferences,
+    interests: interestInput
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean),
+    location:
+      currentUser?.latitude && currentUser?.longitude
+        ? {
+            latitude: currentUser.latitude,
+            longitude: currentUser.longitude,
+            address: currentUser.address,
+          }
+        : undefined,
+  });
+
+  const loadRecommendations = async () => {
+    setLoading(true);
+    setError(null);
 
     try {
-      const matchingPrefsToSend: MatchingPreferences = {
-        ...preferences,
-        location: {
-          latitude: currentUser.latitude,
-          longitude: currentUser.longitude,
-          address: currentUser.address,
-        },
-      };
-      const matches: MatchProfile[] = await matchingService.startMatching(matchingPrefsToSend);
-      console.log('[Matching.tsx] Received matches from /api/matching/start:', matches);
-
-      if (matches && matches.length > 0) {
-        const firstMatch = matches[0];
-        if (!firstMatch.id || !firstMatch.matchId) {
-          console.error('[Matching.tsx] Invalid match data received:', firstMatch);
-          dispatch(addNotification({type: 'error', message: '수신된 매칭 데이터에 오류가 있습니다.'}));
-          dispatch(setMatchStatusMessage('매칭 데이터를 처리하는 중 문제가 발생했습니다.'));
-          resetMatchingProcessStates();
-        } else {
-          dispatch(setPendingMatchOffer(firstMatch));
-        }
-      } else {
-        dispatch(addNotification({type: 'info', message: '조건에 맞는 매칭 상대를 찾지 못했습니다.'}));
-        dispatch(setMatchStatusMessage('매칭할 사용자를 찾지 못했습니다. 잠시 후 다시 시도해주세요.'));
-      }
-    } catch (error) {
-      console.error('매칭 시작 요청 실패:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      dispatch(setMatchStatusMessage(`매칭 시작 중 오류: ${errorMessage}`));
-      dispatch(addNotification({type: 'error', message: `매칭 시작 중 오류: ${errorMessage}`}));
-      resetMatchingProcessStates();
+      const result = await matchingService.getRecommendations();
+      setRecommendations(result);
+    } catch {
+      setError('추천 후보를 불러오지 못했어. 프로필과 위치 정보를 확인해줘.');
     } finally {
-      setIsRequestingAPI(false);
+      setLoading(false);
     }
   };
 
-  const handleStopMatching = async () => {
-    resetMatchingProcessStates();
-    dispatch(addNotification({type: 'info', message: '매칭 찾기를 중단했습니다.'}));
+  const loadIncomingRequests = async () => {
+    try {
+      const result = await matchingService.getIncomingRequests();
+      setIncomingRequests(result);
+    } catch {
+      setError('받은 매칭 요청을 불러오지 못했어.');
+    }
+  };
+
+  const handleSavePreferences = async () => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      await matchingService.saveMatchingPreferences(buildPreferences());
+      await loadRecommendations();
+      setSuccess('매칭 조건을 저장하고 추천을 갱신했어.');
+    } catch (err: any) {
+      setError(err.response?.data?.message || '매칭 조건 저장에 실패했어.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRequestMatch = async (profile: MatchProfile) => {
+    setRequesting((prev) => ({ ...prev, [profile.id]: true }));
+    setError(null);
+
+    try {
+      await matchingService.requestMatch(profile.id);
+      setSuccess(`${profile.username}님에게 매칭 요청을 보냈어.`);
+    } catch (err: any) {
+      setError(err.response?.data?.message || '매칭 요청을 보낼 수 없어.');
+    } finally {
+      setRequesting((prev) => ({ ...prev, [profile.id]: false }));
+    }
+  };
+
+  const handleFeedback = async (profile: MatchProfile, sentiment: 'POSITIVE' | 'NEGATIVE') => {
+    try {
+      await matchingService.sendRecommendationFeedback(profile.id, sentiment);
+      if (sentiment === 'NEGATIVE') {
+        setRecommendations((items) => items.filter((item) => item.id !== profile.id));
+      }
+      setSuccess(sentiment === 'POSITIVE' ? '좋은 추천으로 기억할게.' : '다음 추천에 반영할게.');
+    } catch {
+      setError('추천 피드백을 저장하지 못했어.');
+    }
   };
 
   const handleAcceptMatch = async () => {
-    if (!pendingMatchOffer || !pendingMatchOffer.matchId) {
-      dispatch(setMatchStatusMessage('오류: 수락할 매칭 정보가 없습니다.'));
-      return;
-    }
-    setIsRequestingAPI(true);
-    dispatch(setMatchStatusMessage('수락 의사를 전달 중입니다...'));
+    if (!pendingMatchOffer?.matchId) return;
+
     try {
-      await matchingService.acceptMatch(pendingMatchOffer.matchId);
-      setUserClickedAccept(true);
-      dispatch(setMatchStatusMessage('수락 의사를 전달했습니다. 상대방의 응답 또는 최종 결과를 기다립니다...'));
-    } catch (error) {
-      console.error('매칭 수락 요청 실패:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      dispatch(setMatchStatusMessage(`매칭 수락 중 오류: ${errorMessage}`));
-      dispatch(addNotification({type: 'error', message: `매칭 수락 중 오류: ${errorMessage}`}));
-      setUserClickedAccept(false);
-    } finally {
-      setIsRequestingAPI(false);
+      const chatRoom = await matchingService.acceptMatch(pendingMatchOffer.matchId);
+      if (chatRoom?.id) {
+        dispatch(clearPendingMatchOffer());
+        navigate(`/chat/${chatRoom.id}`);
+        return;
+      }
+      dispatch(setMatchStatusMessage('수락했어. 상대방 응답을 기다리는 중이야.'));
+    } catch (err: any) {
+      setError(err.response?.data?.message || '매칭 수락에 실패했어.');
     }
   };
 
   const handleRejectMatch = async () => {
-    if (!pendingMatchOffer || !pendingMatchOffer.matchId) {
-      dispatch(setMatchStatusMessage('오류: 거절할 매칭 정보가 없습니다.'));
-      return;
-    }
-    setIsRequestingAPI(true);
-    dispatch(setMatchStatusMessage('거절 의사를 전달 중입니다...'));
+    if (!pendingMatchOffer?.matchId) return;
+
     try {
       await matchingService.rejectMatch(pendingMatchOffer.matchId);
-      resetMatchingProcessStates();
-      dispatch(addNotification({type: 'info', message: '매칭 제안을 거절했습니다.'}));
-    } catch (error) {
-      console.error('매칭 거절 요청 실패:', error);
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      dispatch(setMatchStatusMessage(`매칭 거절 중 오류: ${errorMessage}`));
-      dispatch(addNotification({type: 'error', message: `매칭 거절 중 오류: ${errorMessage}`}));
-    } finally {
-      setIsRequestingAPI(false);
+      dispatch(clearPendingMatchOffer());
+      dispatch(setMatchStatusMessage(null));
+    } catch (err: any) {
+      setError(err.response?.data?.message || '매칭 거절에 실패했어.');
     }
   };
-  
-  const handleCloseDialog = () => {
-    if (pendingMatchOffer && !userClickedAccept) {
-        dispatch(addNotification({type: 'info', message: '매칭 제안을 닫았습니다.'}));
+
+  const handleAcceptIncoming = async (request: MatchProfile) => {
+    if (!request.matchId) return;
+    const requestKey = `incoming-${request.matchId}`;
+    setRequesting((prev) => ({ ...prev, [requestKey]: true }));
+    setError(null);
+
+    try {
+      const chatRoom = await matchingService.acceptMatch(request.matchId);
+      setIncomingRequests((prev) => prev.filter((item) => item.matchId !== request.matchId));
+      if (chatRoom?.id) {
+        navigate(`/chat/${chatRoom.id}`);
+      } else {
+        setSuccess('매칭을 수락했어. 상대방의 응답을 기다리는 중이야.');
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || '매칭 수락에 실패했어.');
+    } finally {
+      setRequesting((prev) => ({ ...prev, [requestKey]: false }));
     }
-    resetMatchingProcessStates();
+  };
+
+  const handleRejectIncoming = async (request: MatchProfile) => {
+    if (!request.matchId) return;
+    const requestKey = `incoming-${request.matchId}`;
+    setRequesting((prev) => ({ ...prev, [requestKey]: true }));
+    setError(null);
+
+    try {
+      await matchingService.rejectMatch(request.matchId);
+      setIncomingRequests((prev) => prev.filter((item) => item.matchId !== request.matchId));
+    } catch (err: any) {
+      setError(err.response?.data?.message || '매칭 거절에 실패했어.');
+    } finally {
+      setRequesting((prev) => ({ ...prev, [requestKey]: false }));
+    }
   };
 
   return (
     <Container maxWidth="md" sx={{ py: 4 }}>
-      <Paper sx={{ p: 3 }}>
-        <Typography variant="h4" gutterBottom align="center">
-          새로운 친구 찾기
-        </Typography>
-
-        <Box sx={{ mt: 4 }}>
-          <Typography variant="h6" gutterBottom>
-            매칭 설정
+      <Stack spacing={3}>
+        <Box>
+          <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }}>
+            관심사 매칭
           </Typography>
+          <Typography color="text.secondary">
+            관심사, 거리, 나이 조건을 기준으로 잘 맞는 이웃을 추천해.
+          </Typography>
+        </Box>
 
-          {locationError && (
-            <Alert severity="warning" sx={{ mb: 2 }}>
-              {locationError}
-              <Button variant="text" size="small" onClick={() => navigate('/profile')} sx={{ ml: 1}}>
-                프로필로 이동
-              </Button>
-            </Alert>
-          )}
+        {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
+        {success && <Alert severity="success" onClose={() => setSuccess(null)}>{success}</Alert>}
+        {!currentUser?.latitude || !currentUser?.longitude ? (
+          <Alert
+            severity="warning"
+            action={<Button onClick={() => navigate('/profile')}>프로필로 이동</Button>}
+          >
+            거리 점수를 쓰려면 프로필에서 위치를 저장해줘.
+          </Alert>
+        ) : null}
 
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            <Box>
-              <Typography gutterBottom>
-                검색 반경: {preferences.maxDistance}km
-              </Typography>
-              <Slider
-                value={preferences.maxDistance}
-                onChange={(_, value) =>
-                  setPreferences((prev) => ({
-                    ...prev,
-                    maxDistance: value as number,
-                  }))
-                }
-                min={1}
-                max={50}
-                valueLabelDisplay="auto"
-                disabled={isRequestingAPI || !!pendingMatchOffer || !!reduxActiveMatchRoomInfo}
-              />
-            </Box>
-
-            <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
-                <FormControl fullWidth disabled={isRequestingAPI || !!pendingMatchOffer || !!reduxActiveMatchRoomInfo}>
+        <Card variant="outlined" sx={{ borderRadius: 2 }}>
+          <CardContent>
+            <Stack spacing={3}>
+              <Box>
+                <Typography gutterBottom>최대 거리: {preferences.maxDistance}km</Typography>
+                <Slider
+                  min={1}
+                  max={50}
+                  value={preferences.maxDistance}
+                  valueLabelDisplay="auto"
+                  onChange={(_, value) =>
+                    setPreferences((prev) => ({ ...prev, maxDistance: value as number }))
+                  }
+                />
+              </Box>
+              <Box>
+                <Typography gutterBottom>
+                  나이 범위: {preferences.ageRange[0]}세 - {preferences.ageRange[1]}세
+                </Typography>
+                <Slider
+                  min={18}
+                  max={80}
+                  value={preferences.ageRange}
+                  valueLabelDisplay="auto"
+                  onChange={(_, value) =>
+                    setPreferences((prev) => ({ ...prev, ageRange: value as [number, number] }))
+                  }
+                />
+              </Box>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+                <FormControl fullWidth>
                   <InputLabel>성별</InputLabel>
                   <Select
-                    value={preferences.gender}
                     label="성별"
-                    onChange={(e) =>
-                      setPreferences((prev) => ({
-                        ...prev,
-                        gender: e.target.value,
-                      }))
+                    value={preferences.gender || 'any'}
+                    onChange={(event) =>
+                      setPreferences((prev) => ({ ...prev, gender: event.target.value }))
                     }
                   >
                     <MenuItem value="any">모두</MenuItem>
@@ -255,97 +296,185 @@ const Matching = (): React.ReactElement => {
                     <MenuItem value="female">여성</MenuItem>
                   </Select>
                 </FormControl>
-              </Box>
-
-              <Box sx={{ flex: { xs: '1 1 100%', sm: '1 1 calc(50% - 8px)' } }}>
                 <TextField
                   fullWidth
-                  label="관심사 (쉼표로 구분)"
-                  value={preferences.interests?.join(', ')}
-                  onChange={(e) =>
-                    setPreferences((prev) => ({
-                      ...prev,
-                      interests: e.target.value.split(',').map(i => i.trim()),
-                    }))
-                  }
-                  disabled={isRequestingAPI || !!pendingMatchOffer || !!reduxActiveMatchRoomInfo}
+                  label="관심사"
+                  value={interestInput}
+                  onChange={(event) => setInterestInput(event.target.value)}
+                  helperText="쉼표로 구분해줘."
                 />
-              </Box>
-            </Box>
+              </Stack>
+              <Stack direction="row" spacing={1} justifyContent="flex-end">
+                <Button startIcon={<RefreshIcon />} onClick={loadRecommendations} disabled={loading}>
+                  추천 새로고침
+                </Button>
+                <Button variant="contained" onClick={handleSavePreferences} disabled={loading}>
+                  조건 저장
+                </Button>
+              </Stack>
+            </Stack>
+          </CardContent>
+        </Card>
+
+        {incomingRequests.length > 0 && (
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+              받은 매칭 요청
+            </Typography>
+            <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+              {incomingRequests.map((request) => {
+                const requestKey = `incoming-${request.matchId}`;
+                return (
+                  <Card key={request.matchId} variant="outlined" sx={{ borderRadius: 2 }}>
+                    <CardContent>
+                      <Stack
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={2}
+                        alignItems={{ sm: 'center' }}
+                      >
+                        <Avatar src={request.profileImage || request.imageUrl} sx={{ width: 56, height: 56 }}>
+                          {request.username?.[0]}
+                        </Avatar>
+                        <Box sx={{ flexGrow: 1 }}>
+                          <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                              {request.username}
+                            </Typography>
+                            <Chip
+                              size="small"
+                              color="primary"
+                              label={`궁합 ${Math.round(request.compatibilityScore || 0)}점`}
+                            />
+                          </Stack>
+                          {request.bio && <Typography sx={{ mt: 0.75 }}>{request.bio}</Typography>}
+                          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                            {(request.sharedInterests || []).map((interest) => (
+                              <Chip key={interest} size="small" label={interest} />
+                            ))}
+                          </Stack>
+                        </Box>
+                        <Stack direction="row" spacing={1}>
+                          <Button
+                            startIcon={<CloseIcon />}
+                            disabled={requesting[requestKey]}
+                            onClick={() => handleRejectIncoming(request)}
+                          >
+                            거절
+                          </Button>
+                          <Button
+                            variant="contained"
+                            startIcon={<CheckCircleOutlineIcon />}
+                            disabled={requesting[requestKey]}
+                            onClick={() => handleAcceptIncoming(request)}
+                          >
+                            수락하고 채팅하기
+                          </Button>
+                        </Stack>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </Stack>
           </Box>
-        </Box>
+        )}
 
-        <Box sx={{ mt: 4, textAlign: 'center' }}>
-          {!pendingMatchOffer && !reduxActiveMatchRoomInfo && (
-            <Button
-              variant="contained"
-              size="large"
-              onClick={handleStartMatching}
-              disabled={!!locationError || isRequestingAPI || !isWsConnectedLocal}
-              sx={{minWidth: '180px'}}
-            >
-              {isRequestingAPI && reduxMatchStatusMessage === '매칭 상대를 찾고 있습니다...' ? (
-                <CircularProgress size={24} color="inherit" sx={{mr: 1}}/>
-              ) : null}
-              {isRequestingAPI && reduxMatchStatusMessage === '매칭 상대를 찾고 있습니다...' 
-                ? '매칭 찾는중...' 
-                : !isWsConnectedLocal 
-                  ? '서버 연결중...' 
-                  : '매칭 시작하기'}
-            </Button>
-          )}
+        <Stack spacing={2}>
+          {recommendations.map((profile) => (
+            <Card key={profile.id} variant="outlined" sx={{ borderRadius: 2 }}>
+              <CardContent>
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
+                  <Avatar src={profile.profileImage || profile.imageUrl} sx={{ width: 64, height: 64 }}>
+                    {profile.username?.[0]}
+                  </Avatar>
+                  <Box sx={{ flexGrow: 1 }}>
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                      <Typography variant="h6" sx={{ fontWeight: 800 }}>
+                        {profile.username}
+                      </Typography>
+                      <Chip color="primary" label={`${Math.round(profile.compatibilityScore || 0)}점`} />
+                      {profile.distance !== undefined && (
+                        <Chip variant="outlined" label={`${profile.distance.toFixed(1)}km`} />
+                      )}
+                    </Stack>
+                    <Typography variant="body2" color="text.secondary">
+                      {[profile.age && `${profile.age}세`, profile.gender].filter(Boolean).join(' · ')}
+                    </Typography>
+                    {profile.bio && <Typography sx={{ mt: 1 }}>{profile.bio}</Typography>}
+                    <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
+                      {(profile.sharedInterests?.length ? profile.sharedInterests : profile.interests || []).map(
+                        (interest) => (
+                          <Chip key={interest} size="small" label={interest} />
+                        )
+                      )}
+                    </Stack>
+                    {(profile.explanationReasons || []).length > 0 && (
+                      <Alert severity="info" icon={false} sx={{ mt: 1.5, py: 0.5 }}>
+                        추천한 이유 · {profile.explanationReasons?.join(' · ')}
+                      </Alert>
+                    )}
+                    <Stack direction="row" spacing={0.5} sx={{ mt: 1 }}>
+                      <Button size="small" startIcon={<ThumbUpAltOutlinedIcon />} onClick={() => handleFeedback(profile, 'POSITIVE')}>잘 맞아요</Button>
+                      <Button size="small" color="inherit" startIcon={<ThumbDownAltOutlinedIcon />} onClick={() => handleFeedback(profile, 'NEGATIVE')}>다른 추천</Button>
+                    </Stack>
+                  </Box>
+                  <Button
+                    variant="contained"
+                    startIcon={<PersonAddAltIcon />}
+                    disabled={requesting[profile.id]}
+                    onClick={() => handleRequestMatch(profile)}
+                  >
+                    매칭 요청
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
+          ))}
 
-          {(isRequestingAPI || pendingMatchOffer) && !reduxActiveMatchRoomInfo && (
-            <Button
-              variant="outlined"
-              color="secondary"
-              size="large"
-              onClick={handleStopMatching}
-              sx={{minWidth: '180px'}}
-            >
-              매칭 중단하기
-            </Button>
-          )}
-        </Box>
-
-        <Dialog 
-          open={!!pendingMatchOffer && !reduxActiveMatchRoomInfo} 
-          onClose={handleCloseDialog}
-          disableEscapeKeyDown={isRequestingAPI || (!!pendingMatchOffer && userClickedAccept && !reduxActiveMatchRoomInfo)}
-        >
-          <DialogTitle>
-            {pendingMatchOffer ? `${pendingMatchOffer.username} (${pendingMatchOffer.age}세)님과 매칭할까요?` : "매칭 제안"}
-          </DialogTitle>
-          <DialogContent>
-            {reduxMatchStatusMessage && (
-              <Typography sx={{mb: 2}}>{reduxMatchStatusMessage}</Typography>
-            )}
-            {pendingMatchOffer && !reduxMatchStatusMessage && (
-              <Box>
-                <Typography variant="body1">관심사: {pendingMatchOffer.interests.join(', ')}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {pendingMatchOffer.distance ? `${pendingMatchOffer.distance.toFixed(1)}km 떨어져 있어요` : '거리 정보 없음'}
+          {!loading && recommendations.length === 0 && (
+            <Card variant="outlined" sx={{ borderRadius: 2 }}>
+              <CardContent>
+                <Typography color="text.secondary">
+                  아직 추천 후보가 없어. 프로필 관심사를 채우고 조건을 조금 넓혀봐.
                 </Typography>
-                {pendingMatchOffer.bio && <Typography sx={{mt:1}}>소개: {pendingMatchOffer.bio}</Typography>}
-              </Box>
-            )}
-          </DialogContent>
-          <DialogActions sx={{ p: '0 24px 24px 24px', justifyContent: 'center', gap: 2 }}>
-            {!userClickedAccept && pendingMatchOffer && (
-              <>
-                <Button onClick={handleRejectMatch} color="secondary" variant="outlined" disabled={isRequestingAPI || !isWsConnectedLocal}>거절</Button>
-                <Button onClick={handleAcceptMatch} variant="contained" color="primary" disabled={isRequestingAPI || !isWsConnectedLocal}>수락</Button>
-              </>
-            )}
-            {pendingMatchOffer && userClickedAccept && (
-              <Button onClick={handleCloseDialog} color="inherit" variant="outlined" disabled={isRequestingAPI}>
-                {isRequestingAPI ? <CircularProgress size={20} sx={{mr:1}}/> : null}
-                응답 대기중 (닫기)
-              </Button> 
-            )}
-          </DialogActions>
-        </Dialog>
-      </Paper>
+              </CardContent>
+            </Card>
+          )}
+        </Stack>
+      </Stack>
+
+      <Dialog open={Boolean(pendingMatchOffer) && !activeMatchRoomInfo} onClose={() => dispatch(clearPendingMatchOffer())}>
+        <DialogTitle>매칭 요청</DialogTitle>
+        <DialogContent>
+          <Typography sx={{ mb: 1 }}>
+            {pendingMatchOffer?.username}님과 매칭할까?
+          </Typography>
+          {matchStatusMessage && (
+            <Typography variant="body2" color="text.secondary">
+              {matchStatusMessage}
+            </Typography>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleRejectMatch}>거절</Button>
+          <Button variant="contained" onClick={handleAcceptMatch}>
+            수락
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(activeMatchRoomInfo)} onClose={() => dispatch(clearActiveMatchRoomInfo())}>
+        <DialogTitle>매칭 성공</DialogTitle>
+        <DialogContent>
+          <Typography>{activeMatchRoomInfo?.message || '채팅방이 만들어졌어.'}</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => dispatch(clearActiveMatchRoomInfo())}>닫기</Button>
+          <Button variant="contained" onClick={() => navigate(`/chat/${activeMatchRoomInfo?.id}`)}>
+            채팅으로 이동
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 };
