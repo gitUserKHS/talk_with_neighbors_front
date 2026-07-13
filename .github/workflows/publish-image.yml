@@ -12,24 +12,49 @@ concurrency:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
-  publish:
+  quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run unit tests
+        run: npm test
+      - name: Run TypeScript type check
+        run: npm run typecheck
+      - name: Build same-origin production bundle
+        run: npm run build
+        env:
+          VITE_API_URL: /api
+          VITE_SOCKET_URL: ""
+          VITE_BASE_PATH: /
+
+  publish:
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Normalize image name
         id: image
         shell: bash
         run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4
+      - uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/metadata-action@v5
+      - uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6
         id: meta
         with:
           images: ${{ steps.image.outputs.name }}
@@ -38,14 +63,75 @@ jobs:
             type=ref,event=tag
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
-      - uses: docker/build-push-action@v6
+      - name: Build and push an isolated candidate
+        id: push
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7
         with:
           context: .
           push: true
+          platforms: linux/amd64,linux/arm64
           build-args: |
             VITE_API_URL=/api
             VITE_SOCKET_URL=
-          tags: ${{ steps.meta.outputs.tags }}
+            VITE_BASE_PATH=/
+          tags: ${{ steps.image.outputs.name }}:candidate-${{ github.run_id }}-${{ github.run_attempt }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+      - name: Scan the exact pushed digest
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}
+          format: table
+          exit-code: "1"
+          ignore-unfixed: true
+          vuln-type: os,library
+          severity: CRITICAL,HIGH
+      - name: Smoke-test the exact pushed digest
+        env:
+          RELEASE_IMAGE: ${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          trap 'docker rm -f talk-with-neighbors-frontend-release >/dev/null 2>&1 || true' EXIT
+          docker run --detach --name talk-with-neighbors-frontend-release \
+            --add-host backend:127.0.0.1 \
+            --publish 127.0.0.1:8081:80 \
+            "$RELEASE_IMAGE"
+
+          for _ in {1..15}; do
+            if curl --fail --silent --show-error http://127.0.0.1:8081/healthz | grep --quiet '^ok$'; then
+              curl --fail --silent --show-error http://127.0.0.1:8081/ | grep --ignore-case --quiet '<!doctype html>'
+              exit 0
+            fi
+            if [ "$(docker inspect --format '{{.State.Running}}' talk-with-neighbors-frontend-release)" != "true" ]; then
+              docker logs talk-with-neighbors-frontend-release
+              exit 1
+            fi
+            sleep 1
+          done
+
+          docker logs talk-with-neighbors-frontend-release
+          exit 1
+      - name: Promote the verified digest to release tags
+        env:
+          RELEASE_IMAGE: ${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}
+          RELEASE_TAGS: ${{ steps.meta.outputs.tags }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag_args=()
+          while IFS= read -r tag; do
+            [[ -n "$tag" ]] && tag_args+=(--tag "$tag")
+          done <<<"$RELEASE_TAGS"
+          (( ${#tag_args[@]} > 0 )) || { echo "No release tags were generated" >&2; exit 1; }
+          docker buildx imagetools create "${tag_args[@]}" "$RELEASE_IMAGE"
+      - name: Write immutable deployment reference
+        env:
+          RELEASE_IMAGE: ${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}
+        shell: bash
+        run: |
+          echo "### Verified frontend image" >> "$GITHUB_STEP_SUMMARY"
+          printf "\`%s\`\n" "$RELEASE_IMAGE" >> "$GITHUB_STEP_SUMMARY"
