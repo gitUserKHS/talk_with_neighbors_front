@@ -13,6 +13,7 @@ import {
   moveChatRoomToTop,
   removeRoom,
   updateMessageReadStatus,
+  updateRoomInfo,
   updateUnreadCount,
 } from '../store/slices/chatSlice';
 
@@ -213,6 +214,15 @@ class WebSocketService {
 
       if (notification.type === 'CHAT_ROOM_LIST_UPDATE' && data.chatRoomId) {
         store.dispatch(moveChatRoomToTop(String(data.chatRoomId)));
+      } else if (notification.type === 'CHAT_MESSAGE_CHANGED' && data.chatRoomId) {
+        store.dispatch(
+          updateRoomInfo({
+            roomId: String(data.chatRoomId),
+            lastMessage: data.lastMessage ?? null,
+            senderName: data.lastSenderName ?? null,
+            timestamp: data.lastMessageTime ?? null,
+          })
+        );
       } else if (notification.type === 'UNREAD_COUNT_UPDATE' && data.chatRoomId) {
         store.dispatch(
           updateUnreadCount({

@@ -1,4 +1,5 @@
 import api from './api';
+import { buildChatMessageFormData } from './multipart';
 import { ChatRoom, Message, ChatMessageDto, MessageDto, MessageType, WebSocketResponse, CreateRoomRequest, ChatRoomType, WebSocketMessage, Page } from '../types/chat';
 import { websocketService } from './websocketService';
 import { store } from '../store';
@@ -40,6 +41,8 @@ const convertToChatMessageDto = (message: Message | WebSocketResponse): ChatMess
     isRead: 'isRead' in message ? message.isRead : false,
     createdAt: message.createdAt,
     updatedAt: message.updatedAt || message.createdAt,
+    editedAt: msg.editedAt,
+    deletedAt: msg.deletedAt,
     type: message.type,
     isDeleted: msg.isDeleted,
     readByUsers: msg.readByUsers,
@@ -298,11 +301,7 @@ class ChatService {
       console.log(`[chatService.ts] Attempting to POST to /chat/rooms/${message.chatRoomId}/messages`);
       let response;
       if (files.length > 0) {
-        const formData = new FormData();
-        formData.append('message', new Blob([JSON.stringify({ content: message.content })], {
-          type: 'application/json',
-        }));
-        files.forEach((file) => formData.append('files', file));
+        const formData = buildChatMessageFormData(message.content, files);
         response = await api.post<MessageDto>(
           `/chat/rooms/${message.chatRoomId}/messages`,
           formData,
@@ -331,6 +330,21 @@ class ChatService {
       }
       throw error;
     }
+  }
+
+  async updateMessage(roomId: string, messageId: string, content: string): Promise<ChatMessageDto> {
+    const response = await api.patch<MessageDto>(
+      `/chat/rooms/${roomId}/messages/${messageId}`,
+      { content }
+    );
+    return convertToChatMessageDto(response.data as Message);
+  }
+
+  async deleteMessage(roomId: string, messageId: string): Promise<ChatMessageDto> {
+    const response = await api.delete<MessageDto>(
+      `/chat/rooms/${roomId}/messages/${messageId}`
+    );
+    return convertToChatMessageDto(response.data as Message);
   }
 
   // 특정 채팅방의 읽지 않은 메시지 수 조회

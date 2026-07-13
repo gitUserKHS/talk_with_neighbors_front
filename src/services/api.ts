@@ -1,21 +1,21 @@
 import axios from 'axios';
 import { store } from '../store';
 import { setUser } from '../store/slices/authSlice';
+import { DEFAULT_API_HEADERS, prepareRequestContentType } from './requestConfig';
 
 const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
 
 const api = axios.create({
   baseURL,
-  headers: {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  },
+  headers: DEFAULT_API_HEADERS,
   withCredentials: true,
 });
 
 api.interceptors.request.use(
   (config) => {
     const sessionId = localStorage.getItem('sessionId');
+
+    prepareRequestContentType(config.data, config.headers);
 
     if (sessionId) {
       config.headers['X-Session-Id'] = sessionId;
