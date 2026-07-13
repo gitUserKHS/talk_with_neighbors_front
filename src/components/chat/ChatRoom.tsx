@@ -23,6 +23,8 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AttachFileIcon from '@mui/icons-material/AttachFile';
 import CloseIcon from '@mui/icons-material/Close';
 import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import MovieOutlinedIcon from '@mui/icons-material/MovieOutlined';
 import SendIcon from '@mui/icons-material/Send';
@@ -39,6 +41,7 @@ import {
 } from '../../types/chat';
 import { RootState } from '../../store/types';
 import { meetupService } from '../../services/meetupService';
+import { mergeChatMessage } from '../../services/chatMessageState';
 
 const MAX_ATTACHMENT_COUNT = 5;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -90,6 +93,8 @@ const toChatMessage = (message: WebSocketResponse): ChatMessageDto => ({
   isRead: message.isRead,
   createdAt: message.createdAt,
   updatedAt: message.updatedAt,
+  editedAt: message.editedAt,
+  deletedAt: message.deletedAt,
   type: message.type,
   isDeleted: message.isDeleted,
   readByUsers: message.readByUsers,
@@ -121,6 +126,10 @@ const ChatRoom: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [leaveDialogOpen, setLeaveDialogOpen] = useState(false);
   const [leaving, setLeaving] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState('');
+  const [mutatingMessageId, setMutatingMessageId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<ChatMessageDto | null>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingRef = useRef<PendingAttachment[]>([]);
@@ -158,9 +167,12 @@ const ChatRoom: React.FC = () => {
   useEffect(() => {
     if (!roomId || !websocketService.getIsConnected()) return;
     websocketService.subscribeToRoom(roomId, (message) => {
-      setMessages((current) => current.some((item) => item.id === message.id)
-        ? current
-        : [...current, toChatMessage(message)]);
+      const incoming = toChatMessage(message);
+      setMessages((current) => mergeChatMessage(current, incoming));
+      if (incoming.isDeleted) {
+        setEditingMessageId((current) => current === incoming.id ? null : current);
+        setDeleteTarget((current) => current?.id === incoming.id ? null : current);
+      }
     });
     return () => websocketService.unsubscribeFromRoom(roomId);
   }, [roomId]);
@@ -291,6 +303,59 @@ const ChatRoom: React.FC = () => {
     }
   };
 
+  const startEditingMessage = (message: ChatMessageDto) => {
+    setEditingMessageId(message.id);
+    setEditingContent(message.content ?? '');
+    setError(null);
+  };
+
+  const cancelEditingMessage = () => {
+    setEditingMessageId(null);
+    setEditingContent('');
+  };
+
+  const handleUpdateMessage = async (message: ChatMessageDto) => {
+    if (!roomId || mutatingMessageId) return;
+    const normalized = editingContent.trim();
+    if (!normalized && (message.attachments?.length ?? 0) === 0) {
+      setError('텍스트 메시지의 내용은 비워둘 수 없어.');
+      return;
+    }
+    if (normalized === (message.content ?? '').trim()) {
+      cancelEditingMessage();
+      return;
+    }
+
+    setMutatingMessageId(message.id);
+    setError(null);
+    try {
+      const updated = await chatService.updateMessage(roomId, message.id, normalized);
+      setMessages((current) => mergeChatMessage(current, updated));
+      cancelEditingMessage();
+    } catch (err: any) {
+      setError(err.response?.data?.message || '메시지를 수정하지 못했어. 잠시 후 다시 시도해줘.');
+    } finally {
+      setMutatingMessageId(null);
+    }
+  };
+
+  const handleDeleteMessage = async () => {
+    if (!roomId || !deleteTarget || mutatingMessageId) return;
+    const target = deleteTarget;
+    setMutatingMessageId(target.id);
+    setError(null);
+    try {
+      const deleted = await chatService.deleteMessage(roomId, target.id);
+      setMessages((current) => mergeChatMessage(current, deleted));
+      setDeleteTarget(null);
+      if (editingMessageId === target.id) cancelEditingMessage();
+    } catch (err: any) {
+      setError(err.response?.data?.message || '메시지를 삭제하지 못했어. 잠시 후 다시 시도해줘.');
+    } finally {
+      setMutatingMessageId(null);
+    }
+  };
+
   if (loading) {
     return <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 'calc(100vh - 64px)' }}><CircularProgress /></Box>;
   }
@@ -322,15 +387,58 @@ const ChatRoom: React.FC = () => {
           <Stack spacing={1.5}>
             {messages.map((message) => {
               const isMine = String(message.senderId) === String(currentUser?.id);
+              const isEditing = editingMessageId === message.id;
+              const isMutating = mutatingMessageId === message.id;
+              const canMutate = isMine
+                && !message.isDeleted
+                && ['TEXT', 'IMAGE', 'VIDEO', 'FILE'].includes(message.type);
               return (
                 <Box key={message.id} sx={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start' }}>
-                  <Box sx={{ maxWidth: { xs: '88%', sm: '76%' }, px: 1.25, py: 1, borderRadius: 2.5, bgcolor: isMine ? 'primary.main' : 'background.paper', color: isMine ? 'primary.contrastText' : 'text.primary', border: isMine ? 0 : 1, borderColor: 'divider' }}>
-                    {!isMine && <Typography variant="caption" sx={{ fontWeight: 700 }}>{message.senderName}</Typography>}
-                    <AttachmentGallery attachments={message.attachments ?? []} />
-                    {message.content && <Typography sx={{ whiteSpace: 'pre-wrap', mt: message.attachments?.length ? 0.75 : 0 }}>{message.content}</Typography>}
-                    <Typography variant="caption" sx={{ display: 'block', opacity: 0.75, textAlign: 'right', mt: 0.5 }}>{formatTime(message.createdAt)}</Typography>
-                  </Box>
-                </Box>
+                  <Box sx={{ maxWidth: { xs: '88%', sm: '76%' }, minWidth: isEditing ? { xs: '78%', sm: 360 } : 0, px: 1.25, py: 1, borderRadius: 2.5, bgcolor: message.isDeleted ? 'action.disabledBackground' : isMine ? 'primary.main' : 'background.paper', color: message.isDeleted ? 'text.secondary' : isMine ? 'primary.contrastText' : 'text.primary', border: isMine && !message.isDeleted ? 0 : 1, borderColor: 'divider' }}>
+                     {!isMine && <Typography variant="caption" sx={{ fontWeight: 700 }}>{message.senderName}</Typography>}
+                     {canMutate && !isEditing && (
+                       <Stack direction="row" spacing={0.25} justifyContent="flex-end" sx={{ mt: -0.5, mr: -0.5 }}>
+                         <Tooltip title="메시지 수정">
+                           <span><IconButton aria-label="메시지 수정" size="small" disabled={isMutating} onClick={() => startEditingMessage(message)} sx={{ color: 'inherit', opacity: 0.8 }}><EditOutlinedIcon fontSize="inherit" /></IconButton></span>
+                         </Tooltip>
+                         <Tooltip title="메시지 삭제">
+                           <span><IconButton aria-label="메시지 삭제" size="small" disabled={isMutating} onClick={() => setDeleteTarget(message)} sx={{ color: 'inherit', opacity: 0.8 }}><DeleteOutlineIcon fontSize="inherit" /></IconButton></span>
+                         </Tooltip>
+                       </Stack>
+                     )}
+                     {message.isDeleted ? (
+                       <Typography sx={{ fontStyle: 'italic', py: 0.25 }}>삭제된 메시지야.</Typography>
+                     ) : (
+                       <>
+                         <AttachmentGallery attachments={message.attachments ?? []} />
+                         {isEditing ? (
+                           <Box sx={{ mt: message.attachments?.length ? 0.75 : 0 }}>
+                             <TextField
+                               value={editingContent}
+                               onChange={(event) => setEditingContent(event.target.value)}
+                               multiline
+                               maxRows={5}
+                               fullWidth
+                               autoFocus
+                               disabled={isMutating}
+                               inputProps={{ maxLength: 2000, 'aria-label': '수정할 메시지' }}
+                               sx={{ bgcolor: 'background.paper', borderRadius: 1 }}
+                             />
+                             <Stack direction="row" spacing={0.75} justifyContent="flex-end" sx={{ mt: 0.75 }}>
+                               <Button size="small" color="inherit" onClick={cancelEditingMessage} disabled={isMutating}>취소</Button>
+                               <Button size="small" variant="contained" onClick={() => handleUpdateMessage(message)} disabled={isMutating || (!editingContent.trim() && (message.attachments?.length ?? 0) === 0)}>{isMutating ? '저장 중…' : '저장'}</Button>
+                             </Stack>
+                           </Box>
+                         ) : message.content ? (
+                           <Typography sx={{ whiteSpace: 'pre-wrap', mt: message.attachments?.length ? 0.75 : 0 }}>{message.content}</Typography>
+                         ) : null}
+                       </>
+                     )}
+                     <Typography variant="caption" sx={{ display: 'block', opacity: 0.75, textAlign: 'right', mt: 0.5 }}>
+                       {message.editedAt && !message.isDeleted ? '수정됨 · ' : ''}{formatTime(message.createdAt)}
+                     </Typography>
+                   </Box>
+                 </Box>
               );
             })}
             <div ref={endRef} />
@@ -384,6 +492,19 @@ const ChatRoom: React.FC = () => {
         <DialogActions>
           <Button onClick={() => setLeaveDialogOpen(false)} disabled={leaving}>취소</Button>
           <Button color="error" onClick={handleLeaveMeetup} disabled={leaving}>{leaving ? '나가는 중' : '나가기'}</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={Boolean(deleteTarget)} onClose={() => !mutatingMessageId && setDeleteTarget(null)}>
+        <DialogTitle>메시지를 삭제할까?</DialogTitle>
+        <DialogContent>
+          <Typography>삭제하면 내용과 첨부 파일이 함께 사라지고 되돌릴 수 없어.</Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteTarget(null)} disabled={Boolean(mutatingMessageId)}>취소</Button>
+          <Button color="error" variant="contained" onClick={handleDeleteMessage} disabled={Boolean(mutatingMessageId)}>
+            {mutatingMessageId ? '삭제 중…' : '삭제'}
+          </Button>
         </DialogActions>
       </Dialog>
     </Container>

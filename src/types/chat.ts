@@ -50,6 +50,8 @@ export interface Message {
   type: MessageType;
   createdAt: string;
   updatedAt?: string;
+  editedAt?: string;
+  deletedAt?: string;
   isDeleted: boolean;
   readByUsers: number[];
   attachments?: ChatAttachment[];
@@ -64,6 +66,8 @@ export interface ChatMessageDto {
   isRead: boolean;
   createdAt: string;
   updatedAt?: string;
+  editedAt?: string;
+  deletedAt?: string;
   type: MessageType;
   isDeleted?: boolean;
   readByUsers?: number[];
@@ -78,6 +82,8 @@ export interface MessageDto {
   content: string;
   createdAt: string;
   updatedAt?: string;
+  editedAt?: string;
+  deletedAt?: string;
   type: MessageType;
   isDeleted: boolean;
   readByUsers: number[];
@@ -102,6 +108,8 @@ export interface WebSocketResponse {
   content: string;
   createdAt: string;
   updatedAt?: string;
+  editedAt?: string;
+  deletedAt?: string;
   isRead: boolean;
   isDeleted?: boolean;
   readByUsers?: number[];

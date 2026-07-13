@@ -34,7 +34,8 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
-    "test": "npm run typecheck",
+    "test": "npm run test:unit && npm run typecheck",
+    "test:unit": "node --experimental-strip-types --test scripts/*.test.ts",
     "check": "npm run typecheck && npm run build",
     "test:load": "node scripts/realistic-load-test.mjs"
   },

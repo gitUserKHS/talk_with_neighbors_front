@@ -364,33 +364,44 @@ const chatSlice = createSlice({
       }
     },
     // 채팅방 정보 업데이트 (새 메시지 알림용)
-    updateRoomInfo: (state, action: PayloadAction<{ roomId: string; lastMessage?: string; senderName?: string; timestamp?: string }>) => {
+    updateRoomInfo: (state, action: PayloadAction<{
+      roomId: string;
+      lastMessage?: string | null;
+      senderName?: string | null;
+      timestamp?: string | null;
+    }>) => {
       const { roomId, lastMessage, senderName, timestamp } = action.payload;
       
       // 일반 채팅방 목록에서 해당 방 찾기
       const roomIndex = state.rooms.findIndex(room => room.id === roomId);
       if (roomIndex !== -1) {
-        if (lastMessage) state.rooms[roomIndex].lastMessage = lastMessage;
-        if (senderName) state.rooms[roomIndex].lastSenderName = senderName;
-        if (timestamp) state.rooms[roomIndex].lastMessageTime = timestamp;
+        if (lastMessage !== undefined) state.rooms[roomIndex].lastMessage = lastMessage ?? undefined;
+        if (senderName !== undefined) state.rooms[roomIndex].lastSenderName = senderName ?? undefined;
+        if (timestamp !== undefined) state.rooms[roomIndex].lastMessageTime = timestamp ?? undefined;
         
         // 방을 목록 맨 위로 이동 (최신 메시지 순)
-        const updatedRoom = state.rooms[roomIndex];
-        state.rooms.splice(roomIndex, 1);
-        state.rooms.unshift(updatedRoom);
+        state.rooms.sort((left, right) =>
+          new Date(right.lastMessageTime ?? 0).getTime() - new Date(left.lastMessageTime ?? 0).getTime()
+        );
       }
       
       // 검색된 채팅방 목록에서도 동일하게 처리
       const searchRoomIndex = state.searchedRooms.findIndex(room => room.id === roomId);
       if (searchRoomIndex !== -1) {
-        if (lastMessage) state.searchedRooms[searchRoomIndex].lastMessage = lastMessage;
-        if (senderName) state.searchedRooms[searchRoomIndex].lastSenderName = senderName;
-        if (timestamp) state.searchedRooms[searchRoomIndex].lastMessageTime = timestamp;
+        if (lastMessage !== undefined) state.searchedRooms[searchRoomIndex].lastMessage = lastMessage ?? undefined;
+        if (senderName !== undefined) state.searchedRooms[searchRoomIndex].lastSenderName = senderName ?? undefined;
+        if (timestamp !== undefined) state.searchedRooms[searchRoomIndex].lastMessageTime = timestamp ?? undefined;
         
         // 검색 결과에서도 맨 위로 이동
-        const updatedSearchRoom = state.searchedRooms[searchRoomIndex];
-        state.searchedRooms.splice(searchRoomIndex, 1);
-        state.searchedRooms.unshift(updatedSearchRoom);
+        state.searchedRooms.sort((left, right) =>
+          new Date(right.lastMessageTime ?? 0).getTime() - new Date(left.lastMessageTime ?? 0).getTime()
+        );
+      }
+
+      if (state.currentRoom?.id === roomId) {
+        if (lastMessage !== undefined) state.currentRoom.lastMessage = lastMessage ?? undefined;
+        if (senderName !== undefined) state.currentRoom.lastSenderName = senderName ?? undefined;
+        if (timestamp !== undefined) state.currentRoom.lastMessageTime = timestamp ?? undefined;
       }
       
       console.log(`[chatSlice] Room ${roomId} info updated with new message`);
@@ -543,4 +554,4 @@ export const {
   updateRoomInfo
 } = chatSlice.actions;
 
-export default chatSlice.reducer; 
+export default chatSlice.reducer;
