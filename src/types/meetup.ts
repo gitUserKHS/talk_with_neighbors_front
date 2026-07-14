@@ -9,6 +9,10 @@ export interface HobbyMeetup {
   interestTags: string[];
   sharedInterests: string[];
   location?: string;
+  locationAddress?: string;
+  latitude?: number;
+  longitude?: number;
+  kakaoPlaceId?: string;
   maxParticipants?: number;
   participantCount: number;
   joined: boolean;
@@ -28,9 +32,15 @@ export interface CreateHobbyMeetupRequest {
   description?: string;
   interestTags: string[];
   location?: string;
+  locationAddress?: string;
+  latitude?: number;
+  longitude?: number;
+  kakaoPlaceId?: string;
   maxParticipants: number;
+  /** Browser-local form value; meetupService normalizes it to UTC ISO-8601 before sending. */
   scheduledAt?: string;
   durationMinutes?: number;
+  /** Browser-local form value; meetupService normalizes it to UTC ISO-8601 before sending. */
   registrationDeadline?: string;
 }
 

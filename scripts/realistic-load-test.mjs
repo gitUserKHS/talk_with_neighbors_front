@@ -27,7 +27,18 @@ function percentile(values, ratio) {
   return sorted[Math.min(sorted.length - 1, Math.ceil(sorted.length * ratio) - 1)];
 }
 
-async function api(operation, path, { method = 'GET', sessionId, body } = {}) {
+function extractCookieHeader(headers) {
+  const setCookieValues = typeof headers.getSetCookie === 'function'
+    ? headers.getSetCookie()
+    : [headers.get('set-cookie')].filter(Boolean);
+
+  return setCookieValues
+    .map((value) => value.split(';', 1)[0].trim())
+    .filter(Boolean)
+    .join('; ');
+}
+
+async function api(operation, path, { method = 'GET', cookie, body } = {}) {
   const startedAt = performance.now();
   let status = 0;
   try {
@@ -36,7 +47,7 @@ async function api(operation, path, { method = 'GET', sessionId, body } = {}) {
       headers: {
         Accept: 'application/json',
         ...(body === undefined ? {} : { 'Content-Type': 'application/json' }),
-        ...(sessionId ? { 'X-Session-Id': sessionId } : {}),
+        ...(cookie ? { Cookie: cookie } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(requestTimeoutMs),
@@ -68,8 +79,15 @@ class StompProbe {
   connect() {
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error(`WebSocket ready timeout for ${this.user.username}`)), 10000);
+      const authenticatedTransport = { headers: { Cookie: this.user.cookie } };
       const client = new Client({
-        webSocketFactory: () => new SockJS(`${socketUrl}?sessionId=${encodeURIComponent(this.user.sessionId)}`),
+        webSocketFactory: () => new SockJS(socketUrl, undefined, {
+          transportOptions: {
+            websocket: authenticatedTransport,
+            'xhr-streaming': authenticatedTransport,
+            'xhr-polling': authenticatedTransport,
+          },
+        }),
         reconnectDelay: 0,
         heartbeatIncoming: 10000,
         heartbeatOutgoing: 10000,
@@ -133,9 +151,9 @@ const users = await Promise.all(
       method: 'POST',
       body: { email, password, username },
     });
-    const sessionId = headers.get('x-session-id');
-    assert(Boolean(sessionId), `registration for ${username} did not return X-Session-Id`);
-    return { id: String(payload.id), username, email, sessionId };
+    const cookie = extractCookieHeader(headers);
+    assert(Boolean(cookie), `registration for ${username} did not return a session cookie`);
+    return { id: String(payload.id), username, email, cookie };
   }),
 );
 
@@ -143,7 +161,7 @@ await Promise.all(
   users.map((user, index) =>
     api('auth.profile', '/auth/profile', {
       method: 'PUT',
-      sessionId: user.sessionId,
+      cookie: user.cookie,
       body: {
         username: user.username,
         age: 20 + (index % 20),
@@ -164,7 +182,7 @@ const createdPosts = (
       Array.from({ length: postsPerUser }, (_, postIndex) =>
         api('feed.create', '/feed', {
           method: 'POST',
-          sessionId: user.sessionId,
+          cookie: user.cookie,
           body: {
             caption: `load post ${runId} ${userIndex}-${postIndex}`,
             imageUrl: `https://picsum.photos/seed/${runId}-${userIndex}-${postIndex}/640/640`,
@@ -183,12 +201,12 @@ await Promise.all(
     return [
       api('feed.comment', `/feed/${post.id}/comments`, {
         method: 'POST',
-        sessionId: commenter.sessionId,
+        cookie: commenter.cookie,
         body: { content: `load comment ${runId} on ${post.id}` },
       }),
       api('feed.like', `/feed/${post.id}/likes`, {
         method: 'POST',
-        sessionId: liker.sessionId,
+        cookie: liker.cookie,
       }),
     ];
   }),
@@ -196,7 +214,7 @@ await Promise.all(
 
 const { payload: room } = await api('chat.room.create', '/chat/rooms', {
   method: 'POST',
-  sessionId: users[0].sessionId,
+  cookie: users[0].cookie,
   body: {
     name: `load-room-${runId}`,
     type: 'GROUP',
@@ -213,7 +231,7 @@ const sentMessages = await Promise.all(
     Array.from({ length: messagesPerUser }, (_, messageIndex) =>
       api('chat.message.send', `/chat/rooms/${room.id}/messages`, {
         method: 'POST',
-        sessionId: user.sessionId,
+        cookie: user.cookie,
         body: { content: `load message ${runId} ${userIndex}-${messageIndex}` },
       }).then(({ payload }) => payload),
     ),
@@ -227,17 +245,17 @@ for (let round = 0; round < feedRounds; round += 1) {
   // Keep the declared user concurrency (20 by default) while producing a
   // sustained multi-round burst instead of accidentally opening 400 at once.
   await Promise.all(
-    users.map((user) => api('feed.burst.read', '/feed?page=0&size=20', { sessionId: user.sessionId })),
+    users.map((user) => api('feed.burst.read', '/feed?page=0&size=20', { cookie: user.cookie })),
   );
 }
 
 const { payload: chatPage } = await api('chat.messages.verify', `/chat/rooms/${room.id}/messages?page=0&size=200`, {
-  sessionId: users[0].sessionId,
+  cookie: users[0].cookie,
 });
 assert(chatPage.totalElements === sentMessages.length, `chat stored ${chatPage.totalElements}, expected ${sentMessages.length}`);
 
 const overviews = await Promise.all(
-  users.map((user) => api('mypage.overview', '/mypage/overview', { sessionId: user.sessionId }).then(({ payload }) => payload)),
+  users.map((user) => api('mypage.overview', '/mypage/overview', { cookie: user.cookie }).then(({ payload }) => payload)),
 );
 overviews.forEach((overview, index) => {
   assert(overview.postCount === postsPerUser, `user ${index} postCount=${overview.postCount}, expected ${postsPerUser}`);
@@ -259,13 +277,13 @@ if (cleanupEnabled) {
     createdPosts.map((post) =>
       api('cleanup.feed.delete', `/feed/${post.id}`, {
         method: 'DELETE',
-        sessionId: users[post.authorIndex].sessionId,
+        cookie: users[post.authorIndex].cookie,
       }),
     ),
   );
   await api('cleanup.chat.delete', `/chat/rooms/${room.id}`, {
     method: 'DELETE',
-    sessionId: users[0].sessionId,
+    cookie: users[0].cookie,
   });
 }
 

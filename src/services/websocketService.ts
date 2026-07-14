@@ -32,7 +32,6 @@ class WebSocketService {
   private currentUserId: number | string | undefined;
   private isConnected = false;
   private roomSubscriptions = new Map<string, StompSubscription>();
-  private readStatusSubscriptions = new Map<string, StompSubscription>();
   private connectionCallbacks: Array<(connected: boolean) => void> = [];
 
   initialize(currentUserId?: number | string): void {
@@ -44,14 +43,13 @@ class WebSocketService {
       return;
     }
 
-    const sessionId = localStorage.getItem('sessionId');
-    if (!sessionId) {
+    if (!this.currentUserId) {
       return;
     }
 
     const socketUrl = import.meta.env.VITE_SOCKET_URL || window.location.origin;
     this.client = new Client({
-      webSocketFactory: () => new SockJS(`${socketUrl}/ws?sessionId=${sessionId}`),
+      webSocketFactory: () => new SockJS(`${socketUrl}/ws`),
       reconnectDelay: 5000,
       heartbeatIncoming: 10000,
       heartbeatOutgoing: 10000,
@@ -82,8 +80,6 @@ class WebSocketService {
   disconnect(): void {
     this.roomSubscriptions.forEach((subscription) => subscription.unsubscribe());
     this.roomSubscriptions.clear();
-    this.readStatusSubscriptions.forEach((subscription) => subscription.unsubscribe());
-    this.readStatusSubscriptions.clear();
     this.client?.deactivate();
     this.client = null;
     this.isConnected = false;
@@ -121,31 +117,11 @@ class WebSocketService {
       }
     });
     this.roomSubscriptions.set(roomId, subscription);
-
-    const readStatusSubscription = this.client.subscribe(
-      `/topic/chat/room/${roomId}/read-status`,
-      (message) => {
-        const notification = this.parseMessage<WebSocketNotification>(message);
-        const data = notification?.data;
-        if (notification?.type === 'MESSAGE_READ_STATUS_UPDATE' && data) {
-          store.dispatch(
-            updateMessageReadStatus({
-              messageId: String(data.messageId),
-              roomId: String(data.chatRoomId),
-              readByUserId: data.readByUserId,
-            })
-          );
-        }
-      }
-    );
-    this.readStatusSubscriptions.set(roomId, readStatusSubscription);
   }
 
   unsubscribeFromRoom(roomId: string): void {
     this.roomSubscriptions.get(roomId)?.unsubscribe();
     this.roomSubscriptions.delete(roomId);
-    this.readStatusSubscriptions.get(roomId)?.unsubscribe();
-    this.readStatusSubscriptions.delete(roomId);
   }
 
   joinRoom(roomId: string): void {
@@ -169,10 +145,10 @@ class WebSocketService {
     });
   }
 
-  markMessageAsRead(messageId: string): void {
+  markMessageAsRead(roomId: string, messageId: string): void {
     this.client?.publish({
       destination: '/app/chat.markAsRead',
-      body: JSON.stringify({ messageId }),
+      body: JSON.stringify({ roomId, messageId }),
     });
   }
 
@@ -233,6 +209,20 @@ class WebSocketService {
       } else if (notification.type === 'ROOM_DELETED' && data.chatRoomId) {
         store.dispatch(removeRoom(String(data.chatRoomId)));
       }
+    });
+
+    this.client.subscribe('/user/queue/chat/read-status', (message) => {
+      const notification = this.parseMessage<WebSocketNotification>(message);
+      const data = notification?.data;
+      if (notification?.type !== 'MESSAGE_READ_STATUS_UPDATE' || !data) return;
+
+      store.dispatch(
+        updateMessageReadStatus({
+          messageId: String(data.messageId),
+          roomId: String(data.chatRoomId),
+          readByUserId: data.readByUserId,
+        })
+      );
     });
 
     this.client.subscribe('/user/queue/system-notifications', (message) => {

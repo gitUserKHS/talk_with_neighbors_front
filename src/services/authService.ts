@@ -1,6 +1,5 @@
 import api from './api';
 import { User } from '../types/user';
-import { websocketService } from './websocketService';
 import type { AxiosProgressEvent } from 'axios';
 
 interface LoginResponse {
@@ -16,59 +15,22 @@ interface DuplicateCheckResponse {
 }
 
 class AuthService {
-  private currentUser: User | null = null;
-
-  constructor() {
-    const storedUser = localStorage.getItem('user');
-    if (!storedUser || storedUser === 'undefined' || storedUser === 'null') {
-      return;
-    }
-
-    try {
-      this.currentUser = JSON.parse(storedUser);
-      if (this.currentUser?.id) {
-        websocketService.setCurrentUserId(this.currentUser.id);
-      }
-    } catch {
-      localStorage.removeItem('user');
-      localStorage.removeItem('sessionId');
-      this.currentUser = null;
-    }
-  }
-
-  getInitialUser(): User | null {
-    return this.currentUser;
-  }
-
-  isAuthenticated(): boolean {
-    return Boolean(this.currentUser && localStorage.getItem('sessionId'));
-  }
-
   async login(email: string, password: string): Promise<User | null> {
     const response = await api.post<LoginResponse>('/auth/login', { email, password });
-    const sessionId = response.headers['x-session-id'];
     const user = this.extractUser(response.data);
 
-    if (!sessionId || !user?.id) {
+    if (!user?.id) {
       throw new Error('로그인 응답이 올바르지 않습니다.');
     }
 
-    localStorage.setItem('sessionId', sessionId);
-    this.setCurrentUser(user);
     return user;
   }
 
   async register(email: string, password: string, username: string): Promise<User | null> {
     const response = await api.post<LoginResponse>('/auth/register', { email, password, username });
-    const sessionId = response.headers['x-session-id'];
     const user = this.extractUser(response.data);
 
-    if (sessionId) {
-      localStorage.setItem('sessionId', sessionId);
-    }
-
     if (user?.id) {
-      this.setCurrentUser(user);
       return user;
     }
 
@@ -79,37 +41,18 @@ class AuthService {
     try {
       await api.post('/auth/logout');
     } catch {
-      // Local logout should still complete even if the server session is already gone.
-    } finally {
-      this.currentUser = null;
-      localStorage.removeItem('user');
-      localStorage.removeItem('sessionId');
-      websocketService.setCurrentUserId(undefined);
-      websocketService.disconnect();
+      // Redux still completes local logout if the server session already expired.
     }
   }
 
   async getCurrentUser(): Promise<User | null> {
-    const sessionId = localStorage.getItem('sessionId');
-    if (!sessionId) {
-      this.clearCurrentUser();
-      return null;
+    const response = await api.get<LoginResponse>('/auth/me');
+    const user = this.extractUser(response.data);
+
+    if (user?.id) {
+      return user;
     }
 
-    try {
-      const response = await api.get<LoginResponse>('/auth/me');
-      const user = this.extractUser(response.data);
-
-      if (user?.id) {
-        this.setCurrentUser(user);
-        return user;
-      }
-    } catch (error) {
-      this.clearCurrentUser();
-      throw error;
-    }
-
-    this.clearCurrentUser();
     return null;
   }
 
@@ -122,7 +65,6 @@ class AuthService {
 
   async updateProfile(profileData: Partial<User>): Promise<User | null> {
     const response = await api.put<User>('/auth/profile', profileData);
-    this.setCurrentUser(response.data);
     return response.data;
   }
 
@@ -139,32 +81,12 @@ class AuthService {
         }
       },
     });
-    this.setCurrentUser(response.data);
     return response.data;
   }
 
   async deleteProfileImage(): Promise<User> {
     const response = await api.delete<User>('/auth/profile/image');
-    this.setCurrentUser(response.data);
     return response.data;
-  }
-
-  clearLocalSession(): void {
-    this.clearCurrentUser();
-  }
-
-  private setCurrentUser(user: User): void {
-    this.currentUser = user;
-    localStorage.setItem('user', JSON.stringify(user));
-    websocketService.setCurrentUserId(user.id);
-  }
-
-  private clearCurrentUser(): void {
-    this.currentUser = null;
-    localStorage.removeItem('user');
-    localStorage.removeItem('sessionId');
-    websocketService.setCurrentUserId(undefined);
-    websocketService.disconnect();
   }
 
   private extractUser(payload: LoginResponse): User | null {

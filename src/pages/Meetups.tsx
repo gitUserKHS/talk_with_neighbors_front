@@ -34,6 +34,8 @@ import { useSelector } from 'react-redux';
 import { meetupService } from '../services/meetupService';
 import { CreateHobbyMeetupRequest, HobbyMeetup } from '../types/meetup';
 import { RootState } from '../store/types';
+import MapLocationPicker from '../components/MapLocationPicker';
+import { formatMeetupDateTime } from '../services/meetupDateTime';
 import {
   AccessScope,
   AccessScopedList,
@@ -151,16 +153,33 @@ const MeetupCard: React.FC<{
               {meetup.participantCount}/{meetup.maxParticipants ?? '-'}명
             </Typography>
           </Stack>
-          {meetup.location && (
+          {(meetup.location || meetup.locationAddress) && (
             <Stack direction="row" spacing={0.5} alignItems="center">
               <LocationOnOutlinedIcon fontSize="small" />
-              <Typography variant="body2">{meetup.location}</Typography>
+              <Box>
+                <Typography variant="body2">{meetup.location || meetup.locationAddress}</Typography>
+                {meetup.location && meetup.locationAddress && (
+                  <Typography variant="caption" display="block">{meetup.locationAddress}</Typography>
+                )}
+                {meetup.latitude !== undefined && meetup.longitude !== undefined && (
+                  <Typography
+                    component="a"
+                    variant="caption"
+                    href={`https://map.kakao.com/link/map/${encodeURIComponent(meetup.location || '모임 장소')},${meetup.latitude},${meetup.longitude}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    color="primary"
+                  >
+                    카카오맵에서 보기
+                  </Typography>
+                )}
+              </Box>
             </Stack>
           )}
           {meetup.scheduledAt && (
             <Stack direction="row" spacing={0.5} alignItems="center">
               <EventOutlinedIcon fontSize="small" />
-              <Typography variant="body2">{new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(meetup.scheduledAt))}</Typography>
+              <Typography variant="body2">{formatMeetupDateTime(meetup.scheduledAt)}</Typography>
             </Stack>
           )}
         </Stack>
@@ -270,7 +289,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
 
     setError(null);
     setTagInput((currentUser?.interests ?? []).slice(0, 3).join(', '));
-    setForm({ ...EMPTY_FORM, location: currentUser?.address || '' });
+    setForm({ ...EMPTY_FORM });
     setCreateOpen(true);
   };
 
@@ -293,6 +312,8 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
         title: form.title.trim(),
         description: form.description?.trim() || undefined,
         location: form.location?.trim() || undefined,
+        locationAddress: form.locationAddress?.trim() || undefined,
+        kakaoPlaceId: form.kakaoPlaceId?.trim() || undefined,
         scheduledAt: form.scheduledAt || undefined,
         registrationDeadline: form.registrationDeadline || undefined,
         interestTags,
@@ -490,14 +511,25 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
                 required
                 fullWidth
               />
+              <MapLocationPicker
+                value={form.location || form.locationAddress ? {
+                  placeName: form.location ?? '',
+                  address: form.locationAddress,
+                  latitude: form.latitude,
+                  longitude: form.longitude,
+                  kakaoPlaceId: form.kakaoPlaceId,
+                } : null}
+                onChange={(selection) => setForm((current) => ({
+                  ...current,
+                  location: selection?.placeName ?? '',
+                  locationAddress: selection?.address,
+                  latitude: selection?.latitude,
+                  longitude: selection?.longitude,
+                  kakaoPlaceId: selection?.kakaoPlaceId,
+                }))}
+                disabled={creating}
+              />
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  label="장소"
-                  value={form.location}
-                  onChange={(event) => setForm((current) => ({ ...current, location: event.target.value }))}
-                  inputProps={{ maxLength: 100 }}
-                  fullWidth
-                />
                 <TextField
                   label="모집 인원"
                   type="number"

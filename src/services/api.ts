@@ -12,31 +12,16 @@ const api = axios.create({
 
 api.interceptors.request.use(
   (config) => {
-    const sessionId = localStorage.getItem('sessionId');
-
     prepareRequestContentType(config.data, config.headers);
-
-    if (sessionId) {
-      config.headers['X-Session-Id'] = sessionId;
-    }
-
     return config;
   },
   (error) => Promise.reject(error)
 );
 
 api.interceptors.response.use(
-  (response) => {
-    const sessionId = response.headers['x-session-id'];
-    if (sessionId) {
-      localStorage.setItem('sessionId', sessionId);
-    }
-    return response;
-  },
+  (response) => response,
   async (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('sessionId');
-      localStorage.removeItem('user');
       store.dispatch(setUser(null));
     }
 

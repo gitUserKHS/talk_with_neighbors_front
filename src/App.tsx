@@ -76,11 +76,6 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
     let isMounted = true;
 
     const initialize = async () => {
-      const initialUser = authService.getInitialUser();
-      if (initialUser) {
-        dispatch(setUser(initialUser));
-      }
-
       try {
         const sessionUser = await authService.getCurrentUser();
         if (isMounted) {

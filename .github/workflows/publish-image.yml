@@ -30,12 +30,24 @@ jobs:
         run: npm test
       - name: Run TypeScript type check
         run: npm run typecheck
+      - name: Report Kakao Maps release configuration
+        env:
+          KAKAO_MAP_KEY: ${{ secrets.VITE_KAKAO_MAP_JAVASCRIPT_KEY }}
+        shell: bash
+        run: |
+          if [[ -n "$KAKAO_MAP_KEY" ]]; then
+            echo "Kakao Maps JavaScript key is configured for this release." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::warning::VITE_KAKAO_MAP_JAVASCRIPT_KEY is not configured; the release will use the manual location fallback."
+            echo "Kakao Maps is disabled because the JavaScript key secret is missing; manual location fallback remains available." >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Build same-origin production bundle
         run: npm run build
         env:
           VITE_API_URL: /api
           VITE_SOCKET_URL: ""
           VITE_BASE_PATH: /
+          VITE_KAKAO_MAP_JAVASCRIPT_KEY: ${{ secrets.VITE_KAKAO_MAP_JAVASCRIPT_KEY }}
 
   publish:
     needs: quality
@@ -76,6 +88,7 @@ jobs:
             VITE_API_URL=/api
             VITE_SOCKET_URL=
             VITE_BASE_PATH=/
+            VITE_KAKAO_MAP_JAVASCRIPT_KEY=${{ secrets.VITE_KAKAO_MAP_JAVASCRIPT_KEY }}
           tags: ${{ steps.image.outputs.name }}:candidate-${{ github.run_id }}-${{ github.run_attempt }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

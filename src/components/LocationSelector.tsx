@@ -1,17 +1,17 @@
 import React, { useState } from 'react';
 import {
   Alert,
-  Box,
   Button,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Stack,
-  TextField,
 } from '@mui/material';
 import MyLocationIcon from '@mui/icons-material/MyLocation';
 import { Location } from '../store/types';
+import { MapLocationSelection } from '../types/location';
+import MapLocationPicker from './MapLocationPicker';
 
 interface LocationSelectorProps {
   onLocationSelect: (location: Location) => void;
@@ -25,43 +25,42 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   disabled,
 }) => {
   const [open, setOpen] = useState(false);
-  const [address, setAddress] = useState(initialLocation?.address || '');
-  const [latitude, setLatitude] = useState(initialLocation?.latitude?.toString() || '');
-  const [longitude, setLongitude] = useState(initialLocation?.longitude?.toString() || '');
+  const [selection, setSelection] = useState<MapLocationSelection | null>(
+    initialLocation ? {
+      placeName: initialLocation.address || '선택한 위치',
+      address: initialLocation.address,
+      latitude: initialLocation.latitude,
+      longitude: initialLocation.longitude,
+    } : null,
+  );
   const [error, setError] = useState<string | null>(null);
 
-  const handleCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      setError('브라우저가 현재 위치를 지원하지 않아.');
-      return;
-    }
-
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLatitude(position.coords.latitude.toString());
-        setLongitude(position.coords.longitude.toString());
-        if (!address) {
-          setAddress('현재 위치');
-        }
-        setError(null);
-      },
-      () => setError('현재 위치를 가져오지 못했어.')
-    );
+  const handleOpen = () => {
+    setSelection(initialLocation ? {
+      placeName: initialLocation.address || '선택한 위치',
+      address: initialLocation.address,
+      latitude: initialLocation.latitude,
+      longitude: initialLocation.longitude,
+    } : null);
+    setError(null);
+    setOpen(true);
   };
 
   const handleConfirm = () => {
-    const lat = Number(latitude);
-    const lng = Number(longitude);
-
-    if (!address.trim() || Number.isNaN(lat) || Number.isNaN(lng)) {
-      setError('주소, 위도, 경도를 모두 입력해줘.');
+    const address = selection?.address?.trim() || selection?.placeName.trim();
+    if (
+      !address
+      || selection?.latitude === undefined
+      || selection.longitude === undefined
+    ) {
+      setError('카카오 지도에서 동네를 선택하거나 HTTPS 현재 위치 권한을 허용해줘.');
       return;
     }
 
     onLocationSelect({
-      address: address.trim(),
-      latitude: lat,
-      longitude: lng,
+      address,
+      latitude: selection.latitude,
+      longitude: selection.longitude,
     });
     setOpen(false);
   };
@@ -70,42 +69,28 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
     <>
       <Button
         variant="outlined"
-        onClick={() => setOpen(true)}
+        onClick={handleOpen}
         startIcon={<MyLocationIcon />}
         disabled={disabled}
       >
         {initialLocation?.address || '위치 선택'}
       </Button>
 
-      <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>위치 선택</DialogTitle>
+      <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle>동네 위치 선택</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             {error && <Alert severity="error">{error}</Alert>}
-            <TextField
-              label="주소"
-              value={address}
-              onChange={(event) => setAddress(event.target.value)}
-              placeholder="예: 서울시 마포구"
-              fullWidth
+            <MapLocationPicker
+              value={selection}
+              onChange={(nextSelection) => {
+                setSelection(nextSelection);
+                setError(null);
+              }}
+              allowCurrentLocation
+              requireCoordinates
+              helperText="동네 중심이나 가까운 공공장소를 선택해줘. 정확한 좌표는 다른 사용자에게 직접 공개되지 않아."
             />
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <TextField
-                label="위도"
-                value={latitude}
-                onChange={(event) => setLatitude(event.target.value)}
-                fullWidth
-              />
-              <TextField
-                label="경도"
-                value={longitude}
-                onChange={(event) => setLongitude(event.target.value)}
-                fullWidth
-              />
-            </Box>
-            <Button variant="outlined" startIcon={<MyLocationIcon />} onClick={handleCurrentLocation}>
-              현재 위치 사용
-            </Button>
           </Stack>
         </DialogContent>
         <DialogActions>

@@ -32,12 +32,14 @@ jobs:
           VITE_API_URL: /api
           VITE_SOCKET_URL: ""
           VITE_BASE_PATH: /
+          VITE_KAKAO_MAP_JAVASCRIPT_KEY: ""
       - name: Build production container
         run: >-
           docker build
           --build-arg VITE_API_URL=/api
           --build-arg VITE_SOCKET_URL=
           --build-arg VITE_BASE_PATH=/
+          --build-arg VITE_KAKAO_MAP_JAVASCRIPT_KEY=
           -t talk-with-neighbors-frontend:ci .
       - name: Scan container for fixable high-severity vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
