@@ -29,6 +29,7 @@ import { authService } from '../services/authService';
 import { setUser } from '../store/slices/authSlice';
 import { RootState } from '../store/types';
 import notificationService, { InboxNotification } from '../services/notificationService';
+import { resolveMediaUrl } from '../services/mediaUrl';
 
 const navItems = [
   { label: '피드', path: '/feed', icon: <HomeIcon /> },
@@ -37,6 +38,8 @@ const navItems = [
   { label: '모임', path: '/meetups', icon: <GroupsOutlinedIcon /> },
   { label: '채팅', path: '/chat', icon: <ChatBubbleOutlineIcon /> },
 ];
+
+const browseItems = navItems.filter((item) => item.path === '/feed' || item.path === '/meetups');
 
 const Navbar: React.FC = () => {
   const navigate = useNavigate();
@@ -70,8 +73,7 @@ const Navbar: React.FC = () => {
   const handleLogout = async () => {
     await authService.logout();
     dispatch(setUser(null));
-    window.history.replaceState({}, '', '/login');
-    window.location.reload();
+    navigate('/login', { replace: true });
   };
 
   const handleNotificationClick = async (notification: InboxNotification) => {
@@ -155,7 +157,7 @@ const Navbar: React.FC = () => {
             </Tooltip>
             <Tooltip title="프로필">
               <IconButton component={RouterLink} to="/mypage" aria-label="마이페이지" sx={{ p: 0.5 }}>
-                <Avatar src={user.profileImage} sx={{ width: 34, height: 34, bgcolor: 'secondary.main', fontSize: 15 }}>
+                <Avatar src={resolveMediaUrl(user.profileImage)} sx={{ width: 34, height: 34, bgcolor: 'secondary.main', fontSize: 15 }}>
                   {user.username?.[0]}
                 </Avatar>
               </IconButton>
@@ -170,14 +172,31 @@ const Navbar: React.FC = () => {
             </Button>
           </>
         ) : (
-          <Stack direction="row" spacing={1}>
-            <Button component={RouterLink} to="/login" color="inherit" sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
-              로그인
-            </Button>
-            <Button component={RouterLink} to="/register" variant="contained">
-              시작하기
-            </Button>
-          </Stack>
+          <>
+            <Box component="nav" aria-label="둘러보기 메뉴" sx={{ display: { xs: 'none', md: 'flex' }, gap: 0.5 }}>
+              {browseItems.map((item) => (
+                <Button
+                  key={item.path}
+                  component={RouterLink}
+                  to={item.path}
+                  color="inherit"
+                  startIcon={item.icon}
+                  aria-current={isActive(item.path) ? 'page' : undefined}
+                  sx={{ color: isActive(item.path) ? 'primary.main' : 'text.secondary' }}
+                >
+                  {item.label} 둘러보기
+                </Button>
+              ))}
+            </Box>
+            <Stack direction="row" spacing={1}>
+              <Button component={RouterLink} to="/login" color="inherit" sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
+                로그인
+              </Button>
+              <Button component={RouterLink} to="/register" variant="contained">
+                시작하기
+              </Button>
+            </Stack>
+          </>
         )}
       </Toolbar>
 
@@ -214,6 +233,36 @@ const Navbar: React.FC = () => {
               startIcon={item.icon}
             >
               {item.label}
+            </Button>
+          ))}
+        </Box>
+      )}
+
+      {!user && (
+        <Box
+          component="nav"
+          aria-label="모바일 둘러보기 메뉴"
+          sx={{
+            display: { xs: 'grid', md: 'none' },
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            borderTop: 1,
+            borderColor: 'divider',
+            px: 0.5,
+          }}
+        >
+          {browseItems.map((item) => (
+            <Button
+              key={item.path}
+              component={RouterLink}
+              to={item.path}
+              startIcon={item.icon}
+              aria-current={isActive(item.path) ? 'page' : undefined}
+              sx={{
+                minHeight: 44,
+                color: isActive(item.path) ? 'primary.main' : 'text.secondary',
+              }}
+            >
+              {item.label} 둘러보기
             </Button>
           ))}
         </Box>

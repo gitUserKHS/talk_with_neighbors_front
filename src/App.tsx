@@ -12,6 +12,7 @@ import { authService } from './services/authService';
 import { websocketService } from './services/websocketService';
 import Navbar from './components/Navbar';
 import NotificationHandler from './components/notifications/NotificationHandler';
+import { getRouterBasename } from './routerBase';
 
 const Home = React.lazy(() => import('./pages/Home'));
 const Feed = React.lazy(() => import('./pages/Feed'));
@@ -47,6 +48,23 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   }
 
   return <>{children}</>;
+};
+
+const PublicReadableRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
+  const user = useSelector((state: RootState) => state.auth.user);
+
+  if (isAuthenticated && user?.profileComplete === false) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  const accessScope = isAuthenticated
+    ? `authenticated:${String(user?.id ?? 'unknown')}`
+    : 'public';
+
+  // A scope key remounts the readable page before paint when a session expires
+  // or another account replaces it, clearing every piece of page-local state.
+  return <React.Fragment key={accessScope}>{children}</React.Fragment>;
 };
 
 const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -106,7 +124,7 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
 const AppContent: React.FC = () => (
   <ThemeProvider theme={theme}>
     <CssBaseline />
-    <Router>
+    <Router basename={getRouterBasename(import.meta.env.BASE_URL)}>
       <AuthInitializer>
         <Navbar />
         <NotificationHandler />
@@ -118,9 +136,9 @@ const AppContent: React.FC = () => (
           <Route
             path="/feed"
             element={
-              <ProtectedRoute>
+              <PublicReadableRoute>
                 <Feed />
-              </ProtectedRoute>
+              </PublicReadableRoute>
             }
           />
           <Route
@@ -142,9 +160,9 @@ const AppContent: React.FC = () => (
           <Route
             path="/meetups"
             element={
-              <ProtectedRoute>
+              <PublicReadableRoute>
                 <Meetups />
-              </ProtectedRoute>
+              </PublicReadableRoute>
             }
           />
           <Route

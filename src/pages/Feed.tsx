@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Avatar,
@@ -49,6 +49,15 @@ import { RootState } from '../store/types';
 import safetyService from '../services/safetyService';
 import { ReportReason } from '../types/safety';
 import PostMediaCarousel from '../components/feed/PostMediaCarousel';
+import {
+  AccessScope,
+  AccessScopedList,
+  accessScopeForUser,
+  apiAccessForScope,
+  isLatestRequest,
+  updateScopedItems,
+  visibleScopedItems,
+} from '../services/accessScope';
 
 const formatDate = (value?: string | null) => {
   if (!value) return '';
@@ -61,9 +70,14 @@ const formatDate = (value?: string | null) => {
   }).format(new Date(value));
 };
 
-const Feed: React.FC = () => {
-  const currentUser = useSelector((state: RootState) => state.auth.user);
-  const [posts, setPosts] = useState<FeedPost[]>([]);
+const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ currentUser }) => {
+  const isGuest = !currentUser;
+  const accessScope = accessScopeForUser(currentUser?.id);
+  const [postSnapshot, setPostSnapshot] = useState<AccessScopedList<FeedPost>>({
+    scope: null,
+    items: [],
+  });
+  const posts = visibleScopedItems(postSnapshot, accessScope);
   const [comments, setComments] = useState<Record<string, FeedComment[]>>({});
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
@@ -78,31 +92,71 @@ const Feed: React.FC = () => {
   const [reportDetails, setReportDetails] = useState('');
   const [hideAfterReport, setHideAfterReport] = useState(true);
   const [safetySubmitting, setSafetySubmitting] = useState(false);
+  const feedRequestGeneration = useRef(0);
+  const viewGeneration = useRef(0);
 
-  const loadFeed = async () => {
+  const setPosts = (update: React.SetStateAction<FeedPost[]>) => {
+    setPostSnapshot((snapshot) => updateScopedItems(snapshot, accessScope, update));
+  };
+
+  const loadFeed = async (requestScope: AccessScope = accessScope) => {
+    const requestId = ++feedRequestGeneration.current;
     setLoading(true);
     setError(null);
 
     try {
-      const page = await feedService.getFeed();
-      setPosts(page.content ?? []);
+      const page = await feedService.getFeed(0, 20, apiAccessForScope(requestScope));
+      if (!isLatestRequest(requestId, feedRequestGeneration.current)) return;
+      setPostSnapshot({ scope: requestScope, items: page.content ?? [] });
     } catch {
+      if (!isLatestRequest(requestId, feedRequestGeneration.current)) return;
       setError('피드를 불러오지 못했어. 잠시 후 다시 시도해줘.');
     } finally {
-      setLoading(false);
+      if (isLatestRequest(requestId, feedRequestGeneration.current)) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    loadFeed();
-  }, []);
+    const generation = ++viewGeneration.current;
+    ++feedRequestGeneration.current;
+    setPostSnapshot({ scope: null, items: [] });
+    setComments({});
+    setCommentInputs({});
+    setExpandedComments({});
+    setRequestingMatch({});
+    setError(null);
+    setSuccess(null);
+    setMenuAnchor(null);
+    setSelectedPost(null);
+    setReportOpen(false);
+    setReportReason('HARASSMENT');
+    setReportDetails('');
+    setHideAfterReport(true);
+    setSafetySubmitting(false);
+    void loadFeed(accessScope);
+
+    return () => {
+      if (viewGeneration.current === generation) {
+        ++viewGeneration.current;
+      }
+      ++feedRequestGeneration.current;
+    };
+  }, [accessScope]);
 
   const emptyMessage = useMemo(() => {
     if (loading) return '';
-    return posts.length === 0 ? '아직 올라온 게시글이 없어. 첫 취향을 공유해볼까?' : '';
-  }, [loading, posts.length]);
+    if (posts.length > 0) return '';
+    return isGuest
+      ? '아직 공개된 게시글이 없어. 조금 뒤에 다시 둘러봐줘.'
+      : '아직 올라온 게시글이 없어. 첫 취향을 공유해볼까?';
+  }, [isGuest, loading, posts.length]);
 
   const handleToggleLike = async (post: FeedPost) => {
+    if (isGuest) return;
+    const generation = viewGeneration.current;
+
     setPosts((prev) =>
       prev.map((item) =>
         item.id === post.id
@@ -124,31 +178,41 @@ const Feed: React.FC = () => {
         await feedService.likePost(post.id);
       }
     } catch {
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
       setError('좋아요 처리를 실패했어.');
-      loadFeed();
+      void loadFeed();
     }
   };
 
   const handleToggleComments = async (postId: string) => {
+    if (isGuest) return;
+    const generation = viewGeneration.current;
+
     const willOpen = !expandedComments[postId];
     setExpandedComments((prev) => ({ ...prev, [postId]: willOpen }));
 
     if (willOpen && !comments[postId]) {
       try {
         const result = await feedService.getComments(postId);
+        if (!isLatestRequest(generation, viewGeneration.current)) return;
         setComments((prev) => ({ ...prev, [postId]: result }));
       } catch {
+        if (!isLatestRequest(generation, viewGeneration.current)) return;
         setError('댓글을 불러오지 못했어.');
       }
     }
   };
 
   const handleAddComment = async (postId: string) => {
+    if (isGuest) return;
+    const generation = viewGeneration.current;
+
     const content = commentInputs[postId]?.trim();
     if (!content) return;
 
     try {
       const created = await feedService.addComment(postId, content);
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
       setComments((prev) => ({
         ...prev,
         [postId]: [...(prev[postId] || []), created],
@@ -160,25 +224,35 @@ const Feed: React.FC = () => {
         )
       );
     } catch {
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
       setError('댓글 작성을 실패했어.');
     }
   };
 
   const handleRequestMatch = async (post: FeedPost) => {
+    if (isGuest) return;
+    const generation = viewGeneration.current;
+
     setRequestingMatch((prev) => ({ ...prev, [post.id]: true }));
     setError(null);
 
     try {
       await matchingService.requestMatch(post.authorId);
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
       setSuccess(`${post.authorUsername}님에게 매칭 요청을 보냈어.`);
     } catch (err: any) {
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
       setError(err.response?.data?.message || '매칭 요청을 보낼 수 없었어.');
     } finally {
-      setRequestingMatch((prev) => ({ ...prev, [post.id]: false }));
+      if (isLatestRequest(generation, viewGeneration.current)) {
+        setRequestingMatch((prev) => ({ ...prev, [post.id]: false }));
+      }
     }
   };
 
   const openSafetyMenu = (event: React.MouseEvent<HTMLElement>, post: FeedPost) => {
+    if (isGuest) return;
+
     setMenuAnchor(event.currentTarget);
     setSelectedPost(post);
   };
@@ -187,27 +261,33 @@ const Feed: React.FC = () => {
 
   const handleHidePost = async () => {
     if (!selectedPost) return;
+    const generation = viewGeneration.current;
     const post = selectedPost;
     closeSafetyMenu();
     try {
       await safetyService.hide('FEED_POST', post.id);
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
       setPosts((prev) => prev.filter((item) => item.id !== post.id));
       setSuccess('이 게시물을 내 피드에서 숨겼어.');
     } catch {
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
       setError('게시물을 숨기지 못했어. 잠시 후 다시 시도해 줘.');
     }
   };
 
   const handleBlockUser = async () => {
     if (!selectedPost) return;
+    const generation = viewGeneration.current;
     const post = selectedPost;
     closeSafetyMenu();
     if (!window.confirm(`${post.authorUsername}님을 차단할까? 서로의 추천과 피드, 1:1 채팅에서 제외돼.`)) return;
     try {
       await safetyService.blockUser(post.authorId);
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
       setPosts((prev) => prev.filter((item) => item.authorId !== post.authorId));
       setSuccess(`${post.authorUsername}님을 차단했어.`);
     } catch (err: any) {
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
       setError(err.response?.data?.message || '사용자를 차단하지 못했어.');
     }
   };
@@ -222,22 +302,28 @@ const Feed: React.FC = () => {
 
   const submitReport = async () => {
     if (!selectedPost) return;
+    const generation = viewGeneration.current;
+    const post = selectedPost;
     setSafetySubmitting(true);
     try {
       await safetyService.report({
         targetType: 'FEED_POST',
-        targetId: selectedPost.id,
+        targetId: post.id,
         reason: reportReason,
         details: reportDetails.trim() || undefined,
         hideContent: hideAfterReport,
       });
-      if (hideAfterReport) setPosts((prev) => prev.filter((item) => item.id !== selectedPost.id));
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
+      if (hideAfterReport) setPosts((prev) => prev.filter((item) => item.id !== post.id));
       setReportOpen(false);
       setSuccess('신고를 접수했어. 안전하게 검토할게.');
     } catch (err: any) {
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
       setError(err.response?.data?.message || '신고를 접수하지 못했어.');
     } finally {
-      setSafetySubmitting(false);
+      if (isLatestRequest(generation, viewGeneration.current)) {
+        setSafetySubmitting(false);
+      }
     }
   };
 
@@ -250,25 +336,57 @@ const Feed: React.FC = () => {
               이웃 피드
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              취향이 맞는 사람들의 순간을 최신순으로 보여줘.
+              {isGuest
+                ? '가입 전에도 이웃들이 공개한 순간을 둘러볼 수 있어.'
+                : '취향이 맞는 사람들의 순간을 최신순으로 보여줘.'}
             </Typography>
           </Box>
           <Stack direction="row" spacing={1}>
             <Tooltip title="새로고침">
-              <IconButton aria-label="새로고침" onClick={loadFeed}>
+              <IconButton aria-label="새로고침" onClick={() => void loadFeed()}>
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
-            <Button
-              component={RouterLink}
-              to="/post/new"
-              variant="contained"
-              startIcon={<AddPhotoAlternateIcon />}
-            >
-              글쓰기
-            </Button>
+            {isGuest ? (
+              <Button
+                component={RouterLink}
+                to="/login"
+                state={{ from: { pathname: '/feed' } }}
+                variant="contained"
+              >
+                로그인
+              </Button>
+            ) : (
+              <Button
+                component={RouterLink}
+                to="/post/new"
+                variant="contained"
+                startIcon={<AddPhotoAlternateIcon />}
+              >
+                글쓰기
+              </Button>
+            )}
           </Stack>
         </Box>
+
+        {isGuest && (
+          <Alert
+            severity="info"
+            action={(
+              <Button
+                component={RouterLink}
+                to="/login"
+                state={{ from: { pathname: '/feed' } }}
+                color="inherit"
+                size="small"
+              >
+                로그인하기
+              </Button>
+            )}
+          >
+            지금은 둘러보기 모드야. 좋아요, 댓글 확인과 작성, 매칭, 안전 기능은 로그인 후 이용할 수 있어.
+          </Alert>
+        )}
 
         {error && (
           <Alert severity="error" onClose={() => setError(null)}>
@@ -312,13 +430,13 @@ const Feed: React.FC = () => {
                     <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                       {post.authorUsername}
                     </Typography>
-                    {!isOwnPost && score > 0 && (
+                    {!isGuest && !isOwnPost && score > 0 && (
                       <Chip size="small" color="primary" label={`궁합 ${score}점`} />
                     )}
                   </Stack>
                 }
                 subheader={formatDate(post.createdAt)}
-                action={!isOwnPost ? (
+                action={!isGuest && !isOwnPost ? (
                   <IconButton aria-label="안전 메뉴" onClick={(event) => openSafetyMenu(event, post)}>
                     <MoreVertIcon />
                   </IconButton>
@@ -334,30 +452,32 @@ const Feed: React.FC = () => {
                 sx={{ aspectRatio: '1 / 1', objectFit: 'cover', bgcolor: 'grey.100' }}
               />
               )}
-              <CardActions disableSpacing sx={{ px: 1.5 }}>
-                <IconButton
-                  aria-label="좋아요"
-                  onClick={() => handleToggleLike(post)}
-                  color={post.likedByCurrentUser ? 'error' : 'default'}
-                >
-                  {post.likedByCurrentUser ? <FavoriteIcon /> : <FavoriteBorderIcon />}
-                </IconButton>
-                <IconButton aria-label="댓글 보기" onClick={() => handleToggleComments(post.id)}>
-                  <ChatBubbleOutlineIcon />
-                </IconButton>
-                <Box sx={{ flexGrow: 1 }} />
-                {!isOwnPost && (
-                  <Button
-                    size="small"
-                    startIcon={<PersonAddAltIcon />}
-                    disabled={requestingMatch[post.id]}
-                    onClick={() => handleRequestMatch(post)}
+              {!isGuest && (
+                <CardActions disableSpacing sx={{ px: 1.5 }}>
+                  <IconButton
+                    aria-label="좋아요"
+                    onClick={() => handleToggleLike(post)}
+                    color={post.likedByCurrentUser ? 'error' : 'default'}
                   >
-                    매칭 요청
-                  </Button>
-                )}
-              </CardActions>
-              <CardContent sx={{ pt: 0 }}>
+                    {post.likedByCurrentUser ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+                  </IconButton>
+                  <IconButton aria-label="댓글 보기" onClick={() => handleToggleComments(post.id)}>
+                    <ChatBubbleOutlineIcon />
+                  </IconButton>
+                  <Box sx={{ flexGrow: 1 }} />
+                  {!isOwnPost && (
+                    <Button
+                      size="small"
+                      startIcon={<PersonAddAltIcon />}
+                      disabled={requestingMatch[post.id]}
+                      onClick={() => handleRequestMatch(post)}
+                    >
+                      매칭 요청
+                    </Button>
+                  )}
+                </CardActions>
+              )}
+              <CardContent sx={{ pt: isGuest ? 2 : 0 }}>
                 <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
                   좋아요 {likeCount.toLocaleString()}개
                 </Typography>
@@ -369,20 +489,32 @@ const Feed: React.FC = () => {
                     <Chip key={tag} size="small" label={`#${tag}`} />
                   ))}
                 </Stack>
-                {sharedInterests.length > 0 && (
+                {!isGuest && sharedInterests.length > 0 && (
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
                     함께 좋아하는 관심사: {sharedInterests.join(', ')}
                   </Typography>
                 )}
-                <Button
-                  size="small"
-                  sx={{ mt: 1, px: 0 }}
-                  onClick={() => handleToggleComments(post.id)}
-                >
-                  댓글 {commentCount}개 보기
-                </Button>
+                {isGuest ? (
+                  <Button
+                    component={RouterLink}
+                    to="/login"
+                    state={{ from: { pathname: '/feed' } }}
+                    size="small"
+                    sx={{ mt: 1, px: 0 }}
+                  >
+                    댓글은 로그인 후 확인
+                  </Button>
+                ) : (
+                  <Button
+                    size="small"
+                    sx={{ mt: 1, px: 0 }}
+                    onClick={() => handleToggleComments(post.id)}
+                  >
+                    댓글 {commentCount}개 보기
+                  </Button>
+                )}
 
-                {expandedComments[post.id] && (
+                {!isGuest && expandedComments[post.id] && (
                   <Box sx={{ mt: 1 }}>
                     <Divider sx={{ mb: 1.5 }} />
                     <Stack spacing={1.25}>
@@ -431,7 +563,7 @@ const Feed: React.FC = () => {
         })}
       </Stack>
 
-      <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeSafetyMenu}>
+      {!isGuest && <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeSafetyMenu}>
         <MenuItem onClick={handleHidePost}>
           <VisibilityOffOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> 게시물 숨기기
         </MenuItem>
@@ -441,9 +573,9 @@ const Feed: React.FC = () => {
         <MenuItem onClick={handleBlockUser} sx={{ color: 'error.main' }}>
           <BlockOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> 사용자 차단하기
         </MenuItem>
-      </Menu>
+      </Menu>}
 
-      <Dialog open={reportOpen} onClose={() => !safetySubmitting && setReportOpen(false)} fullWidth maxWidth="xs">
+      {!isGuest && <Dialog open={reportOpen} onClose={() => !safetySubmitting && setReportOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>게시물 신고하기</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
@@ -485,9 +617,15 @@ const Feed: React.FC = () => {
             {safetySubmitting ? '접수 중…' : '신고 접수'}
           </Button>
         </DialogActions>
-      </Dialog>
+      </Dialog>}
     </Container>
   );
+};
+
+const Feed: React.FC = () => {
+  const currentUser = useSelector((state: RootState) => state.auth.user);
+  const accessScope = accessScopeForUser(currentUser?.id);
+  return <FeedContent key={accessScope} currentUser={currentUser} />;
 };
 
 export default Feed;

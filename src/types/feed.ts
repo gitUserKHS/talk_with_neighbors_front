@@ -42,4 +42,5 @@ export interface FeedComment {
 export interface CreateFeedPostRequest {
   caption: string;
   interestTags: string[];
+  publicPreview: boolean;
 }

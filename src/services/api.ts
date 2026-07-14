@@ -2,11 +2,10 @@ import axios from 'axios';
 import { store } from '../store';
 import { setUser } from '../store/slices/authSlice';
 import { DEFAULT_API_HEADERS, prepareRequestContentType } from './requestConfig';
-
-const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api';
+import { API_BASE_URL } from './apiConfig';
 
 const api = axios.create({
-  baseURL,
+  baseURL: API_BASE_URL,
   headers: DEFAULT_API_HEADERS,
   withCredentials: true,
 });
