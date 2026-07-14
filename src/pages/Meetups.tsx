@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Box,
@@ -33,6 +33,15 @@ import { useSelector } from 'react-redux';
 import { meetupService } from '../services/meetupService';
 import { CreateHobbyMeetupRequest, HobbyMeetup } from '../types/meetup';
 import { RootState } from '../store/types';
+import {
+  AccessScope,
+  AccessScopedList,
+  accessScopeForUser,
+  apiAccessForScope,
+  isLatestRequest,
+  updateScopedItems,
+  visibleScopedItems,
+} from '../services/accessScope';
 
 const EMPTY_FORM: CreateHobbyMeetupRequest = {
   title: '',
@@ -56,9 +65,11 @@ const toTags = (value: string) =>
 const MeetupCard: React.FC<{
   meetup: HobbyMeetup;
   busy: boolean;
+  isGuest: boolean;
   onJoin: (meetup: HobbyMeetup) => void;
   onOpen: (roomId: string) => void;
-}> = ({ meetup, busy, onJoin, onOpen }) => (
+  onRequireLogin: () => void;
+}> = ({ meetup, busy, isGuest, onJoin, onOpen, onRequireLogin }) => (
   <Card variant="outlined" sx={{ borderRadius: 2 }}>
     <CardContent>
       <Stack spacing={1.75}>
@@ -75,22 +86,36 @@ const MeetupCard: React.FC<{
                   label={`함께 좋아해요 ${meetup.sharedInterests.length}`}
                 />
               )}
-              {meetup.joined && <Chip color="success" size="small" label="참여 중" />}
-              {meetup.waitlisted && <Chip color="warning" size="small" label={`대기 중 · ${meetup.waitlistCount}명`} />}
+              {!isGuest && meetup.joined && <Chip color="success" size="small" label="참여 중" />}
+              {!isGuest && meetup.waitlisted && <Chip color="warning" size="small" label={`대기 중 · ${meetup.waitlistCount}명`} />}
             </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {meetup.creatorUsername ? `${meetup.creatorUsername}님이 만들었어` : '이웃이 만든 모임'}
             </Typography>
           </Box>
           <Button
-            variant={meetup.joined ? 'outlined' : 'contained'}
+            variant={isGuest || meetup.joined ? 'outlined' : 'contained'}
             color={meetup.joined ? 'inherit' : 'primary'}
             startIcon={meetup.joined ? <ForumOutlinedIcon /> : <HowToRegOutlinedIcon />}
-            disabled={busy || meetup.waitlisted}
-            onClick={() => (meetup.joined ? onOpen(meetup.roomId) : onJoin(meetup))}
+            disabled={busy || (!isGuest && meetup.waitlisted)}
+            onClick={() => (
+              isGuest
+                ? onRequireLogin()
+                : meetup.joined
+                  ? onOpen(meetup.roomId)
+                  : onJoin(meetup)
+            )}
             sx={{ flexShrink: 0 }}
           >
-            {meetup.joined ? '채팅 열기' : meetup.waitlisted ? '대기 등록됨' : meetup.full ? '대기 등록' : '참여하기'}
+            {isGuest
+              ? '로그인하고 참여'
+              : meetup.joined
+                ? '채팅 열기'
+                : meetup.waitlisted
+                  ? '대기 등록됨'
+                  : meetup.full
+                    ? '대기 등록'
+                    : '참여하기'}
           </Button>
         </Stack>
 
@@ -128,10 +153,15 @@ const MeetupCard: React.FC<{
   </Card>
 );
 
-const Meetups: React.FC = () => {
+const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ currentUser }) => {
   const navigate = useNavigate();
-  const currentUser = useSelector((state: RootState) => state.auth.user);
-  const [meetups, setMeetups] = useState<HobbyMeetup[]>([]);
+  const isGuest = !currentUser;
+  const accessScope = accessScopeForUser(currentUser?.id);
+  const [meetupSnapshot, setMeetupSnapshot] = useState<AccessScopedList<HobbyMeetup>>({
+    scope: null,
+    items: [],
+  });
+  const meetups = visibleScopedItems(meetupSnapshot, accessScope);
   const [keyword, setKeyword] = useState('');
   const [selectedInterest, setSelectedInterest] = useState('');
   const [loading, setLoading] = useState(true);
@@ -141,40 +171,81 @@ const Meetups: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [tagInput, setTagInput] = useState('');
   const [form, setForm] = useState<CreateHobbyMeetupRequest>(EMPTY_FORM);
+  const meetupRequestGeneration = useRef(0);
+  const viewGeneration = useRef(0);
+
+  const setMeetups = (update: React.SetStateAction<HobbyMeetup[]>) => {
+    setMeetupSnapshot((snapshot) => updateScopedItems(snapshot, accessScope, update));
+  };
 
   const interests = useMemo(
     () => Array.from(new Set((currentUser?.interests ?? []).map((interest) => interest.trim()).filter(Boolean))),
     [currentUser?.interests]
   );
 
-  const loadMeetups = async (nextKeyword = keyword, nextInterest = selectedInterest) => {
+  const loadMeetups = async (
+    nextKeyword = keyword,
+    nextInterest = selectedInterest,
+    requestScope: AccessScope = accessScope,
+  ) => {
+    const requestId = ++meetupRequestGeneration.current;
     setLoading(true);
     setError(null);
     try {
-      const page = await meetupService.getMeetups({
-        keyword: nextKeyword.trim() || undefined,
-        interest: nextInterest || undefined,
-        page: 0,
-        size: 30,
-      });
-      setMeetups(page.content);
+      const page = await meetupService.getMeetups(
+        {
+          keyword: nextKeyword.trim() || undefined,
+          interest: nextInterest || undefined,
+          page: 0,
+          size: 30,
+        },
+        apiAccessForScope(requestScope),
+      );
+      if (!isLatestRequest(requestId, meetupRequestGeneration.current)) return;
+      setMeetupSnapshot({ scope: requestScope, items: page.content });
     } catch (err: any) {
+      if (!isLatestRequest(requestId, meetupRequestGeneration.current)) return;
       setError(err.response?.data?.message || '취미 모임을 불러오지 못했어.');
     } finally {
-      setLoading(false);
+      if (isLatestRequest(requestId, meetupRequestGeneration.current)) {
+        setLoading(false);
+      }
     }
   };
 
   useEffect(() => {
-    loadMeetups('', '');
-  }, []);
+    const generation = ++viewGeneration.current;
+    ++meetupRequestGeneration.current;
+    setMeetupSnapshot({ scope: null, items: [] });
+    setKeyword('');
+    setSelectedInterest('');
+    setActionRoomId(null);
+    setError(null);
+    setCreateOpen(false);
+    setCreating(false);
+    setTagInput('');
+    setForm({ ...EMPTY_FORM });
+    void loadMeetups('', '', accessScope);
+
+    return () => {
+      if (viewGeneration.current === generation) {
+        ++viewGeneration.current;
+      }
+      ++meetupRequestGeneration.current;
+    };
+  }, [accessScope]);
 
   const handleInterest = (interest: string) => {
     setSelectedInterest(interest);
-    loadMeetups(keyword, interest);
+    void loadMeetups(keyword, interest);
   };
 
   const openCreate = () => {
+    if (isGuest) {
+      navigate('/login', { state: { from: { pathname: '/meetups' } } });
+      return;
+    }
+
     setError(null);
     setTagInput((currentUser?.interests ?? []).slice(0, 3).join(', '));
     setForm({ ...EMPTY_FORM, location: currentUser?.address || '' });
@@ -183,6 +254,9 @@ const Meetups: React.FC = () => {
 
   const handleCreate = async (event: React.FormEvent) => {
     event.preventDefault();
+    if (isGuest) return;
+    const generation = viewGeneration.current;
+
     const interestTags = toTags(tagInput);
     if (!form.title.trim() || interestTags.length === 0) {
       setError('모임 이름과 관심사 태그를 입력해줘.');
@@ -201,28 +275,42 @@ const Meetups: React.FC = () => {
         registrationDeadline: form.registrationDeadline || undefined,
         interestTags,
       });
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
       setCreateOpen(false);
       navigate(`/chat/${meetup.roomId}`);
     } catch (err: any) {
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
       setError(err.response?.data?.message || '모임을 만들지 못했어.');
     } finally {
-      setCreating(false);
+      if (isLatestRequest(generation, viewGeneration.current)) {
+        setCreating(false);
+      }
     }
   };
 
   const handleJoin = async (meetup: HobbyMeetup) => {
+    if (isGuest) {
+      navigate('/login', { state: { from: { pathname: '/meetups' } } });
+      return;
+    }
+    const generation = viewGeneration.current;
+
     setActionRoomId(meetup.roomId);
     setError(null);
     try {
       const joinedMeetup = await meetupService.joinMeetup(meetup.roomId);
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
       setMeetups((items) => items.map((item) => (item.roomId === joinedMeetup.roomId ? joinedMeetup : item)));
       if (joinedMeetup.joined) {
         navigate(`/chat/${joinedMeetup.roomId}`);
       }
     } catch (err: any) {
+      if (!isLatestRequest(generation, viewGeneration.current)) return;
       setError(err.response?.data?.message || '모임에 참여하지 못했어.');
     } finally {
-      setActionRoomId(null);
+      if (isLatestRequest(generation, viewGeneration.current)) {
+        setActionRoomId(null);
+      }
     }
   };
 
@@ -236,10 +324,27 @@ const Meetups: React.FC = () => {
             </Typography>
             <Typography color="text.secondary">같은 관심사 이웃과 가볍게 이야기를 시작해.</Typography>
           </Box>
-          <Button variant="contained" startIcon={<AddIcon />} onClick={openCreate}>
-            모임 만들기
+          <Button variant={isGuest ? 'outlined' : 'contained'} startIcon={<AddIcon />} onClick={openCreate}>
+            {isGuest ? '로그인하고 모임 만들기' : '모임 만들기'}
           </Button>
         </Box>
+
+        {isGuest && (
+          <Alert
+            severity="info"
+            action={(
+              <Button
+                color="inherit"
+                size="small"
+                onClick={() => navigate('/login', { state: { from: { pathname: '/meetups' } } })}
+              >
+                로그인하기
+              </Button>
+            )}
+          >
+            공개 모임은 검색하고 둘러볼 수 있어. 생성, 참여, 채팅은 로그인 후 이용해줘.
+          </Alert>
+        )}
 
         <TextField
           fullWidth
@@ -250,7 +355,7 @@ const Meetups: React.FC = () => {
               loadMeetups();
             }
           }}
-          placeholder="모임 이름, 관심사, 장소 검색"
+          placeholder="모임 이름, 소개, 관심사 검색"
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
@@ -294,7 +399,11 @@ const Meetups: React.FC = () => {
         {!loading && meetups.length === 0 && (
           <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
             <GroupsOutlinedIcon sx={{ fontSize: 36, mb: 1 }} />
-            <Typography>아직 조건에 맞는 모임이 없어. 첫 모임을 열어볼까?</Typography>
+            <Typography>
+              {isGuest
+                ? '아직 조건에 맞는 공개 모임이 없어.'
+                : '아직 조건에 맞는 모임이 없어. 첫 모임을 열어볼까?'}
+            </Typography>
           </Box>
         )}
 
@@ -304,14 +413,16 @@ const Meetups: React.FC = () => {
               key={meetup.roomId}
               meetup={meetup}
               busy={actionRoomId === meetup.roomId}
+              isGuest={isGuest}
               onJoin={handleJoin}
               onOpen={(roomId) => navigate(`/chat/${roomId}`)}
+              onRequireLogin={() => navigate('/login', { state: { from: { pathname: '/meetups' } } })}
             />
           ))}
         </Stack>
       </Stack>
 
-      <Dialog open={createOpen} onClose={() => !creating && setCreateOpen(false)} fullWidth maxWidth="sm">
+      {!isGuest && <Dialog open={createOpen} onClose={() => !creating && setCreateOpen(false)} fullWidth maxWidth="sm">
         <Box component="form" onSubmit={handleCreate}>
           <DialogTitle>취미 모임 만들기</DialogTitle>
           <DialogContent>
@@ -396,9 +507,15 @@ const Meetups: React.FC = () => {
             </Button>
           </DialogActions>
         </Box>
-      </Dialog>
+      </Dialog>}
     </Container>
   );
+};
+
+const Meetups: React.FC = () => {
+  const currentUser = useSelector((state: RootState) => state.auth.user);
+  const accessScope = accessScopeForUser(currentUser?.id);
+  return <MeetupsContent key={accessScope} currentUser={currentUser} />;
 };
 
 export default Meetups;

@@ -5,8 +5,10 @@ import {
   Button,
   Card,
   CardContent,
+  Checkbox,
   Chip,
   Container,
+  FormControlLabel,
   IconButton,
   LinearProgress,
   Stack,
@@ -50,6 +52,7 @@ const NewPost: React.FC = () => {
   const [media, setMedia] = useState<SelectedMedia[]>([]);
   const [caption, setCaption] = useState('');
   const [tags, setTags] = useState('');
+  const [publicPreview, setPublicPreview] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -176,7 +179,7 @@ const NewPost: React.FC = () => {
     setUploadProgress(0);
     try {
       await feedService.createPost(
-        { caption: caption.trim(), interestTags },
+        { caption: caption.trim(), interestTags, publicPreview },
         media.map((item) => item.file),
         setUploadProgress
       );
@@ -352,6 +355,32 @@ const NewPost: React.FC = () => {
                 helperText="쉼표로 구분해서 최대 10개까지 입력해 줘."
                 fullWidth
               />
+
+              <Box
+                sx={{
+                  p: 2,
+                  border: 1,
+                  borderColor: publicPreview ? 'warning.main' : 'divider',
+                  borderRadius: 2,
+                  bgcolor: publicPreview ? 'rgba(237, 108, 2, 0.06)' : 'background.default',
+                }}
+              >
+                <FormControlLabel
+                  control={(
+                    <Checkbox
+                      checked={publicPreview}
+                      onChange={(event) => setPublicPreview(event.target.checked)}
+                      disabled={submitting}
+                    />
+                  )}
+                  label="로그인 전 공개 미리보기 허용"
+                  sx={{ m: 0, '& .MuiFormControlLabel-label': { fontWeight: 700 } }}
+                />
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, ml: 4 }}>
+                  기본값은 비공개야. 선택하면 이 글의 사진·동영상, 본문과 관심사 태그를
+                  로그인하지 않은 방문자도 볼 수 있어.
+                </Typography>
+              </Box>
 
               {submitting && (
                 <Box>

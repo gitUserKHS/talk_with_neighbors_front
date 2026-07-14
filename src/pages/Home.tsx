@@ -7,7 +7,7 @@ import FavoriteRoundedIcon from '@mui/icons-material/FavoriteRounded';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import LocationOnRoundedIcon from '@mui/icons-material/LocationOnRounded';
 import { useSelector } from 'react-redux';
-import { Link as RouterLink } from 'react-router-dom';
+import { Link as RouterLink, Navigate } from 'react-router-dom';
 import { RootState } from '../store/types';
 import Feed from './Feed';
 
@@ -31,6 +31,10 @@ const features = [
 
 const Home: React.FC = () => {
   const user = useSelector((state: RootState) => state.auth.user);
+
+  if (user?.profileComplete === false) {
+    return <Navigate to="/onboarding" replace />;
+  }
 
   if (user) {
     return <Feed />;
@@ -84,7 +88,13 @@ const Home: React.FC = () => {
                 피드에서 취향을 나누고, 관심사와 거리로 잘 맞는 사람을 발견해.
                 가벼운 인사부터 오래 이어질 동네 친구까지 이웃톡이 자연스럽게 연결해줄게.
               </Typography>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+              <Stack
+                direction={{ xs: 'column', sm: 'row' }}
+                spacing={1.5}
+                useFlexGap
+                flexWrap="wrap"
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
+              >
                 <Button
                   component={RouterLink}
                   to="/register"
@@ -95,10 +105,19 @@ const Home: React.FC = () => {
                 >
                   내 이웃 찾기
                 </Button>
-                <Button component={RouterLink} to="/login" size="large" variant="outlined" sx={{ px: 3, minHeight: 52, bgcolor: 'rgba(255,255,255,.7)' }}>
-                  이미 계정이 있어
+                <Button component={RouterLink} to="/feed" size="large" variant="outlined" sx={{ px: 3, minHeight: 52, bgcolor: 'rgba(255,255,255,.7)' }}>
+                  피드 둘러보기
+                </Button>
+                <Button component={RouterLink} to="/meetups" size="large" variant="outlined" sx={{ px: 3, minHeight: 52, bgcolor: 'rgba(255,255,255,.7)' }}>
+                  모임 둘러보기
                 </Button>
               </Stack>
+              <Typography variant="body2" color="text.secondary">
+                이미 계정이 있다면{' '}
+                <Button component={RouterLink} to="/login" size="small" sx={{ minWidth: 0, p: 0.5 }}>
+                  로그인하기
+                </Button>
+              </Typography>
               <Stack direction="row" spacing={1.5} alignItems="center" sx={{ pt: 1 }}>
                 <AvatarGroup max={4} sx={{ '& .MuiAvatar-root': { width: 34, height: 34, fontSize: 13, borderColor: '#FFF9F5' } }}>
                   <Avatar sx={{ bgcolor: '#E85C4A' }}>민</Avatar>
