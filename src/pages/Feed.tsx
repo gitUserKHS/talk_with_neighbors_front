@@ -439,6 +439,10 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
         {isGuest && (
           <Alert
             severity="info"
+            sx={{
+              '& .MuiAlert-message': { minWidth: 0 },
+              '& .MuiAlert-action': { flexShrink: 0 },
+            }}
             action={(
               <Button
                 component={RouterLink}
@@ -446,6 +450,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                 state={{ from: { pathname: '/feed' } }}
                 color="inherit"
                 size="small"
+                sx={{ minWidth: 'fit-content', flexShrink: 0, whiteSpace: 'nowrap' }}
               >
                 로그인하기
               </Button>
