@@ -7,7 +7,7 @@ export type MeetupAccess = 'authenticated' | 'public';
 
 export interface PublicMeetupDto {
   id: string;
-  demo?: boolean;
+  official?: boolean;
   title: string;
   description?: string | null;
   interestTags: string[];
@@ -17,12 +17,18 @@ export interface PublicMeetupDto {
   scheduledAt?: string | null;
   durationMinutes?: number | null;
   registrationDeadline?: string | null;
+  location?: string | null;
+  locationAddress?: string | null;
+  areaLabel?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  kakaoPlaceId?: string | null;
 }
 
-/** Public meetup cards never inherit member, chat, location, or personalization state. */
+/** Public cards expose exact location only for explicitly official service meetups. */
 export const mapPublicMeetup = (meetup: PublicMeetupDto): HobbyMeetup => ({
   roomId: meetup.id,
-  demo: meetup.demo ?? false,
+  official: meetup.official ?? false,
   title: meetup.title,
   description: meetup.description ?? undefined,
   interestTags: meetup.interestTags ?? [],
@@ -34,6 +40,14 @@ export const mapPublicMeetup = (meetup: PublicMeetupDto): HobbyMeetup => ({
   scheduledAt: meetup.scheduledAt ?? undefined,
   durationMinutes: meetup.durationMinutes ?? undefined,
   registrationDeadline: meetup.registrationDeadline ?? undefined,
+  ...(meetup.official ? {
+    location: meetup.location?.trim() || undefined,
+    locationAddress: meetup.locationAddress?.trim() || undefined,
+    areaLabel: meetup.areaLabel?.trim() || undefined,
+    latitude: meetup.latitude ?? undefined,
+    longitude: meetup.longitude ?? undefined,
+    kakaoPlaceId: meetup.kakaoPlaceId?.trim() || undefined,
+  } : {}),
   waitlisted: false,
   waitlistCount: 0,
 });

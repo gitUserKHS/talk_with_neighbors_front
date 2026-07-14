@@ -240,6 +240,11 @@ const ChatRoom: React.FC = () => {
     if (!roomId || !currentUser || sending) return;
     const content = newMessage.trim();
     if (!content && pendingAttachments.length === 0) return;
+    const senderId = Number(currentUser.id);
+    if (!Number.isSafeInteger(senderId) || senderId <= 0) {
+      setError('로그인 사용자 정보를 확인하지 못했어. 다시 로그인해줘.');
+      return;
+    }
 
     const selected = pendingAttachments;
     const optimisticAttachments: ChatAttachment[] = selected.map((item, index) => ({
@@ -254,13 +259,13 @@ const ChatRoom: React.FC = () => {
       id: `temp-${Date.now()}`,
       chatRoomId: roomId,
       content,
-      senderId: currentUser.id,
+      senderId,
       senderName: currentUser.username,
       isRead: true,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       type: content ? 'TEXT' : selected[0]?.type ?? 'TEXT',
-      readByUsers: [currentUser.id],
+      readByUsers: [senderId],
       attachments: optimisticAttachments,
     };
 

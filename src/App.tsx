@@ -19,6 +19,7 @@ const Feed = React.lazy(() => import('./pages/Feed'));
 const NewPost = React.lazy(() => import('./pages/NewPost'));
 const Login = React.lazy(() => import('./pages/Login'));
 const Register = React.lazy(() => import('./pages/Register'));
+const AuthCallback = React.lazy(() => import('./pages/AuthCallback'));
 const Matching = React.lazy(() => import('./pages/Matching'));
 const Meetups = React.lazy(() => import('./pages/Meetups'));
 const ChatRoomList = React.lazy(() => import('./components/chat/ChatRoomList'));
@@ -128,6 +129,7 @@ const AppContent: React.FC = () => (
           <Route path="/" element={<Home />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
           <Route
             path="/feed"
             element={

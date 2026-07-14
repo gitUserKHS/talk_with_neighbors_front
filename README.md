@@ -4,7 +4,7 @@
 
 관심사와 거리를 바탕으로 가까운 이웃을 연결하는 React 19 + Vite 애플리케이션이야.
 
-**포트폴리오 데모:** [https://talk-with-neighbors.duckdns.org](https://talk-with-neighbors.duckdns.org)
+**라이브 서비스:** [https://talk-with-neighbors.duckdns.org](https://talk-with-neighbors.duckdns.org)
 
 ## 시작하기
 
@@ -58,7 +58,7 @@ PR과 `main`, `codex/**`, `agent/**` 브랜치 푸시에서는 GitHub Actions가
 
 로그인 세션은 `SameSite=Lax` HttpOnly 쿠키를 사용하므로 프런트와 API를 같은 사이트에서 제공해야 해.
 별도 `github.io` 출처에서 API를 호출하던 Pages 미리보기는 이 계약과 맞지 않아 제거했고, 포트폴리오
-데모는 AWS의 같은 출처(`/api`, `/ws`) 배포를 기준으로 해. `main`과 버전 태그의 GHCR 이미지는
+라이브 서비스는 AWS의 같은 출처(`/api`, `/ws`) 배포를 기준으로 해. `main`과 버전 태그의 GHCR 이미지는
 같은 품질 검증을 모두 통과한 뒤에만 게시되며, 실제 AWS 배포는 별도 배포 워크플로가 담당해.
 
 게시글·채팅 미디어는 같은 출처의 `/uploads` 경로로 요청하고, 백엔드가 실행 환경에 따라 로컬 볼륨 또는 비공개 S3에서 제공해.

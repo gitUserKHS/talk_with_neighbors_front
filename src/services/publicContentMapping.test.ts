@@ -6,8 +6,8 @@ describe('public content mappings', () => {
   it('maps a public feed DTO without inventing personalized state', () => {
     const post = mapPublicFeedPost({
       id: 'post-1',
-      demo: true,
-      authorDisplayName: '이웃',
+      official: true,
+      authorDisplayName: '이웃톡 운영팀',
       imageUrl: 'https://cdn.example.com/photo.jpg',
       media: [{ url: 'https://cdn.example.com/photo.jpg', type: 'IMAGE', sortOrder: 0 }],
       caption: '주말 산책 어때요?',
@@ -20,9 +20,9 @@ describe('public content mappings', () => {
 
     expect(post).toMatchObject({
       id: 'post-1',
-      demo: true,
+      official: true,
       authorId: 0,
-      authorUsername: '이웃',
+      authorUsername: '이웃톡 운영팀',
       authorProfileImage: undefined,
       likedByCurrentUser: false,
       compatibilityScore: 0,
@@ -45,43 +45,59 @@ describe('public content mappings', () => {
     }).authorUsername).toBe('이웃');
   });
 
-  it('maps public meetups with every member-only field disabled', () => {
+  it('maps an official public meetup including its intentionally public location', () => {
     const meetup = mapPublicMeetup({
       id: 'room-1',
-      demo: true,
+      official: true,
       title: '저녁 러닝',
       interestTags: ['러닝'],
       maxParticipants: 6,
       participantCount: 4,
       full: false,
       scheduledAt: '2026-07-18T10:00:00Z',
-      location: '비공개 장소',
-      locationAddress: '비공개 상세 주소',
+      location: '이웃톡 라운지',
+      locationAddress: '서울 마포구 월드컵북로 1',
       latitude: 37.5,
       longitude: 127,
       kakaoPlaceId: 'private-place-id',
-    } as Parameters<typeof mapPublicMeetup>[0] & {
-      location: string;
-      locationAddress: string;
-      latitude: number;
-      longitude: number;
-      kakaoPlaceId: string;
     });
 
     expect(meetup).toMatchObject({
       roomId: 'room-1',
-      demo: true,
+      official: true,
       sharedInterests: [],
       joined: false,
       waitlisted: false,
       waitlistCount: 0,
+      location: '이웃톡 라운지',
+      locationAddress: '서울 마포구 월드컵북로 1',
+      latitude: 37.5,
+      longitude: 127,
+      kakaoPlaceId: 'private-place-id',
     });
     expect(meetup.creatorUsername).toBeUndefined();
+    expect(meetup.lastMessage).toBeUndefined();
+  });
+
+  it('still strips exact location fields from a normal member meetup', () => {
+    const meetup = mapPublicMeetup({
+      id: 'room-private-location',
+      official: false,
+      title: '동네 산책',
+      interestTags: ['산책'],
+      participantCount: 2,
+      full: false,
+      location: '공개되면 안 되는 장소',
+      locationAddress: '공개되면 안 되는 주소',
+      latitude: 37.5,
+      longitude: 127,
+      kakaoPlaceId: 'private-place-id',
+    });
+
     expect(meetup.location).toBeUndefined();
     expect(meetup.locationAddress).toBeUndefined();
     expect(meetup.latitude).toBeUndefined();
     expect(meetup.longitude).toBeUndefined();
     expect(meetup.kakaoPlaceId).toBeUndefined();
-    expect(meetup.lastMessage).toBeUndefined();
   });
 });

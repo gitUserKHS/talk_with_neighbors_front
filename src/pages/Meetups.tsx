@@ -28,7 +28,7 @@ import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutline';
 import SearchIcon from '@mui/icons-material/Search';
 import EventOutlinedIcon from '@mui/icons-material/EventOutlined';
-import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
+import VerifiedRoundedIcon from '@mui/icons-material/VerifiedRounded';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { meetupService } from '../services/meetupService';
@@ -82,13 +82,12 @@ const MeetupCard: React.FC<{
               <Typography variant="h6" sx={{ fontWeight: 800 }}>
                 {meetup.title}
               </Typography>
-              {meetup.demo && (
+              {meetup.official && (
                 <Chip
                   color="secondary"
-                  variant="outlined"
                   size="small"
-                  icon={<AutoAwesomeRoundedIcon />}
-                  label="포트폴리오 데모"
+                  icon={<VerifiedRoundedIcon />}
+                  label="이웃톡 공식"
                 />
               )}
               {meetup.sharedInterests.length > 0 && (
@@ -102,18 +101,18 @@ const MeetupCard: React.FC<{
               {!isGuest && meetup.waitlisted && <Chip color="warning" size="small" label={`대기 중 · ${meetup.waitlistCount}명`} />}
             </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {meetup.demo
-                ? '실제 이용자 정보가 없는 기능 예시'
+              {meetup.official
+                ? '이웃톡 운영팀이 준비한 공식 모임'
                 : meetup.creatorUsername
                   ? `${meetup.creatorUsername}님이 만들었어`
                   : '이웃이 만든 모임'}
             </Typography>
           </Box>
           <Button
-            variant={isGuest || meetup.joined || meetup.demo ? 'outlined' : 'contained'}
+            variant={isGuest || meetup.joined ? 'outlined' : 'contained'}
             color={meetup.joined ? 'inherit' : 'primary'}
-            startIcon={meetup.demo ? <AutoAwesomeRoundedIcon /> : meetup.joined ? <ForumOutlinedIcon /> : <HowToRegOutlinedIcon />}
-            disabled={busy || meetup.demo || (!isGuest && meetup.waitlisted)}
+            startIcon={meetup.joined ? <ForumOutlinedIcon /> : <HowToRegOutlinedIcon />}
+            disabled={busy || (!isGuest && meetup.waitlisted)}
             onClick={() => (
               isGuest
                 ? onRequireLogin()
@@ -123,9 +122,7 @@ const MeetupCard: React.FC<{
             )}
             sx={{ flexShrink: 0 }}
           >
-            {meetup.demo
-              ? '보기 전용 화면 예시'
-              : isGuest
+            {isGuest
                 ? '로그인하고 참여'
               : meetup.joined
                 ? '채팅 열기'
@@ -153,11 +150,11 @@ const MeetupCard: React.FC<{
               {meetup.participantCount}/{meetup.maxParticipants ?? '-'}명
             </Typography>
           </Stack>
-          {(meetup.location || meetup.locationAddress) && (
+          {(meetup.location || meetup.areaLabel || meetup.locationAddress) && (
             <Stack direction="row" spacing={0.5} alignItems="center">
               <LocationOnOutlinedIcon fontSize="small" />
               <Box>
-                <Typography variant="body2">{meetup.location || meetup.locationAddress}</Typography>
+                <Typography variant="body2">{meetup.location || meetup.areaLabel || meetup.locationAddress}</Typography>
                 {meetup.location && meetup.locationAddress && (
                   <Typography variant="caption" display="block">{meetup.locationAddress}</Typography>
                 )}
@@ -165,7 +162,7 @@ const MeetupCard: React.FC<{
                   <Typography
                     component="a"
                     variant="caption"
-                    href={`https://map.kakao.com/link/map/${encodeURIComponent(meetup.location || '모임 장소')},${meetup.latitude},${meetup.longitude}`}
+                    href={`https://map.kakao.com/link/map/${encodeURIComponent(meetup.location || meetup.areaLabel || '모임 장소')},${meetup.latitude},${meetup.longitude}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     color="primary"
@@ -183,11 +180,6 @@ const MeetupCard: React.FC<{
             </Stack>
           )}
         </Stack>
-        {meetup.demo && (
-          <Typography variant="caption" color="text.secondary">
-            인원과 일정은 화면 구성을 보여주는 예시이며 실제 모집 정보가 아니야.
-          </Typography>
-        )}
       </Stack>
     </CardContent>
   </Card>
@@ -218,11 +210,11 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
     setMeetupSnapshot((snapshot) => updateScopedItems(snapshot, accessScope, update));
   };
 
-  const interests = useMemo(
-    () => Array.from(new Set((currentUser?.interests ?? []).map((interest) => interest.trim()).filter(Boolean))),
-    [currentUser?.interests]
-  );
-  const hasDemoMeetups = meetups.some((meetup) => meetup.demo);
+  const interests = useMemo(() => Array.from(new Set([
+    ...(currentUser?.interests ?? []),
+    ...meetups.flatMap((meetup) => meetup.interestTags ?? []),
+    selectedInterest,
+  ].map((interest) => interest.trim()).filter(Boolean))), [currentUser?.interests, meetups, selectedInterest]);
 
   const loadMeetups = async (
     nextKeyword = keyword,
@@ -386,21 +378,6 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
             )}
           >
             공개 모임은 검색하고 둘러볼 수 있어. 생성, 참여, 채팅은 로그인 후 이용해줘.
-          </Alert>
-        )}
-
-        {hasDemoMeetups && (
-          <Alert
-            severity="success"
-            icon={<AutoAwesomeRoundedIcon />}
-            sx={{ '& .MuiAlert-message': { width: '100%' } }}
-          >
-            <Typography variant="subtitle2" sx={{ fontWeight: 850 }}>
-              포트폴리오 데모 모임
-            </Typography>
-            <Typography variant="body2">
-              실제 이용자나 실제 모집이 아닌, 모임 탐색 경험을 보여주기 위한 개인정보 없는 예시야.
-            </Typography>
           </Alert>
         )}
 

@@ -1,5 +1,7 @@
+import type { AuthProviderId } from './auth';
+
 export interface User {
-  id: number;
+  id: string | number;
   email: string;
   username: string;
   profileImage?: string;
@@ -15,4 +17,6 @@ export interface User {
   interests?: string[];
   profileComplete?: boolean;
   profileCompletion?: number;
+  emailVerified?: boolean;
+  linkedProviders?: AuthProviderId[];
 }
