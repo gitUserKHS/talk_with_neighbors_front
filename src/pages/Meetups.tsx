@@ -28,6 +28,7 @@ import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutline';
 import SearchIcon from '@mui/icons-material/Search';
 import EventOutlinedIcon from '@mui/icons-material/EventOutlined';
+import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { meetupService } from '../services/meetupService';
@@ -79,6 +80,15 @@ const MeetupCard: React.FC<{
               <Typography variant="h6" sx={{ fontWeight: 800 }}>
                 {meetup.title}
               </Typography>
+              {meetup.demo && (
+                <Chip
+                  color="secondary"
+                  variant="outlined"
+                  size="small"
+                  icon={<AutoAwesomeRoundedIcon />}
+                  label="포트폴리오 데모"
+                />
+              )}
               {meetup.sharedInterests.length > 0 && (
                 <Chip
                   color="primary"
@@ -90,14 +100,18 @@ const MeetupCard: React.FC<{
               {!isGuest && meetup.waitlisted && <Chip color="warning" size="small" label={`대기 중 · ${meetup.waitlistCount}명`} />}
             </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              {meetup.creatorUsername ? `${meetup.creatorUsername}님이 만들었어` : '이웃이 만든 모임'}
+              {meetup.demo
+                ? '실제 이용자 정보가 없는 기능 예시'
+                : meetup.creatorUsername
+                  ? `${meetup.creatorUsername}님이 만들었어`
+                  : '이웃이 만든 모임'}
             </Typography>
           </Box>
           <Button
-            variant={isGuest || meetup.joined ? 'outlined' : 'contained'}
+            variant={isGuest || meetup.joined || meetup.demo ? 'outlined' : 'contained'}
             color={meetup.joined ? 'inherit' : 'primary'}
-            startIcon={meetup.joined ? <ForumOutlinedIcon /> : <HowToRegOutlinedIcon />}
-            disabled={busy || (!isGuest && meetup.waitlisted)}
+            startIcon={meetup.demo ? <AutoAwesomeRoundedIcon /> : meetup.joined ? <ForumOutlinedIcon /> : <HowToRegOutlinedIcon />}
+            disabled={busy || meetup.demo || (!isGuest && meetup.waitlisted)}
             onClick={() => (
               isGuest
                 ? onRequireLogin()
@@ -107,8 +121,10 @@ const MeetupCard: React.FC<{
             )}
             sx={{ flexShrink: 0 }}
           >
-            {isGuest
-              ? '로그인하고 참여'
+            {meetup.demo
+              ? '보기 전용 화면 예시'
+              : isGuest
+                ? '로그인하고 참여'
               : meetup.joined
                 ? '채팅 열기'
                 : meetup.waitlisted
@@ -148,6 +164,11 @@ const MeetupCard: React.FC<{
             </Stack>
           )}
         </Stack>
+        {meetup.demo && (
+          <Typography variant="caption" color="text.secondary">
+            인원과 일정은 화면 구성을 보여주는 예시이며 실제 모집 정보가 아니야.
+          </Typography>
+        )}
       </Stack>
     </CardContent>
   </Card>
@@ -182,6 +203,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
     () => Array.from(new Set((currentUser?.interests ?? []).map((interest) => interest.trim()).filter(Boolean))),
     [currentUser?.interests]
   );
+  const hasDemoMeetups = meetups.some((meetup) => meetup.demo);
 
   const loadMeetups = async (
     nextKeyword = keyword,
@@ -315,7 +337,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
+    <Container component="main" maxWidth="md" sx={{ py: 4 }}>
       <Stack spacing={3}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: { sm: 'center' }, justifyContent: 'space-between', flexDirection: { xs: 'column', sm: 'row' } }}>
           <Box>
@@ -343,6 +365,21 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
             )}
           >
             공개 모임은 검색하고 둘러볼 수 있어. 생성, 참여, 채팅은 로그인 후 이용해줘.
+          </Alert>
+        )}
+
+        {hasDemoMeetups && (
+          <Alert
+            severity="success"
+            icon={<AutoAwesomeRoundedIcon />}
+            sx={{ '& .MuiAlert-message': { width: '100%' } }}
+          >
+            <Typography variant="subtitle2" sx={{ fontWeight: 850 }}>
+              포트폴리오 데모 모임
+            </Typography>
+            <Typography variant="body2">
+              실제 이용자나 실제 모집이 아닌, 모임 탐색 경험을 보여주기 위한 개인정보 없는 예시야.
+            </Typography>
           </Alert>
         )}
 
@@ -391,7 +428,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
 
         {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
         {loading && (
-          <Box sx={{ display: 'grid', placeItems: 'center', py: 8 }}>
+          <Box role="status" aria-live="polite" aria-label="모임 불러오는 중" sx={{ display: 'grid', placeItems: 'center', py: 8 }}>
             <CircularProgress />
           </Box>
         )}

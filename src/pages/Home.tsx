@@ -6,6 +6,9 @@ import Diversity3RoundedIcon from '@mui/icons-material/Diversity3Rounded';
 import FavoriteRoundedIcon from '@mui/icons-material/FavoriteRounded';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import LocationOnRoundedIcon from '@mui/icons-material/LocationOnRounded';
+import CloudDoneRoundedIcon from '@mui/icons-material/CloudDoneRounded';
+import LockPersonRoundedIcon from '@mui/icons-material/LockPersonRounded';
+import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
 import { useSelector } from 'react-redux';
 import { Link as RouterLink, Navigate } from 'react-router-dom';
 import { RootState } from '../store/types';
@@ -26,6 +29,27 @@ const features = [
     icon: <ForumRoundedIcon />,
     title: '부담 없는 첫 대화',
     description: '매칭이 성사되면 안전한 1:1 채팅에서 천천히 서로를 알아갈 수 있어.',
+  },
+];
+
+const portfolioHighlights = [
+  {
+    icon: <LockPersonRoundedIcon />,
+    label: 'PUBLIC / PRIVATE',
+    title: '공개 탐색과 회원 기능 분리',
+    description: '로그인 없이 공개 콘텐츠만 둘러보고, 쓰기·댓글·매칭·채팅은 인증 경계 안에서 동작해.',
+  },
+  {
+    icon: <ShieldRoundedIcon />,
+    label: 'PRIVACY BY DESIGN',
+    title: '공개 전용 데이터 설계',
+    description: '공개 응답에서 사용자 식별정보·정확한 위치·채팅 정보를 제외하고, 데모 콘텐츠도 명확하게 구분해.',
+  },
+  {
+    icon: <CloudDoneRoundedIcon />,
+    label: 'DELIVERY',
+    title: '테스트부터 AWS 배포까지',
+    description: 'GitHub Actions로 검증하고 컨테이너 이미지를 만들어 AWS k3s 환경에 반영하는 흐름을 갖췄어.',
   },
 ];
 
@@ -148,7 +172,10 @@ const Home: React.FC = () => {
                     <Typography fontWeight={850}>해솔 · 연남동</Typography>
                     <Typography variant="body2" color="text.secondary">방금 전</Typography>
                   </Box>
-                  <Chip size="small" label="동네 피드" color="primary" variant="outlined" />
+                  <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap justifyContent="flex-end">
+                    <Chip size="small" label="동네 피드" color="primary" variant="outlined" />
+                    <Chip size="small" label="UI 예시" color="secondary" variant="outlined" />
+                  </Stack>
                 </Stack>
                 <Typography variant="h6" sx={{ mt: 3, lineHeight: 1.55 }}>
                   이번 주말에 경의선숲길 같이 걷고 근처 독립서점 구경할 사람? 🌿
@@ -202,6 +229,139 @@ const Home: React.FC = () => {
             </Card>
           ))}
         </Box>
+
+        <Card
+          component="section"
+          aria-labelledby="portfolio-showcase-title"
+          sx={{
+            mt: { xs: 7, md: 10 },
+            p: { xs: 3, sm: 4.5, md: 6 },
+            overflow: 'hidden',
+            position: 'relative',
+            borderRadius: 4,
+            color: '#fff',
+            border: '1px solid rgba(255,255,255,.12)',
+            background: 'linear-gradient(135deg, #2D2321 0%, #213D3A 58%, #17665E 100%)',
+            '&::after': {
+              content: '\"\"',
+              position: 'absolute',
+              width: 320,
+              height: 320,
+              borderRadius: '50%',
+              right: -150,
+              top: -170,
+              bgcolor: 'rgba(255,255,255,.08)',
+            },
+          }}
+        >
+          <Box
+            sx={{
+              position: 'relative',
+              zIndex: 1,
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', md: '0.85fr 1.15fr' },
+              gap: { xs: 4, md: 6 },
+              alignItems: 'center',
+            }}
+          >
+            <Stack spacing={2.25} alignItems="flex-start">
+              <Chip
+                icon={<CloudDoneRoundedIcon />}
+                label="LIVE PORTFOLIO"
+                sx={{
+                  color: '#fff',
+                  bgcolor: 'rgba(255,255,255,.10)',
+                  border: '1px solid rgba(255,255,255,.2)',
+                  '& .MuiChip-icon': { color: '#9DE0D5' },
+                }}
+              />
+              <Typography id="portfolio-showcase-title" variant="h3" sx={{ color: 'inherit', maxWidth: 500 }}>
+                화면 너머의 설계까지 직접 확인해봐.
+              </Typography>
+              <Typography sx={{ color: 'rgba(255,255,255,.76)', lineHeight: 1.8, maxWidth: 540 }}>
+                이웃톡은 UI 시안에 머무르지 않고 실제 API, 인증 경계, 컨테이너 배포까지 연결한 풀스택 프로젝트야.
+                같은 코드가 AWS 운영 환경에서도 실행돼.
+              </Typography>
+              <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.12)' }}>
+                <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.8)', lineHeight: 1.65 }}>
+                  공개 피드와 모임의 ‘포트폴리오 데모’ 표시는 실제 이용자 데이터가 아닌, 개인정보 없는 기능 설명용 콘텐츠라는 뜻이야.
+                </Typography>
+              </Box>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+                <Button
+                  component={RouterLink}
+                  to="/feed"
+                  variant="contained"
+                  endIcon={<ArrowForwardRoundedIcon />}
+                  sx={{ bgcolor: '#fff', color: '#17665E', '&:hover': { bgcolor: '#F3FAF8' } }}
+                >
+                  공개 피드 체험
+                </Button>
+                <Button
+                  component={RouterLink}
+                  to="/meetups"
+                  variant="outlined"
+                  sx={{ color: '#fff', borderColor: 'rgba(255,255,255,.42)', '&:hover': { borderColor: '#fff', bgcolor: 'rgba(255,255,255,.08)' } }}
+                >
+                  모임 탐색 체험
+                </Button>
+              </Stack>
+            </Stack>
+
+            <Stack spacing={1.5}>
+              {portfolioHighlights.map((highlight) => (
+                <Box
+                  key={highlight.label}
+                  sx={{
+                    display: 'grid',
+                    gridTemplateColumns: '48px 1fr',
+                    gap: 2,
+                    p: { xs: 2, sm: 2.5 },
+                    borderRadius: 3,
+                    bgcolor: 'rgba(255,255,255,.09)',
+                    border: '1px solid rgba(255,255,255,.13)',
+                    backdropFilter: 'blur(8px)',
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: 'grid',
+                      placeItems: 'center',
+                      width: 48,
+                      height: 48,
+                      borderRadius: 2.5,
+                      color: '#9DE0D5',
+                      bgcolor: 'rgba(157,224,213,.10)',
+                    }}
+                  >
+                    {highlight.icon}
+                  </Box>
+                  <Box>
+                    <Typography variant="overline" sx={{ color: '#9DE0D5', fontWeight: 900, letterSpacing: '0.12em' }}>
+                      {highlight.label}
+                    </Typography>
+                    <Typography variant="h6" sx={{ color: 'inherit', mt: -0.25 }}>
+                      {highlight.title}
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.72)', mt: 0.5, lineHeight: 1.65 }}>
+                      {highlight.description}
+                    </Typography>
+                  </Box>
+                </Box>
+              ))}
+              <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap sx={{ pt: 0.5 }} aria-label="프로젝트 기술 스택">
+                {['React · TypeScript', 'Spring Boot', 'Docker · k3s', 'GitHub Actions', 'AWS'].map((technology) => (
+                  <Chip
+                    key={technology}
+                    size="small"
+                    label={technology}
+                    sx={{ color: 'rgba(255,255,255,.84)', bgcolor: 'rgba(255,255,255,.08)' }}
+                  />
+                ))}
+              </Stack>
+            </Stack>
+          </Box>
+        </Card>
 
         <Box sx={{ mt: { xs: 7, md: 10 }, p: { xs: 3.5, md: 6 }, borderRadius: 4, color: '#fff', background: 'linear-gradient(125deg, #238579 0%, #1E7068 55%, #295B64 100%)', display: 'flex', flexDirection: { xs: 'column', md: 'row' }, alignItems: { md: 'center' }, justifyContent: 'space-between', gap: 3 }}>
           <Box>

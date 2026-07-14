@@ -2,6 +2,8 @@ import { Page } from './chat';
 
 export interface HobbyMeetup {
   roomId: string;
+  /** True when the server supplied privacy-safe portfolio demonstration content. */
+  demo?: boolean;
   title: string;
   description?: string;
   interestTags: string[];

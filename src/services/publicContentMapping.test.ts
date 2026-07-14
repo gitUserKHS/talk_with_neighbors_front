@@ -6,6 +6,7 @@ describe('public content mappings', () => {
   it('maps a public feed DTO without inventing personalized state', () => {
     const post = mapPublicFeedPost({
       id: 'post-1',
+      demo: true,
       authorDisplayName: '이웃',
       imageUrl: 'https://cdn.example.com/photo.jpg',
       media: [{ url: 'https://cdn.example.com/photo.jpg', type: 'IMAGE', sortOrder: 0 }],
@@ -19,6 +20,7 @@ describe('public content mappings', () => {
 
     expect(post).toMatchObject({
       id: 'post-1',
+      demo: true,
       authorId: 0,
       authorUsername: '이웃',
       authorProfileImage: undefined,
@@ -46,6 +48,7 @@ describe('public content mappings', () => {
   it('maps public meetups with every member-only field disabled', () => {
     const meetup = mapPublicMeetup({
       id: 'room-1',
+      demo: true,
       title: '저녁 러닝',
       interestTags: ['러닝'],
       maxParticipants: 6,
@@ -56,6 +59,7 @@ describe('public content mappings', () => {
 
     expect(meetup).toMatchObject({
       roomId: 'room-1',
+      demo: true,
       sharedInterests: [],
       joined: false,
       waitlisted: false,
