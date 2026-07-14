@@ -6,6 +6,7 @@ export type MeetupAccess = 'authenticated' | 'public';
 
 export interface PublicMeetupDto {
   id: string;
+  demo?: boolean;
   title: string;
   description?: string | null;
   interestTags: string[];
@@ -20,6 +21,7 @@ export interface PublicMeetupDto {
 /** Public meetup cards never inherit member, chat, location, or personalization state. */
 export const mapPublicMeetup = (meetup: PublicMeetupDto): HobbyMeetup => ({
   roomId: meetup.id,
+  demo: meetup.demo ?? false,
   title: meetup.title,
   description: meetup.description ?? undefined,
   interestTags: meetup.interestTags ?? [],

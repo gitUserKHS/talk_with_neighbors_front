@@ -1,5 +1,7 @@
 export interface FeedPost {
   id: string;
+  /** True when the server supplied privacy-safe portfolio demonstration content. */
+  demo?: boolean;
   authorId: number;
   authorUsername: string;
   authorProfileImage?: string;

@@ -1,6 +1,7 @@
 import { alpha, createTheme } from '@mui/material/styles';
 
-const coral = '#E85C4A';
+const coral = '#C84335';
+const coralAccent = '#E85C4A';
 const mint = '#238579';
 const ink = '#29211F';
 
@@ -9,8 +10,8 @@ const theme = createTheme({
     mode: 'light',
     primary: {
       main: coral,
-      dark: '#C84335',
-      light: '#F39182',
+      dark: '#A73329',
+      light: coralAccent,
       contrastText: '#FFFFFF',
     },
     secondary: {
