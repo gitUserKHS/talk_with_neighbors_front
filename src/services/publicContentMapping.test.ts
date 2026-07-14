@@ -55,6 +55,17 @@ describe('public content mappings', () => {
       participantCount: 4,
       full: false,
       scheduledAt: '2026-07-18T10:00:00Z',
+      location: '비공개 장소',
+      locationAddress: '비공개 상세 주소',
+      latitude: 37.5,
+      longitude: 127,
+      kakaoPlaceId: 'private-place-id',
+    } as Parameters<typeof mapPublicMeetup>[0] & {
+      location: string;
+      locationAddress: string;
+      latitude: number;
+      longitude: number;
+      kakaoPlaceId: string;
     });
 
     expect(meetup).toMatchObject({
@@ -67,6 +78,10 @@ describe('public content mappings', () => {
     });
     expect(meetup.creatorUsername).toBeUndefined();
     expect(meetup.location).toBeUndefined();
+    expect(meetup.locationAddress).toBeUndefined();
+    expect(meetup.latitude).toBeUndefined();
+    expect(meetup.longitude).toBeUndefined();
+    expect(meetup.kakaoPlaceId).toBeUndefined();
     expect(meetup.lastMessage).toBeUndefined();
   });
 });

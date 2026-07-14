@@ -1,27 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { Alert, Button, Divider, Stack, TextField, Typography } from '@mui/material';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import { authService } from '../services/authService';
-import { websocketService } from '../services/websocketService';
 import { setUser } from '../store/slices/authSlice';
-import { AppDispatch } from '../store/types';
+import { AppDispatch, RootState } from '../store/types';
 import AuthLayout from '../components/AuthLayout';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch<AppDispatch>();
+  const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    if (authService.isAuthenticated()) {
+    if (isAuthenticated) {
       navigate('/feed', { replace: true });
     }
-  }, [navigate]);
+  }, [isAuthenticated, navigate]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -35,8 +35,6 @@ const Login: React.FC = () => {
       }
 
       dispatch(setUser(user));
-      websocketService.setCurrentUserId(user.id);
-      websocketService.initialize(user.id);
 
       const redirectPath = (location.state as any)?.from?.pathname || '/feed';
       navigate(redirectPath, { replace: true });

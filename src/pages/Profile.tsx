@@ -176,7 +176,7 @@ const Profile: React.FC = () => {
 
   const logoutAll = async () => {
     try {
-      await myPageService.logoutAll(); authService.clearLocalSession(); dispatch(setUser(null)); navigate('/login');
+      await myPageService.logoutAll(); dispatch(setUser(null)); navigate('/login');
     } catch { setError('전체 로그아웃을 완료하지 못했어.'); }
   };
 

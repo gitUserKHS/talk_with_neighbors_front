@@ -1,6 +1,7 @@
 import api from './api';
 import { CreateHobbyMeetupRequest, HobbyMeetup, HobbyMeetupPage } from '../types/meetup';
 import { Page } from '../types/chat';
+import { localDateTimeToUtcIso } from './meetupDateTime';
 
 export type MeetupAccess = 'authenticated' | 'public';
 
@@ -57,7 +58,11 @@ export const meetupService = {
   },
 
   async createMeetup(request: CreateHobbyMeetupRequest): Promise<HobbyMeetup> {
-    const response = await api.post<HobbyMeetup>('/meetups', request);
+    const response = await api.post<HobbyMeetup>('/meetups', {
+      ...request,
+      scheduledAt: localDateTimeToUtcIso(request.scheduledAt),
+      registrationDeadline: localDateTimeToUtcIso(request.registrationDeadline),
+    });
     return response.data;
   },
 
