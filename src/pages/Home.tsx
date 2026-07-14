@@ -60,29 +60,13 @@ const portfolioHighlights = [
   },
 ];
 
-const PublicContentHighlights: React.FC = () => {
-  const [posts, setPosts] = useState<FeedPost[]>([]);
-  const [meetups, setMeetups] = useState<HobbyMeetup[]>([]);
-  const [loading, setLoading] = useState(true);
+interface PublicContentHighlightsProps {
+  posts: FeedPost[];
+  meetups: HobbyMeetup[];
+  loading: boolean;
+}
 
-  useEffect(() => {
-    let mounted = true;
-
-    Promise.allSettled([
-      feedService.getFeed(0, 3, 'public'),
-      meetupService.getMeetups({ page: 0, size: 3 }, 'public'),
-    ]).then(([feedResult, meetupResult]) => {
-      if (!mounted) return;
-      if (feedResult.status === 'fulfilled') setPosts(feedResult.value.content.slice(0, 3));
-      if (meetupResult.status === 'fulfilled') setMeetups(meetupResult.value.content.slice(0, 3));
-    }).finally(() => {
-      if (mounted) setLoading(false);
-    });
-
-    return () => {
-      mounted = false;
-    };
-  }, []);
+const PublicContentHighlights: React.FC<PublicContentHighlightsProps> = ({ posts, meetups, loading }) => {
 
   if (!loading && posts.length === 0 && meetups.length === 0) return null;
 
@@ -168,6 +152,33 @@ const PublicContentHighlights: React.FC = () => {
 
 const Home: React.FC = () => {
   const user = useSelector((state: RootState) => state.auth.user);
+  const [publicPosts, setPublicPosts] = useState<FeedPost[]>([]);
+  const [publicMeetups, setPublicMeetups] = useState<HobbyMeetup[]>([]);
+  const [publicContentLoading, setPublicContentLoading] = useState(true);
+
+  useEffect(() => {
+    if (user) {
+      return undefined;
+    }
+
+    let mounted = true;
+    setPublicContentLoading(true);
+
+    Promise.allSettled([
+      feedService.getFeed(0, 3, 'public'),
+      meetupService.getMeetups({ page: 0, size: 3 }, 'public'),
+    ]).then(([feedResult, meetupResult]) => {
+      if (!mounted) return;
+      if (feedResult.status === 'fulfilled') setPublicPosts(feedResult.value.content.slice(0, 3));
+      if (meetupResult.status === 'fulfilled') setPublicMeetups(meetupResult.value.content.slice(0, 3));
+    }).finally(() => {
+      if (mounted) setPublicContentLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
 
   if (user?.profileComplete === false) {
     return <Navigate to="/onboarding" replace />;
@@ -176,6 +187,13 @@ const Home: React.FC = () => {
   if (user) {
     return <Feed />;
   }
+
+  const heroPost = publicPosts[0];
+  const heroMedia = heroPost?.media?.[0];
+  const heroImage = heroPost?.imageUrl
+    || heroMedia?.thumbnailUrl
+    || (heroMedia?.type === 'IMAGE' ? heroMedia.url : '');
+  const heroTags = heroPost?.interestTags?.slice(0, 3) ?? [];
 
   return (
     <Box component="main" sx={{ overflow: 'hidden' }}>
@@ -272,21 +290,34 @@ const Home: React.FC = () => {
                 }}
               >
                 <Stack direction="row" spacing={1.5} alignItems="center">
-                  <Avatar sx={{ bgcolor: 'secondary.main', width: 50, height: 50 }}>운</Avatar>
+                  <Avatar sx={{ bgcolor: 'secondary.main', width: 50, height: 50 }}>
+                    {heroPost?.authorUsername?.trim().charAt(0) || '이'}
+                  </Avatar>
                   <Box sx={{ flexGrow: 1 }}>
-                    <Typography fontWeight={850}>이웃톡 운영팀</Typography>
-                    <Typography variant="body2" color="text.secondary">공식 공개 콘텐츠</Typography>
+                    <Typography fontWeight={850}>{heroPost?.authorUsername || '공개 피드'}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {heroPost?.official ? '공식 공개 콘텐츠' : '실제 공개 콘텐츠'}
+                    </Typography>
                   </Box>
                   <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap justifyContent="flex-end">
-                    <Chip size="small" label="실제 DB 글" color="primary" variant="outlined" />
-                    <Chip size="small" label="운영팀 공식" color="secondary" variant="outlined" />
+                    {heroPost && <Chip size="small" label="실제 DB 글" color="primary" variant="outlined" />}
+                    {heroPost?.official && <Chip size="small" label="운영팀 공식" color="secondary" variant="outlined" />}
                   </Stack>
                 </Stack>
                 <Typography variant="h6" sx={{ mt: 3, lineHeight: 1.55 }}>
-                  저녁 30분, 우리 동네를 천천히 걸어 봤어. 익숙한 골목도 이웃과 함께 보면 새롭게 느껴지더라.
+                  {heroPost?.caption
+                    || (publicContentLoading ? '우리 동네 이야기를 불러오는 중이야.' : '공개 피드에서 지금 이웃들의 이야기를 만나봐.')}
                 </Typography>
+                {heroImage && (
+                  <CardMedia
+                    component="img"
+                    image={heroImage}
+                    alt={heroPost.caption}
+                    sx={{ mt: 2, height: { xs: 108, sm: 140 }, borderRadius: 2.5, objectFit: 'cover' }}
+                  />
+                )}
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 2 }}>
-                  {['산책', '동네생활', '사진'].map((tag) => <Chip key={tag} label={`# ${tag}`} size="small" sx={{ bgcolor: '#FFF1ED', color: 'primary.dark' }} />)}
+                  {heroTags.map((tag) => <Chip key={tag} label={`# ${tag}`} size="small" sx={{ bgcolor: '#FFF1ED', color: 'primary.dark' }} />)}
                 </Stack>
                 <Box sx={{ mt: 3, p: 2, borderRadius: 3, bgcolor: '#F3FAF8' }}>
                   <Typography variant="body2" fontWeight={800}>좋아요·댓글·참여 수는 실제 기록만 표시해</Typography>
@@ -311,7 +342,7 @@ const Home: React.FC = () => {
         </Container>
       </Box>
 
-      <PublicContentHighlights />
+      <PublicContentHighlights posts={publicPosts} meetups={publicMeetups} loading={publicContentLoading} />
 
       <Container maxWidth="lg" sx={{ py: { xs: 7, md: 10 } }}>
         <Box textAlign="center" sx={{ maxWidth: 680, mx: 'auto', mb: 5 }}>
