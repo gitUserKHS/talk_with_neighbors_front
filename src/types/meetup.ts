@@ -2,14 +2,15 @@ import { Page } from './chat';
 
 export interface HobbyMeetup {
   roomId: string;
-  /** True when the server supplied privacy-safe portfolio demonstration content. */
-  demo?: boolean;
+  /** True for a meetup published by the non-loginable service account. */
+  official?: boolean;
   title: string;
   description?: string;
   interestTags: string[];
   sharedInterests: string[];
   location?: string;
   locationAddress?: string;
+  areaLabel?: string;
   latitude?: number;
   longitude?: number;
   kakaoPlaceId?: string;

@@ -40,8 +40,7 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined';
 import ReportOutlinedIcon from '@mui/icons-material/ReportOutlined';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
-import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
-import LocalFloristRoundedIcon from '@mui/icons-material/LocalFloristRounded';
+import VerifiedRoundedIcon from '@mui/icons-material/VerifiedRounded';
 import { Link as RouterLink } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import feedService from '../services/feedService';
@@ -71,70 +70,6 @@ const formatDate = (value?: string | null) => {
     minute: '2-digit',
   }).format(new Date(value));
 };
-
-const DemoFeedArtwork: React.FC<{ tags: string[] }> = ({ tags }) => (
-  <Box
-    role="img"
-    aria-label="포트폴리오 데모 이미지"
-    sx={{
-      position: 'relative',
-      display: 'grid',
-      placeItems: 'center',
-      overflow: 'hidden',
-      aspectRatio: '1 / 1',
-      p: 4,
-      color: '#fff',
-      textAlign: 'center',
-      background: 'linear-gradient(145deg, #238579 0%, #3F9B8E 46%, #F2A06F 100%)',
-      '&::before': {
-        content: '\"\"',
-        position: 'absolute',
-        width: '70%',
-        height: '70%',
-        borderRadius: '50%',
-        top: '-20%',
-        right: '-18%',
-        bgcolor: 'rgba(255,255,255,.14)',
-      },
-      '&::after': {
-        content: '\"\"',
-        position: 'absolute',
-        width: 180,
-        height: 180,
-        border: '1px solid rgba(255,255,255,.28)',
-        borderRadius: '42% 58% 56% 44%',
-        bottom: -70,
-        left: -45,
-        transform: 'rotate(18deg)',
-      },
-    }}
-  >
-    <Stack spacing={2} alignItems="center" sx={{ position: 'relative', zIndex: 1, maxWidth: 360 }}>
-      <Box
-        sx={{
-          display: 'grid',
-          placeItems: 'center',
-          width: 76,
-          height: 76,
-          borderRadius: '28px',
-          bgcolor: 'rgba(255,255,255,.18)',
-          border: '1px solid rgba(255,255,255,.36)',
-          backdropFilter: 'blur(8px)',
-        }}
-      >
-        <LocalFloristRoundedIcon sx={{ fontSize: 42 }} />
-      </Box>
-      <Box>
-        <Typography variant="overline" sx={{ fontWeight: 900, letterSpacing: '0.16em', opacity: 0.82 }}>
-          NEIGHBORHOOD MOMENT
-        </Typography>
-        <Typography variant="h5" component="p" sx={{ mt: 0.5, color: 'inherit', lineHeight: 1.42 }}>
-          {tags.slice(0, 3).join(' · ') || '우리 동네의 작은 취향'}
-        </Typography>
-      </Box>
-    </Stack>
-  </Box>
-);
 
 const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ currentUser }) => {
   const isGuest = !currentUser;
@@ -218,8 +153,6 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       ? '아직 공개된 게시글이 없어. 조금 뒤에 다시 둘러봐줘.'
       : '아직 올라온 게시글이 없어. 첫 취향을 공유해볼까?';
   }, [isGuest, loading, posts.length]);
-  const hasDemoPosts = posts.some((post) => post.demo);
-
   const handleToggleLike = async (post: FeedPost) => {
     if (isGuest) return;
     const generation = viewGeneration.current;
@@ -460,21 +393,6 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
           </Alert>
         )}
 
-        {hasDemoPosts && (
-          <Alert
-            severity="success"
-            icon={<AutoAwesomeRoundedIcon />}
-            sx={{ '& .MuiAlert-message': { width: '100%' } }}
-          >
-            <Typography variant="subtitle2" sx={{ fontWeight: 850 }}>
-              포트폴리오 데모 콘텐츠
-            </Typography>
-            <Typography variant="body2">
-              실제 이용자의 개인정보가 아닌, 화면과 기능 흐름을 보여주기 위해 만든 예시야.
-            </Typography>
-          </Alert>
-        )}
-
         {error && (
           <Alert severity="error" onClose={() => setError(null)}>
             {error}
@@ -517,13 +435,12 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                     <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
                       {post.authorUsername}
                     </Typography>
-                    {post.demo && (
+                    {post.official && (
                       <Chip
                         size="small"
-                        icon={<AutoAwesomeRoundedIcon />}
-                        label="포트폴리오 데모"
+                        icon={<VerifiedRoundedIcon />}
+                        label="이웃톡 공식"
                         color="secondary"
-                        variant="outlined"
                       />
                     )}
                     {!isGuest && !isOwnPost && score > 0 && (
@@ -532,7 +449,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                   </Stack>
                 }
                 subheader={formatDate(post.createdAt)}
-                action={!post.demo && !isGuest && !isOwnPost ? (
+                action={!post.official && !isGuest && !isOwnPost ? (
                   <IconButton aria-label="안전 메뉴" onClick={(event) => openSafetyMenu(event, post)}>
                     <MoreVertIcon />
                   </IconButton>
@@ -547,8 +464,6 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                   alt={post.caption || '피드 이미지'}
                   sx={{ aspectRatio: '1 / 1', objectFit: 'cover', bgcolor: 'grey.100' }}
                 />
-              ) : post.demo ? (
-                <DemoFeedArtwork tags={interestTags} />
               ) : (
                 <Box
                   role="img"
@@ -564,7 +479,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                   <Typography variant="body2">사진 없이 나눈 이야기</Typography>
                 </Box>
               )}
-              {!post.demo && !isGuest && (
+              {!isGuest && (
                 <CardActions disableSpacing sx={{ px: 1.5 }}>
                   <IconButton
                     aria-label="좋아요"
@@ -577,7 +492,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                     <ChatBubbleOutlineIcon />
                   </IconButton>
                   <Box sx={{ flexGrow: 1 }} />
-                  {!isOwnPost && (
+                  {!isOwnPost && !post.official && (
                     <Button
                       size="small"
                       startIcon={<PersonAddAltIcon />}
@@ -590,15 +505,9 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                 </CardActions>
               )}
               <CardContent sx={{ pt: isGuest ? 2 : 0 }}>
-                {post.demo ? (
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
-                    예시 콘텐츠 · 실제 활동 수치가 아니야
-                  </Typography>
-                ) : (
-                  <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
-                    좋아요 {likeCount.toLocaleString()}개
-                  </Typography>
-                )}
+                <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
+                  좋아요 {likeCount.toLocaleString()}개
+                </Typography>
                 <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
                   {post.caption}
                 </Typography>
@@ -612,15 +521,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                     함께 좋아하는 관심사: {sharedInterests.join(', ')}
                   </Typography>
                 )}
-                {post.demo ? (
-                  <Chip
-                    size="small"
-                    icon={<VisibilityOffOutlinedIcon />}
-                    label="보기 전용 화면 예시"
-                    variant="outlined"
-                    sx={{ mt: 1 }}
-                  />
-                ) : isGuest ? (
+                {isGuest ? (
                   <Button
                     component={RouterLink}
                     to="/login"
@@ -628,7 +529,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                     size="small"
                     sx={{ mt: 1, px: 0 }}
                   >
-                    댓글은 로그인 후 확인
+                    댓글 {commentCount.toLocaleString()}개 · 로그인하고 참여
                   </Button>
                 ) : (
                   <Button

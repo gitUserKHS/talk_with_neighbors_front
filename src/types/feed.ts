@@ -1,7 +1,7 @@
 export interface FeedPost {
   id: string;
-  /** True when the server supplied privacy-safe portfolio demonstration content. */
-  demo?: boolean;
+  /** True for content published by the non-loginable service account. */
+  official?: boolean;
   authorId: number;
   authorUsername: string;
   authorProfileImage?: string;

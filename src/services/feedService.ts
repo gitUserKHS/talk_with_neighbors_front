@@ -27,7 +27,7 @@ export interface PublicFeedMediaDto {
 
 export interface PublicFeedPostDto {
   id: string;
-  demo?: boolean;
+  official?: boolean;
   authorDisplayName: string | null;
   imageUrl: string | null;
   media?: PublicFeedMediaDto[] | null;
@@ -72,7 +72,7 @@ const mapPublicMedia = (media: PublicFeedMediaDto): FeedMedia => ({
 /** Public API fields are deliberately expanded into the richer signed-in view model. */
 export const mapPublicFeedPost = (post: PublicFeedPostDto): FeedPost => ({
   id: post.id,
-  demo: post.demo ?? false,
+  official: post.official ?? false,
   authorId: 0,
   authorUsername: post.authorDisplayName?.trim() || '이웃',
   authorProfileImage: undefined,

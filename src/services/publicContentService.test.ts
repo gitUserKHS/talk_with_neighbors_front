@@ -21,6 +21,7 @@ const publicPost = {
   updatedAt: '2026-07-14T01:00:00Z',
   likeCount: 1,
   commentCount: 1,
+  official: true,
 };
 
 describe('public content service access', () => {
@@ -51,6 +52,12 @@ describe('public content service access', () => {
             interestTags: ['산책'],
             participantCount: 2,
             full: false,
+            official: true,
+            location: '이웃톡 라운지',
+            locationAddress: '서울 마포구',
+            latitude: 37.5,
+            longitude: 127,
+            kakaoPlaceId: 'place-1',
           }],
         },
       });
@@ -64,6 +71,13 @@ describe('public content service access', () => {
     });
     expect(feed.content[0].likedByCurrentUser).toBe(false);
     expect(meetups.content[0].joined).toBe(false);
+    expect(feed.content[0].official).toBe(true);
+    expect(meetups.content[0]).toMatchObject({
+      official: true,
+      location: '이웃톡 라운지',
+      latitude: 37.5,
+      longitude: 127,
+    });
     expect(get.mock.calls.some(([url]) => String(url).includes('/comments'))).toBe(false);
   });
 

@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Divider, Stack, TextField, Typography } from '@mui/material';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
-import { authService } from '../services/authService';
+import { authErrorPresentation, authService } from '../services/authService';
+import { returnToFromRouteState } from '../services/authNavigation';
 import { setUser } from '../store/slices/authSlice';
 import { AppDispatch, RootState } from '../store/types';
 import AuthLayout from '../components/AuthLayout';
+import SocialLoginButtons from '../components/auth/SocialLoginButtons';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -16,12 +18,13 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const returnTo = useMemo(() => returnToFromRouteState(location.state), [location.state]);
 
   useEffect(() => {
     if (isAuthenticated) {
-      navigate('/feed', { replace: true });
+      navigate(returnTo, { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, returnTo]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -30,46 +33,61 @@ const Login: React.FC = () => {
 
     try {
       const user = await authService.login(email, password);
-      if (!user) {
-        throw new Error('사용자 정보를 받지 못했어.');
-      }
+      if (!user) throw new Error('사용자 정보를 받지 못했어.');
 
       dispatch(setUser(user));
-
-      const redirectPath = (location.state as any)?.from?.pathname || '/feed';
-      navigate(redirectPath, { replace: true });
-    } catch {
-      setError('로그인에 실패했어. 이메일과 비밀번호를 확인해줘.');
+      navigate(returnTo, { replace: true });
+    } catch (requestError) {
+      setError(authErrorPresentation(
+        requestError,
+        '로그인에 실패했어. 이메일과 비밀번호를 확인해줘.',
+      ).message);
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <AuthLayout eyebrow="WELCOME BACK" title="다시 만나서 반가워." description="이웃의 새 소식과 도착한 매칭을 확인해봐.">
-      <Stack spacing={2.25} component="form" onSubmit={handleSubmit}>
-        {error && <Alert severity="error">{error}</Alert>}
-        <TextField
-          required
-          fullWidth
-          label="이메일"
-          type="email"
-          autoComplete="email"
-          value={email}
-          onChange={(event) => setEmail(event.target.value)}
-        />
-        <TextField
-          required
-          fullWidth
-          label="비밀번호"
-          type="password"
-          autoComplete="current-password"
-          value={password}
-          onChange={(event) => setPassword(event.target.value)}
-        />
-        <Button type="submit" size="large" variant="contained" disabled={isLoading} fullWidth sx={{ minHeight: 50 }}>
-          {isLoading ? '로그인 중...' : '로그인'}
-        </Button>
+    <AuthLayout
+      eyebrow="WELCOME BACK"
+      title="다시 만나서 반가워."
+      description="이웃의 새 소식과 도착한 매칭을 확인해봐."
+    >
+      <Stack spacing={2.25}>
+        <Stack spacing={2.25} component="form" onSubmit={handleSubmit}>
+          {error && <Alert severity="error">{error}</Alert>}
+          <TextField
+            required
+            fullWidth
+            label="이메일"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+          />
+          <TextField
+            required
+            fullWidth
+            label="비밀번호"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+          />
+          <Button
+            type="submit"
+            size="large"
+            variant="contained"
+            disabled={isLoading}
+            fullWidth
+            sx={{ minHeight: 50 }}
+          >
+            {isLoading ? '로그인 중...' : '로그인'}
+          </Button>
+        </Stack>
+
+        <SocialLoginButtons returnTo={returnTo} />
+
         <Divider>처음 왔어?</Divider>
         <Typography variant="body2" color="text.secondary" textAlign="center">
           아직 계정이 없다면{' '}

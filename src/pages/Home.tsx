@@ -1,18 +1,25 @@
-import React from 'react';
-import { Avatar, AvatarGroup, Box, Button, Card, Chip, Container, Stack, Typography } from '@mui/material';
+import React, { useEffect, useState } from 'react';
+import { Avatar, Box, Button, Card, CardContent, CardMedia, Chip, CircularProgress, Container, Stack, Typography } from '@mui/material';
 import ArrowForwardRoundedIcon from '@mui/icons-material/ArrowForwardRounded';
 import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import Diversity3RoundedIcon from '@mui/icons-material/Diversity3Rounded';
-import FavoriteRoundedIcon from '@mui/icons-material/FavoriteRounded';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import LocationOnRoundedIcon from '@mui/icons-material/LocationOnRounded';
 import CloudDoneRoundedIcon from '@mui/icons-material/CloudDoneRounded';
 import LockPersonRoundedIcon from '@mui/icons-material/LockPersonRounded';
 import ShieldRoundedIcon from '@mui/icons-material/ShieldRounded';
+import ChatBubbleOutlineRoundedIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
+import PeopleOutlineRoundedIcon from '@mui/icons-material/PeopleOutlineRounded';
+import VerifiedRoundedIcon from '@mui/icons-material/VerifiedRounded';
 import { useSelector } from 'react-redux';
 import { Link as RouterLink, Navigate } from 'react-router-dom';
 import { RootState } from '../store/types';
 import Feed from './Feed';
+import { feedService } from '../services/feedService';
+import { meetupService } from '../services/meetupService';
+import { formatMeetupDateTime } from '../services/meetupDateTime';
+import type { FeedPost } from '../types/feed';
+import type { HobbyMeetup } from '../types/meetup';
 
 const features = [
   {
@@ -43,7 +50,7 @@ const portfolioHighlights = [
     icon: <ShieldRoundedIcon />,
     label: 'PRIVACY BY DESIGN',
     title: '공개 전용 데이터 설계',
-    description: '공개 응답에서 사용자 식별정보·정확한 위치·채팅 정보를 제외하고, 데모 콘텐츠도 명확하게 구분해.',
+    description: '일반 회원의 식별정보·정확한 위치·채팅 정보는 공개 응답에서 제외하고, 운영팀 콘텐츠는 공식 표시로 구분해.',
   },
   {
     icon: <CloudDoneRoundedIcon />,
@@ -52,6 +59,112 @@ const portfolioHighlights = [
     description: 'GitHub Actions로 검증하고 컨테이너 이미지를 만들어 AWS k3s 환경에 반영하는 흐름을 갖췄어.',
   },
 ];
+
+const PublicContentHighlights: React.FC = () => {
+  const [posts, setPosts] = useState<FeedPost[]>([]);
+  const [meetups, setMeetups] = useState<HobbyMeetup[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+
+    Promise.allSettled([
+      feedService.getFeed(0, 3, 'public'),
+      meetupService.getMeetups({ page: 0, size: 3 }, 'public'),
+    ]).then(([feedResult, meetupResult]) => {
+      if (!mounted) return;
+      if (feedResult.status === 'fulfilled') setPosts(feedResult.value.content.slice(0, 3));
+      if (meetupResult.status === 'fulfilled') setMeetups(meetupResult.value.content.slice(0, 3));
+    }).finally(() => {
+      if (mounted) setLoading(false);
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (!loading && posts.length === 0 && meetups.length === 0) return null;
+
+  return (
+    <Box component="section" aria-labelledby="live-neighborhood-title" sx={{ py: { xs: 7, md: 9 }, bgcolor: '#F3FAF8' }}>
+      <Container maxWidth="lg">
+        <Stack direction={{ xs: 'column', md: 'row' }} justifyContent="space-between" alignItems={{ md: 'end' }} spacing={2} sx={{ mb: 4 }}>
+          <Box>
+            <Typography variant="overline" color="secondary.main" sx={{ fontWeight: 900, letterSpacing: '0.13em' }}>
+              NOW IN THE NEIGHBORHOOD
+            </Typography>
+            <Typography id="live-neighborhood-title" variant="h3" sx={{ mt: 0.75 }}>
+              지금 이웃톡에서 이어지는 이야기
+            </Typography>
+            <Typography color="text.secondary" sx={{ mt: 1 }}>
+              가입 전에도 공개된 이야기와 다가오는 모임을 먼저 둘러볼 수 있어.
+            </Typography>
+          </Box>
+          <Stack direction="row" spacing={1}>
+            <Button component={RouterLink} to="/feed" variant="outlined">피드 전체 보기</Button>
+            <Button component={RouterLink} to="/meetups" variant="contained">모임 전체 보기</Button>
+          </Stack>
+        </Stack>
+
+        {loading ? (
+          <Box role="status" aria-label="공개 콘텐츠 불러오는 중" sx={{ display: 'grid', placeItems: 'center', py: 7 }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', lg: posts.length > 0 && meetups.length > 0 ? '1.15fr .85fr' : '1fr' }, gap: 3 }}>
+            {posts.length > 0 && <Stack spacing={1.5}>
+              <Typography variant="h5">오늘의 이웃 이야기</Typography>
+              {posts.map((post) => {
+                const firstMedia = post.media?.[0];
+                const previewImage = post.imageUrl || firstMedia?.thumbnailUrl || (firstMedia?.type === 'IMAGE' ? firstMedia.url : '');
+                return (
+                  <Card key={post.id} variant="outlined" sx={{ display: 'grid', gridTemplateColumns: previewImage ? { xs: '1fr', sm: '150px 1fr' } : '1fr', overflow: 'hidden' }}>
+                    {previewImage && <CardMedia component="img" image={previewImage} alt="" sx={{ width: '100%', height: '100%', minHeight: 132, objectFit: 'cover' }} />}
+                    <CardContent>
+                      <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                        <Typography fontWeight={850}>{post.authorUsername}</Typography>
+                        {post.official && <Chip icon={<VerifiedRoundedIcon />} label="이웃톡 공식" size="small" color="secondary" />}
+                      </Stack>
+                      <Typography sx={{ mt: 1, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                        {post.caption}
+                      </Typography>
+                      <Stack direction="row" spacing={1.5} sx={{ mt: 1.5 }} color="text.secondary">
+                        <Typography variant="caption">좋아요 {post.likeCount.toLocaleString()}</Typography>
+                        <Typography variant="caption"><ChatBubbleOutlineRoundedIcon sx={{ fontSize: 14, mr: .4, verticalAlign: 'text-bottom' }} />댓글 {post.commentCount.toLocaleString()}</Typography>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </Stack>}
+
+            {meetups.length > 0 && <Stack spacing={1.5}>
+              <Typography variant="h5">다가오는 모임</Typography>
+              {meetups.map((meetup) => (
+                <Card key={meetup.roomId} variant="outlined">
+                  <CardContent>
+                    <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
+                      <Typography variant="h6" fontWeight={850}>{meetup.title}</Typography>
+                      {meetup.official && <Chip icon={<VerifiedRoundedIcon />} label="공식" size="small" color="secondary" />}
+                    </Stack>
+                    <Typography color="text.secondary" sx={{ mt: 1 }}>
+                      {meetup.location || meetup.areaLabel || meetup.locationAddress || '참여 후 장소 안내'}
+                    </Typography>
+                    <Stack direction="row" spacing={1.5} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }} color="text.secondary">
+                      {meetup.scheduledAt && <Typography variant="body2">{formatMeetupDateTime(meetup.scheduledAt)}</Typography>}
+                      <Typography variant="body2"><PeopleOutlineRoundedIcon sx={{ fontSize: 17, mr: .4, verticalAlign: 'text-bottom' }} />{meetup.participantCount}/{meetup.maxParticipants ?? '-'}명</Typography>
+                    </Stack>
+                  </CardContent>
+                </Card>
+              ))}
+            </Stack>}
+          </Box>
+        )}
+      </Container>
+    </Box>
+  );
+};
 
 const Home: React.FC = () => {
   const user = useSelector((state: RootState) => state.auth.user);
@@ -142,17 +255,9 @@ const Home: React.FC = () => {
                   로그인하기
                 </Button>
               </Typography>
-              <Stack direction="row" spacing={1.5} alignItems="center" sx={{ pt: 1 }}>
-                <AvatarGroup max={4} sx={{ '& .MuiAvatar-root': { width: 34, height: 34, fontSize: 13, borderColor: '#FFF9F5' } }}>
-                  <Avatar sx={{ bgcolor: '#E85C4A' }}>민</Avatar>
-                  <Avatar sx={{ bgcolor: '#238579' }}>준</Avatar>
-                  <Avatar sx={{ bgcolor: '#6C63A8' }}>서</Avatar>
-                  <Avatar sx={{ bgcolor: '#C68B3C' }}>윤</Avatar>
-                </AvatarGroup>
-                <Typography variant="body2" color="text.secondary">
-                  오늘도 새로운 취향이 연결되고 있어
-                </Typography>
-              </Stack>
+              <Typography variant="body2" color="text.secondary" sx={{ pt: 1 }}>
+                로그인 전에도 실제 공개 글과 모임을 둘러볼 수 있어
+              </Typography>
             </Stack>
 
             <Box sx={{ position: 'relative', minHeight: { xs: 440, md: 520 } }} aria-label="이웃톡 커뮤니티 미리보기">
@@ -167,50 +272,46 @@ const Home: React.FC = () => {
                 }}
               >
                 <Stack direction="row" spacing={1.5} alignItems="center">
-                  <Avatar sx={{ bgcolor: 'secondary.main', width: 50, height: 50 }}>해</Avatar>
+                  <Avatar sx={{ bgcolor: 'secondary.main', width: 50, height: 50 }}>운</Avatar>
                   <Box sx={{ flexGrow: 1 }}>
-                    <Typography fontWeight={850}>해솔 · 연남동</Typography>
-                    <Typography variant="body2" color="text.secondary">방금 전</Typography>
+                    <Typography fontWeight={850}>이웃톡 운영팀</Typography>
+                    <Typography variant="body2" color="text.secondary">공식 공개 콘텐츠</Typography>
                   </Box>
                   <Stack direction="row" spacing={0.75} flexWrap="wrap" useFlexGap justifyContent="flex-end">
-                    <Chip size="small" label="동네 피드" color="primary" variant="outlined" />
-                    <Chip size="small" label="UI 예시" color="secondary" variant="outlined" />
+                    <Chip size="small" label="실제 DB 글" color="primary" variant="outlined" />
+                    <Chip size="small" label="운영팀 공식" color="secondary" variant="outlined" />
                   </Stack>
                 </Stack>
                 <Typography variant="h6" sx={{ mt: 3, lineHeight: 1.55 }}>
-                  이번 주말에 경의선숲길 같이 걷고 근처 독립서점 구경할 사람? 🌿
+                  저녁 30분, 우리 동네를 천천히 걸어 봤어. 익숙한 골목도 이웃과 함께 보면 새롭게 느껴지더라.
                 </Typography>
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 2 }}>
-                  {['산책', '독립서점', '사진'].map((tag) => <Chip key={tag} label={`# ${tag}`} size="small" sx={{ bgcolor: '#FFF1ED', color: 'primary.dark' }} />)}
+                  {['산책', '동네생활', '사진'].map((tag) => <Chip key={tag} label={`# ${tag}`} size="small" sx={{ bgcolor: '#FFF1ED', color: 'primary.dark' }} />)}
                 </Stack>
                 <Box sx={{ mt: 3, p: 2, borderRadius: 3, bgcolor: '#F3FAF8' }}>
-                  <Stack direction="row" spacing={1.5} alignItems="center">
-                    <Avatar sx={{ width: 42, height: 42, bgcolor: '#D97A4A' }}>도</Avatar>
-                    <Box sx={{ flexGrow: 1 }}>
-                      <Typography variant="body2" fontWeight={800}>도윤님과 취향 92% 일치</Typography>
-                      <Typography variant="caption" color="text.secondary">산책 · 사진 · 에세이</Typography>
-                    </Box>
-                    <FavoriteRoundedIcon color="primary" />
-                  </Stack>
+                  <Typography variant="body2" fontWeight={800}>좋아요·댓글·참여 수는 실제 기록만 표시해</Typography>
+                  <Typography variant="caption" color="text.secondary">가짜 회원이나 가짜 반응을 만들지 않았어</Typography>
                 </Box>
               </Card>
 
               <Card sx={{ position: 'absolute', left: { xs: 0, sm: 10 }, bottom: 0, p: 2, borderRadius: 3, width: 210, transform: 'rotate(-3deg)' }}>
-                <Typography variant="caption" color="text.secondary">이번 주 모임</Typography>
-                <Typography fontWeight={850} sx={{ mt: 0.5 }}>한강 저녁 러닝 🏃</Typography>
-                <Typography variant="body2" color="text.secondary">토요일 19:00 · 4/6명</Typography>
+                <Typography variant="caption" color="text.secondary">공개 모임</Typography>
+                <Typography fontWeight={850} sx={{ mt: 0.5 }}>일정·장소·지도 연결</Typography>
+                <Typography variant="body2" color="text.secondary">참여하려면 로그인</Typography>
               </Card>
 
               <Card sx={{ position: 'absolute', right: { xs: 0, sm: 12 }, top: { xs: 2, sm: 0 }, px: 2, py: 1.5, borderRadius: 3, transform: 'rotate(3deg)' }}>
                 <Stack direction="row" spacing={1} alignItems="center">
                   <Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: 'success.main' }} />
-                  <Typography variant="body2" fontWeight={800}>새 매칭 도착!</Typography>
+                  <Typography variant="body2" fontWeight={800}>AWS HTTPS 운영 중</Typography>
                 </Stack>
               </Card>
             </Box>
           </Box>
         </Container>
       </Box>
+
+      <PublicContentHighlights />
 
       <Container maxWidth="lg" sx={{ py: { xs: 7, md: 10 } }}>
         <Box textAlign="center" sx={{ maxWidth: 680, mx: 'auto', mb: 5 }}>
@@ -284,7 +385,7 @@ const Home: React.FC = () => {
               </Typography>
               <Box sx={{ p: 2, borderRadius: 2.5, bgcolor: 'rgba(255,255,255,.07)', border: '1px solid rgba(255,255,255,.12)' }}>
                 <Typography variant="body2" sx={{ color: 'rgba(255,255,255,.8)', lineHeight: 1.65 }}>
-                  공개 피드와 모임의 ‘포트폴리오 데모’ 표시는 실제 이용자 데이터가 아닌, 개인정보 없는 기능 설명용 콘텐츠라는 뜻이야.
+                  운영팀 공식 콘텐츠는 로그인할 수 없는 시스템 계정이 관리하고, 일반 회원의 공개 범위는 작성자가 직접 선택해.
                 </Typography>
               </Box>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ width: { xs: '100%', sm: 'auto' } }}>
@@ -295,7 +396,7 @@ const Home: React.FC = () => {
                   endIcon={<ArrowForwardRoundedIcon />}
                   sx={{ bgcolor: '#fff', color: '#17665E', '&:hover': { bgcolor: '#F3FAF8' } }}
                 >
-                  공개 피드 체험
+                  공개 피드 보기
                 </Button>
                 <Button
                   component={RouterLink}
@@ -303,7 +404,7 @@ const Home: React.FC = () => {
                   variant="outlined"
                   sx={{ color: '#fff', borderColor: 'rgba(255,255,255,.42)', '&:hover': { borderColor: '#fff', bgcolor: 'rgba(255,255,255,.08)' } }}
                 >
-                  모임 탐색 체험
+                  모임 살펴보기
                 </Button>
               </Stack>
             </Stack>
