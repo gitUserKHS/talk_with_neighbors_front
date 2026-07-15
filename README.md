@@ -59,6 +59,12 @@ PR과 `main`, `codex/**`, `agent/**` 브랜치 푸시에서는 GitHub Actions가
 로그인 세션은 `SameSite=Lax` HttpOnly 쿠키를 사용하므로 프런트와 API를 같은 사이트에서 제공해야 해.
 별도 `github.io` 출처에서 API를 호출하던 Pages 미리보기는 이 계약과 맞지 않아 제거했고, 포트폴리오
 라이브 서비스는 AWS의 같은 출처(`/api`, `/ws`) 배포를 기준으로 해. `main`과 버전 태그의 GHCR 이미지는
-같은 품질 검증을 모두 통과한 뒤에만 게시되며, 실제 AWS 배포는 별도 배포 워크플로가 담당해.
+같은 품질 검증을 모두 통과한 뒤에만 게시돼. 프런트 `main` 게시가 끝나면 `production-dispatch`
+Environment의 최소 권한 GitHub App 자격 증명으로 백엔드 저장소에 배포 이벤트를 보내고, 백엔드
+워크플로가 이벤트 digest와 현재 검증된 프런트 `:main`이 같은지 확인한 뒤 기존 k3s 프런트
+Deployment만 교체해. DB·Redis·백엔드·Secret·migration은 이 경로에서 건드리지 않고, 실제 배포
+중인 백엔드 digest와 새 프런트 digest를 함께 기록해. App은 백엔드 저장소 한 곳에만 설치하고
+`Contents: read and write` 하나만 허용하며, Environment 변수 `BACKEND_DEPLOY_APP_ID`와 secret
+`BACKEND_DEPLOY_APP_PRIVATE_KEY`로 관리해. 장기 개인 액세스 토큰은 사용하지 않아.
 
 게시글·채팅 미디어는 같은 출처의 `/uploads` 경로로 요청하고, 백엔드가 실행 환경에 따라 로컬 볼륨 또는 비공개 S3에서 제공해.

@@ -1,5 +1,11 @@
 import api from './api';
-import { CreateFeedPostRequest, FeedComment, FeedMedia, FeedPost } from '../types/feed';
+import {
+  CreateFeedPostRequest,
+  FeedComment,
+  FeedMedia,
+  FeedPost,
+  UpdateFeedPostRequest,
+} from '../types/feed';
 import type { AxiosProgressEvent } from 'axios';
 import { resolveMediaUrl } from './mediaUrl';
 
@@ -80,6 +86,7 @@ export const mapPublicFeedPost = (post: PublicFeedPostDto): FeedPost => ({
   media: post.media?.map(mapPublicMedia),
   caption: post.caption,
   interestTags: post.interestTags ?? [],
+  publicPreview: true,
   createdAt: post.createdAt,
   updatedAt: post.updatedAt,
   likeCount: post.likeCount ?? 0,
@@ -164,6 +171,16 @@ export const feedService = {
 
   async addComment(postId: string, content: string): Promise<FeedComment> {
     const response = await api.post<FeedComment>(`/feed/${postId}/comments`, { content });
+    return mapAuthenticatedComment(response.data);
+  },
+
+  async updatePost(postId: string, request: UpdateFeedPostRequest): Promise<FeedPost> {
+    const response = await api.patch<FeedPost>(`/feed/${postId}`, request);
+    return mapAuthenticatedPost(response.data);
+  },
+
+  async updateComment(commentId: string, content: string): Promise<FeedComment> {
+    const response = await api.patch<FeedComment>(`/feed/comments/${commentId}`, { content });
     return mapAuthenticatedComment(response.data);
   },
 

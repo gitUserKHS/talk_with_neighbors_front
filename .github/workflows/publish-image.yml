@@ -56,6 +56,8 @@ jobs:
     permissions:
       contents: read
       packages: write
+    outputs:
+      release_image: ${{ steps.image.outputs.name }}@${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
       - name: Normalize image name
@@ -150,3 +152,59 @@ jobs:
         run: |
           echo "### Verified frontend image" >> "$GITHUB_STEP_SUMMARY"
           printf "\`%s\`\n" "$RELEASE_IMAGE" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy-production:
+    name: Request verified production deployment
+    needs: publish
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: production-dispatch
+    permissions:
+      contents: read
+    steps:
+      - name: Create a short-lived backend-only GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@fee1f7d63c2ff003460e3d139729b119787bc349 # v2
+        with:
+          app-id: ${{ vars.BACKEND_DEPLOY_APP_ID }}
+          private-key: ${{ secrets.BACKEND_DEPLOY_APP_PRIVATE_KEY }}
+          owner: gitUserKHS
+          repositories: talk_with_neighbors_back
+          permission-contents: write
+
+      - name: Dispatch the verified frontend digest
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          RELEASE_IMAGE: ${{ needs.publish.outputs.release_image }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_IMAGE" =~ ^ghcr\.io/gituserkhs/talk_with_neighbors_front@sha256:[a-f0-9]{64}$ ]] || { echo "Invalid verified frontend digest" >&2; exit 1; }
+          receiver="$(gh api \
+            --method GET \
+            repos/gitUserKHS/talk_with_neighbors_back/contents/.github/workflows/deploy-k3s.yml \
+            --raw-field ref=main \
+            --jq .content | base64 --decode)"
+          grep -Eq '^[[:space:]]+repository_dispatch:' <<<"$receiver" || {
+            echo "Backend main does not yet contain the repository_dispatch receiver" >&2
+            exit 1
+          }
+          payload="$(jq -n \
+            --arg eventType frontend_image_published \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg ref "$GITHUB_REF" \
+            --arg sha "$GITHUB_SHA" \
+            --arg runId "$GITHUB_RUN_ID" \
+            --arg runAttempt "$GITHUB_RUN_ATTEMPT" \
+            --arg image "$RELEASE_IMAGE" \
+            '{event_type:$eventType,client_payload:{source_repository:$repository,source_ref:$ref,source_sha:$sha,source_run_id:$runId,source_run_attempt:$runAttempt,frontend_image:$image}}')"
+          gh api \
+            --method POST \
+            repos/gitUserKHS/talk_with_neighbors_back/dispatches \
+            --input - <<<"$payload"
+          {
+            echo "### Production deployment requested"
+            printf -- "- Frontend: \`%s\`\n" "$RELEASE_IMAGE"
+            printf -- "- Backend workflow: <%s>\n" "https://github.com/gitUserKHS/talk_with_neighbors_back/actions/workflows/deploy-k3s.yml"
+          } >> "$GITHUB_STEP_SUMMARY"
