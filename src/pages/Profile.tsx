@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  Alert, Avatar, Box, Button, Card, CardContent, Chip, CircularProgress, Container,
-  Divider, FormControlLabel, LinearProgress, List, ListItem, ListItemAvatar,
+  Alert, Avatar, Box, Button, Card, CardContent, Checkbox, Chip, CircularProgress, Container,
+  Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, LinearProgress, List, ListItem, ListItemAvatar,
   ListItemText, IconButton, Paper, Snackbar, Stack, Switch, Tab, Tabs, TextField, Tooltip, Typography,
 } from '@mui/material';
 import {
@@ -66,6 +66,13 @@ const Profile: React.FC = () => {
   const [editing, setEditing] = useState(false);
   const [profileUploading, setProfileUploading] = useState(false);
   const [profileUploadProgress, setProfileUploadProgress] = useState(0);
+  const [activityMutationId, setActivityMutationId] = useState<string | null>(null);
+  const [postEditTarget, setPostEditTarget] = useState<FeedPost | null>(null);
+  const [postEditCaption, setPostEditCaption] = useState('');
+  const [postEditTags, setPostEditTags] = useState('');
+  const [postEditPublicPreview, setPostEditPublicPreview] = useState(false);
+  const [commentEditTarget, setCommentEditTarget] = useState<MyCommentActivity | null>(null);
+  const [commentEditContent, setCommentEditContent] = useState('');
   const [newInterest, setNewInterest] = useState('');
   const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' });
   const [profile, setProfile] = useState<ProfileForm>({
@@ -99,6 +106,64 @@ const Profile: React.FC = () => {
   }, []);
 
   useEffect(() => { void loadAll(); }, [loadAll]);
+
+  const runActivityMutation = async (
+    mutationId: string,
+    confirmation: string | null,
+    action: () => Promise<void>,
+  ) => {
+    if (activityMutationId || (confirmation && !window.confirm(confirmation))) return;
+    setActivityMutationId(mutationId);
+    setError(null);
+    try {
+      await action();
+    } catch (err: any) {
+      setError(err.response?.data?.message || '요청을 처리하지 못했어.');
+    } finally {
+      setActivityMutationId(null);
+    }
+  };
+
+  const openPostEdit = (post: FeedPost) => {
+    setPostEditTarget(post);
+    setPostEditCaption(post.caption ?? '');
+    setPostEditTags((post.interestTags ?? []).join(', '));
+    setPostEditPublicPreview(Boolean(post.publicPreview));
+  };
+
+  const savePostEdit = async () => {
+    if (!postEditTarget || !postEditCaption.trim()) return;
+    const target = postEditTarget;
+    const interestTags = postEditTags
+      .split(',')
+      .map((tag) => tag.trim().replace(/^#/, ''))
+      .filter(Boolean)
+      .filter((tag, index, values) => values.indexOf(tag) === index)
+      .slice(0, 10);
+    await runActivityMutation(`post-edit:${target.id}`, null, async () => {
+      const updated = await feedService.updatePost(target.id, {
+        caption: postEditCaption.trim(),
+        interestTags,
+        publicPreview: postEditPublicPreview,
+      });
+      setPosts((items) => items.map((item) => item.id === updated.id ? updated : item));
+      setPostEditTarget(null);
+      setMessage('게시글을 수정했어.');
+    });
+  };
+
+  const saveCommentEdit = async () => {
+    if (!commentEditTarget || !commentEditContent.trim()) return;
+    const target = commentEditTarget;
+    await runActivityMutation(`comment-edit:${target.id}`, null, async () => {
+      const updated = await feedService.updateComment(target.id, commentEditContent.trim());
+      setComments((items) => items.map((item) => item.id === target.id
+        ? { ...item, content: updated.content }
+        : item));
+      setCommentEditTarget(null);
+      setMessage('댓글을 수정했어.');
+    });
+  };
 
   const saveProfile = async () => {
     try {
@@ -248,9 +313,9 @@ const Profile: React.FC = () => {
 
         {tab === 1 && <Box sx={{ p: { xs: 2, md: 3 } }}>
           <Stack direction="row" gap={1} flexWrap="wrap" sx={{ mb: 3 }}>{(['posts', 'comments', 'likes', 'meetups'] as const).map((kind) => <Chip key={kind} clickable color={activityKind === kind ? 'primary' : 'default'} onClick={() => setActivityKind(kind)} label={{ posts: `내 글 ${posts.length}`, comments: `댓글 ${comments.length}`, likes: `좋아요 ${likes.length}`, meetups: `모임 ${meetups.length}` }[kind]} />)}</Stack>
-          {activityKind === 'posts' && <PostList posts={posts} empty="작성한 게시글이 없어." actionLabel="삭제" onAction={async (id) => { await feedService.deletePost(id); setPosts((items) => items.filter((item) => item.id !== id)); setMessage('게시글을 삭제했어.'); }} />}
-          {activityKind === 'likes' && <PostList posts={likes} empty="좋아요한 게시글이 없어." actionLabel="좋아요 취소" onAction={async (id) => { await feedService.unlikePost(id); setLikes((items) => items.filter((item) => item.id !== id)); }} />}
-          {activityKind === 'comments' && <Stack spacing={1}>{comments.length === 0 ? <Empty text="작성한 댓글이 없어." /> : comments.map((item) => <Card key={item.id} variant="outlined"><CardContent><Typography>{item.content}</Typography><Typography variant="caption" color="text.secondary">{item.postCaption || '게시글'} · {formatDate(item.createdAt)}</Typography><Box sx={{ mt: 1 }}><Button size="small" color="error" onClick={async () => { await feedService.deleteComment(item.id); setComments((items) => items.filter((value) => value.id !== item.id)); }}>댓글 삭제</Button></Box></CardContent></Card>)}</Stack>}
+          {activityKind === 'posts' && <PostList posts={posts} empty="작성한 게시글이 없어." actionLabel="삭제" busyId={activityMutationId} onEdit={openPostEdit} onAction={(id) => runActivityMutation(`post:${id}`, '게시글과 첨부 파일, 댓글까지 삭제되고 되돌릴 수 없어. 삭제할까?', async () => { await feedService.deletePost(id); setPosts((items) => items.filter((item) => item.id !== id)); setMessage('게시글을 삭제했어.'); })} />}
+          {activityKind === 'likes' && <PostList posts={likes} empty="좋아요한 게시글이 없어." actionLabel="좋아요 취소" busyId={activityMutationId} onAction={(id) => runActivityMutation(`like:${id}`, null, async () => { await feedService.unlikePost(id); setLikes((items) => items.filter((item) => item.id !== id)); })} />}
+          {activityKind === 'comments' && <Stack spacing={1}>{comments.length === 0 ? <Empty text="작성한 댓글이 없어." /> : comments.map((item) => <Card key={item.id} variant="outlined"><CardContent><Typography>{item.content}</Typography><Typography variant="caption" color="text.secondary">{item.postCaption || '게시글'} · {formatDate(item.createdAt)}</Typography><Stack direction="row" spacing={1} sx={{ mt: 1 }}><Button size="small" disabled={Boolean(activityMutationId)} onClick={() => { setCommentEditTarget(item); setCommentEditContent(item.content); }}>댓글 수정</Button><Button size="small" color="error" disabled={Boolean(activityMutationId)} onClick={() => void runActivityMutation(`comment:${item.id}`, '댓글을 삭제하면 되돌릴 수 없어. 삭제할까?', async () => { await feedService.deleteComment(item.id); setComments((items) => items.filter((value) => value.id !== item.id)); setMessage('댓글을 삭제했어.'); })}>{activityMutationId === `comment:${item.id}` ? '삭제 중…' : '댓글 삭제'}</Button></Stack></CardContent></Card>)}</Stack>}
           {activityKind === 'meetups' && <Stack spacing={1}>{meetups.length === 0 ? <Empty text="참여한 모임이 없어." /> : meetups.map((item) => <Card key={item.roomId} variant="outlined"><CardContent><Typography variant="h6">{item.title}</Typography><Typography color="text.secondary">{item.location || '장소 미정'} · {formatDate(item.scheduledAt)}</Typography><Stack direction="row" gap={1} sx={{ mt: 1 }}>{item.interestTags.map((tag) => <Chip key={tag} size="small" label={tag} />)}</Stack><Button sx={{ mt: 1 }} onClick={() => navigate(`/chat/${item.roomId}`)}>채팅 열기</Button></CardContent></Card>)}</Stack>}
         </Box>}
 
@@ -274,6 +339,29 @@ const Profile: React.FC = () => {
           <Box><Typography variant="h5">로그인 보안</Typography><Typography color="text.secondary" sx={{ my: 1 }}>분실한 기기나 공유 PC의 세션을 포함해 모든 기기에서 로그아웃해.</Typography><Button color="error" variant="outlined" onClick={() => void logoutAll()}>모든 기기에서 로그아웃</Button></Box>
         </Stack></Box>}
       </Paper>
+      <Dialog open={Boolean(postEditTarget)} onClose={() => !activityMutationId && setPostEditTarget(null)} fullWidth maxWidth="sm">
+        <DialogTitle>게시글 수정</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Alert severity="info">첨부한 사진과 동영상은 그대로 유지돼.</Alert>
+            <TextField label="글 내용" multiline minRows={4} fullWidth required value={postEditCaption} disabled={Boolean(activityMutationId)} inputProps={{ maxLength: 1000 }} helperText={`${postEditCaption.length} / 1000`} onChange={(event) => setPostEditCaption(event.target.value)} />
+            <TextField label="관심사 태그" fullWidth value={postEditTags} disabled={Boolean(activityMutationId)} helperText="쉼표로 나눠서 최대 10개까지 입력해줘." onChange={(event) => setPostEditTags(event.target.value)} />
+            <FormControlLabel control={<Checkbox checked={postEditPublicPreview} disabled={Boolean(activityMutationId)} onChange={(event) => setPostEditPublicPreview(event.target.checked)} />} label="로그인 전 공개 미리보기 허용" />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={Boolean(activityMutationId)} onClick={() => setPostEditTarget(null)}>취소</Button>
+          <Button variant="contained" disabled={Boolean(activityMutationId) || !postEditCaption.trim()} onClick={() => void savePostEdit()}>{activityMutationId?.startsWith('post-edit:') ? '저장 중…' : '저장'}</Button>
+        </DialogActions>
+      </Dialog>
+      <Dialog open={Boolean(commentEditTarget)} onClose={() => !activityMutationId && setCommentEditTarget(null)} fullWidth maxWidth="xs">
+        <DialogTitle>댓글 수정</DialogTitle>
+        <DialogContent><TextField sx={{ mt: 1 }} label="댓글 내용" multiline minRows={3} fullWidth autoFocus value={commentEditContent} disabled={Boolean(activityMutationId)} inputProps={{ maxLength: 1000 }} onChange={(event) => setCommentEditContent(event.target.value)} /></DialogContent>
+        <DialogActions>
+          <Button disabled={Boolean(activityMutationId)} onClick={() => setCommentEditTarget(null)}>취소</Button>
+          <Button variant="contained" disabled={Boolean(activityMutationId) || !commentEditContent.trim()} onClick={() => void saveCommentEdit()}>{activityMutationId?.startsWith('comment-edit:') ? '저장 중…' : '저장'}</Button>
+        </DialogActions>
+      </Dialog>
       <Snackbar open={Boolean(message)} autoHideDuration={3000} onClose={() => setMessage(null)}><Alert severity="success">{message}</Alert></Snackbar>
       <Snackbar open={Boolean(error)} autoHideDuration={4500} onClose={() => setError(null)}><Alert severity="error">{error}</Alert></Snackbar>
     </Container>
@@ -282,8 +370,8 @@ const Profile: React.FC = () => {
 
 const Empty = ({ text }: { text: string }) => <Alert severity="info">{text}</Alert>;
 
-const PostList = ({ posts, empty, actionLabel, onAction }: { posts: FeedPost[]; empty: string; actionLabel: string; onAction: (id: string) => Promise<void> }) => (
-  <Stack spacing={1}>{posts.length === 0 ? <Empty text={empty} /> : posts.map((post) => <Card key={post.id} variant="outlined"><CardContent sx={{ display: 'flex', gap: 2 }}><Avatar variant="rounded" src={post.imageUrl} sx={{ width: 72, height: 72 }} /><Box sx={{ flex: 1, minWidth: 0 }}><Typography noWrap>{post.caption || '내용 없는 게시글'}</Typography><Typography variant="caption" color="text.secondary">좋아요 {post.likeCount} · 댓글 {post.commentCount} · {formatDate(post.createdAt)}</Typography><Box sx={{ mt: 1 }}><Button size="small" color={actionLabel === '삭제' ? 'error' : 'primary'} onClick={() => void onAction(post.id)}>{actionLabel}</Button></Box></Box></CardContent></Card>)}</Stack>
+const PostList = ({ posts, empty, actionLabel, busyId, onAction, onEdit }: { posts: FeedPost[]; empty: string; actionLabel: string; busyId: string | null; onAction: (id: string) => Promise<void>; onEdit?: (post: FeedPost) => void }) => (
+  <Stack spacing={1}>{posts.length === 0 ? <Empty text={empty} /> : posts.map((post) => <Card key={post.id} variant="outlined"><CardContent sx={{ display: 'flex', gap: 2 }}><Avatar variant="rounded" src={post.imageUrl} sx={{ width: 72, height: 72 }} /><Box sx={{ flex: 1, minWidth: 0 }}><Typography noWrap>{post.caption || '내용 없는 게시글'}</Typography><Typography variant="caption" color="text.secondary">좋아요 {post.likeCount} · 댓글 {post.commentCount} · {formatDate(post.createdAt)}</Typography><Stack direction="row" spacing={1} sx={{ mt: 1 }}>{onEdit && <Button size="small" disabled={Boolean(busyId)} onClick={() => onEdit(post)}>수정</Button>}<Button size="small" color={actionLabel === '삭제' ? 'error' : 'primary'} disabled={Boolean(busyId)} onClick={() => void onAction(post.id)}>{busyId?.endsWith(post.id) ? `${actionLabel} 중…` : actionLabel}</Button></Stack></Box></CardContent></Card>)}</Stack>
 );
 
 const SafetySection = ({ title, icon, empty, children }: { title: string; icon: React.ReactNode; empty: string; children: React.ReactNode[] }) => (

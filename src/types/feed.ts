@@ -9,6 +9,7 @@ export interface FeedPost {
   media?: FeedMedia[];
   caption: string;
   interestTags: string[];
+  publicPreview: boolean;
   createdAt: string;
   updatedAt: string;
   likeCount: number;
@@ -39,9 +40,16 @@ export interface FeedComment {
   authorProfileImage?: string;
   content: string;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface CreateFeedPostRequest {
+  caption: string;
+  interestTags: string[];
+  publicPreview: boolean;
+}
+
+export interface UpdateFeedPostRequest {
   caption: string;
   interestTags: string[];
   publicPreview: boolean;

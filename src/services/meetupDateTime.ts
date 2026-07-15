@@ -31,3 +31,22 @@ export const formatMeetupDateTime = (value?: string | null): string => {
     timeStyle: 'short',
   }).format(instant);
 };
+
+/** Converts an offset-aware API instant into the browser-local datetime input value. */
+export const meetupDateTimeToLocalInput = (value?: string | null): string => {
+  const instant = parseMeetupDateTime(value);
+  if (!instant) return '';
+
+  const pad = (part: number) => String(part).padStart(2, '0');
+  return [
+    instant.getFullYear(),
+    '-',
+    pad(instant.getMonth() + 1),
+    '-',
+    pad(instant.getDate()),
+    'T',
+    pad(instant.getHours()),
+    ':',
+    pad(instant.getMinutes()),
+  ].join('');
+};

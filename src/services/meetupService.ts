@@ -1,7 +1,13 @@
 import api from './api';
-import { CreateHobbyMeetupRequest, HobbyMeetup, HobbyMeetupPage } from '../types/meetup';
+import {
+  CreateHobbyMeetupRequest,
+  HobbyMeetup,
+  HobbyMeetupPage,
+  UpdateHobbyMeetupRequest,
+} from '../types/meetup';
 import { Page } from '../types/chat';
 import { localDateTimeToUtcIso } from './meetupDateTime';
+import { resolveMediaUrl } from './mediaUrl';
 
 export type MeetupAccess = 'authenticated' | 'public';
 
@@ -24,6 +30,14 @@ export interface PublicMeetupDto {
   longitude?: number | null;
   kakaoPlaceId?: string | null;
 }
+
+const mapAuthenticatedMeetup = (meetup: HobbyMeetup): HobbyMeetup => ({
+  ...meetup,
+  participants: meetup.participants?.map((participant) => ({
+    ...participant,
+    profileImageUrl: resolveMediaUrl(participant.profileImageUrl),
+  })),
+});
 
 /** Public cards expose exact location only for explicitly official service meetups. */
 export const mapPublicMeetup = (meetup: PublicMeetupDto): HobbyMeetup => ({
@@ -68,7 +82,10 @@ export const meetupService = {
     }
 
     const response = await api.get<HobbyMeetupPage>('/meetups', { params });
-    return response.data;
+    return {
+      ...response.data,
+      content: response.data.content.map(mapAuthenticatedMeetup),
+    };
   },
 
   async createMeetup(request: CreateHobbyMeetupRequest): Promise<HobbyMeetup> {
@@ -77,12 +94,38 @@ export const meetupService = {
       scheduledAt: localDateTimeToUtcIso(request.scheduledAt),
       registrationDeadline: localDateTimeToUtcIso(request.registrationDeadline),
     });
-    return response.data;
+    return mapAuthenticatedMeetup(response.data);
+  },
+
+  async getMeetup(roomId: string): Promise<HobbyMeetup> {
+    const response = await api.get<HobbyMeetup>(`/meetups/${roomId}`);
+    return mapAuthenticatedMeetup(response.data);
+  },
+
+  async updateMeetup(roomId: string, request: UpdateHobbyMeetupRequest): Promise<HobbyMeetup> {
+    const response = await api.patch<HobbyMeetup>(`/meetups/${roomId}`, {
+      ...request,
+      description: request.description?.trim() || null,
+      location: request.location?.trim() || null,
+      locationAddress: request.locationAddress?.trim() || null,
+      latitude: request.latitude ?? null,
+      longitude: request.longitude ?? null,
+      kakaoPlaceId: request.kakaoPlaceId?.trim() || null,
+      scheduledAt: request.scheduledAt ? localDateTimeToUtcIso(request.scheduledAt) : null,
+      registrationDeadline: request.registrationDeadline
+        ? localDateTimeToUtcIso(request.registrationDeadline)
+        : null,
+    });
+    return mapAuthenticatedMeetup(response.data);
+  },
+
+  async deleteMeetup(roomId: string): Promise<void> {
+    await api.delete(`/meetups/${roomId}`);
   },
 
   async joinMeetup(roomId: string): Promise<HobbyMeetup> {
     const response = await api.post<HobbyMeetup>(`/meetups/${roomId}/join`);
-    return response.data;
+    return mapAuthenticatedMeetup(response.data);
   },
 
   async leaveMeetup(roomId: string): Promise<void> {

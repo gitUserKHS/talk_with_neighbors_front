@@ -40,6 +40,8 @@ import VisibilityOffOutlinedIcon from '@mui/icons-material/VisibilityOffOutlined
 import ReportOutlinedIcon from '@mui/icons-material/ReportOutlined';
 import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import VerifiedRoundedIcon from '@mui/icons-material/VerifiedRounded';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import { Link as RouterLink } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import feedService from '../services/feedService';
@@ -58,6 +60,13 @@ import {
   updateScopedItems,
   visibleScopedItems,
 } from '../services/accessScope';
+import {
+  decrementPostCommentCount,
+  removeFeedComment,
+  removeFeedPost,
+  replaceFeedComment,
+  replaceFeedPost,
+} from '../services/contentMutationState';
 
 const formatDate = (value?: string | null) => {
   if (!value) return '';
@@ -92,6 +101,16 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
   const [reportDetails, setReportDetails] = useState('');
   const [hideAfterReport, setHideAfterReport] = useState(true);
   const [safetySubmitting, setSafetySubmitting] = useState(false);
+  const [postEditTarget, setPostEditTarget] = useState<FeedPost | null>(null);
+  const [postEditCaption, setPostEditCaption] = useState('');
+  const [postEditTags, setPostEditTags] = useState('');
+  const [postEditPublicPreview, setPostEditPublicPreview] = useState(false);
+  const [postDeleteTarget, setPostDeleteTarget] = useState<FeedPost | null>(null);
+  const [postMutationBusy, setPostMutationBusy] = useState(false);
+  const [commentEditTarget, setCommentEditTarget] = useState<{ postId: string; comment: FeedComment } | null>(null);
+  const [commentEditContent, setCommentEditContent] = useState('');
+  const [commentDeleteTarget, setCommentDeleteTarget] = useState<{ postId: string; comment: FeedComment } | null>(null);
+  const [commentMutationId, setCommentMutationId] = useState<string | null>(null);
   const feedRequestGeneration = useRef(0);
   const viewGeneration = useRef(0);
 
@@ -135,6 +154,12 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
     setReportDetails('');
     setHideAfterReport(true);
     setSafetySubmitting(false);
+    setPostEditTarget(null);
+    setPostDeleteTarget(null);
+    setPostMutationBusy(false);
+    setCommentEditTarget(null);
+    setCommentDeleteTarget(null);
+    setCommentMutationId(null);
     void loadFeed(accessScope);
 
     return () => {
@@ -257,6 +282,123 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
   };
 
   const closeSafetyMenu = () => setMenuAnchor(null);
+
+  const openPostEdit = () => {
+    if (!selectedPost) return;
+    closeSafetyMenu();
+    setPostEditTarget(selectedPost);
+    setPostEditCaption(selectedPost.caption ?? '');
+    setPostEditTags((selectedPost.interestTags ?? []).join(', '));
+    setPostEditPublicPreview(Boolean(selectedPost.publicPreview));
+  };
+
+  const submitPostEdit = async () => {
+    if (!postEditTarget || postMutationBusy) return;
+    const caption = postEditCaption.trim();
+    const tags = postEditTags
+      .split(',')
+      .map((tag) => tag.trim().replace(/^#/, ''))
+      .filter(Boolean)
+      .filter((tag, index, values) => values.indexOf(tag) === index)
+      .slice(0, 10);
+    if (!caption) {
+      setError('게시글 내용을 입력해줘.');
+      return;
+    }
+
+    setPostMutationBusy(true);
+    setError(null);
+    try {
+      const updated = await feedService.updatePost(postEditTarget.id, {
+        caption,
+        interestTags: tags,
+        publicPreview: postEditPublicPreview,
+      });
+      setPosts((items) => replaceFeedPost(items, updated));
+      setSelectedPost(updated);
+      setPostEditTarget(null);
+      setSuccess('게시글을 수정했어.');
+    } catch (err: any) {
+      setError(err.response?.data?.message || '게시글을 수정하지 못했어.');
+    } finally {
+      setPostMutationBusy(false);
+    }
+  };
+
+  const confirmPostDelete = () => {
+    if (!selectedPost) return;
+    closeSafetyMenu();
+    setPostDeleteTarget(selectedPost);
+  };
+
+  const submitPostDelete = async () => {
+    if (!postDeleteTarget || postMutationBusy) return;
+    const postId = postDeleteTarget.id;
+    setPostMutationBusy(true);
+    setError(null);
+    try {
+      await feedService.deletePost(postId);
+      setPosts((items) => removeFeedPost(items, postId));
+      setComments((current) => {
+        const next = { ...current };
+        delete next[postId];
+        return next;
+      });
+      setPostDeleteTarget(null);
+      setSelectedPost(null);
+      setSuccess('게시글을 삭제했어.');
+    } catch (err: any) {
+      setError(err.response?.data?.message || '게시글을 삭제하지 못했어.');
+    } finally {
+      setPostMutationBusy(false);
+    }
+  };
+
+  const startCommentEdit = (postId: string, comment: FeedComment) => {
+    setCommentEditTarget({ postId, comment });
+    setCommentEditContent(comment.content);
+  };
+
+  const submitCommentEdit = async () => {
+    if (!commentEditTarget || commentMutationId) return;
+    const content = commentEditContent.trim();
+    if (!content) {
+      setError('댓글 내용을 입력해줘.');
+      return;
+    }
+    const { postId, comment } = commentEditTarget;
+    setCommentMutationId(comment.id);
+    setError(null);
+    try {
+      const updated = await feedService.updateComment(comment.id, content);
+      setComments((current) => replaceFeedComment(current, postId, updated));
+      setCommentEditTarget(null);
+      setSuccess('댓글을 수정했어.');
+    } catch (err: any) {
+      setError(err.response?.data?.message || '댓글을 수정하지 못했어.');
+    } finally {
+      setCommentMutationId(null);
+    }
+  };
+
+  const submitCommentDelete = async () => {
+    if (!commentDeleteTarget || commentMutationId) return;
+    const { postId, comment } = commentDeleteTarget;
+    setCommentMutationId(comment.id);
+    setError(null);
+    try {
+      await feedService.deleteComment(comment.id);
+      setComments((current) => removeFeedComment(current, postId, comment.id));
+      setPosts((items) => decrementPostCommentCount(items, postId));
+      setCommentDeleteTarget(null);
+      if (commentEditTarget?.comment.id === comment.id) setCommentEditTarget(null);
+      setSuccess('댓글을 삭제했어.');
+    } catch (err: any) {
+      setError(err.response?.data?.message || '댓글을 삭제하지 못했어.');
+    } finally {
+      setCommentMutationId(null);
+    }
+  };
 
   const handleHidePost = async () => {
     if (!selectedPost) return;
@@ -448,8 +590,11 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                   </Stack>
                 }
                 subheader={formatDate(post.createdAt)}
-                action={!post.official && !isGuest && !isOwnPost ? (
-                  <IconButton aria-label="안전 메뉴" onClick={(event) => openSafetyMenu(event, post)}>
+                action={!post.official && !isGuest ? (
+                  <IconButton
+                    aria-label={isOwnPost ? '게시글 관리 메뉴' : '안전 메뉴'}
+                    onClick={(event) => openSafetyMenu(event, post)}
+                  >
                     <MoreVertIcon />
                   </IconButton>
                 ) : undefined}
@@ -537,21 +682,69 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                   <Box sx={{ mt: 1 }}>
                     <Divider sx={{ mb: 1.5 }} />
                     <Stack spacing={1.25}>
-                      {(comments[post.id] || []).map((comment) => (
-                        <Box key={comment.id} sx={{ display: 'flex', gap: 1 }}>
-                          <Avatar src={comment.authorProfileImage} sx={{ width: 28, height: 28 }}>
-                            {comment.authorUsername?.[0]}
-                          </Avatar>
-                          <Box>
-                            <Typography variant="body2">
-                              <strong>{comment.authorUsername}</strong> {comment.content}
-                            </Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {formatDate(comment.createdAt)}
-                            </Typography>
+                      {(comments[post.id] || []).map((comment) => {
+                        const isOwnComment = String(comment.authorId) === String(currentUser?.id);
+                        const isEditingComment = commentEditTarget?.comment.id === comment.id;
+                        const isMutatingComment = commentMutationId === comment.id;
+                        return (
+                          <Box key={comment.id} sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+                            <Avatar src={comment.authorProfileImage} sx={{ width: 28, height: 28 }}>
+                              {comment.authorUsername?.[0]}
+                            </Avatar>
+                            <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+                              {isEditingComment ? (
+                                <Stack spacing={0.75}>
+                                  <TextField
+                                    size="small"
+                                    fullWidth
+                                    multiline
+                                    maxRows={5}
+                                    autoFocus
+                                    value={commentEditContent}
+                                    disabled={isMutatingComment}
+                                    inputProps={{ maxLength: 1000, 'aria-label': '수정할 댓글' }}
+                                    onChange={(event) => setCommentEditContent(event.target.value)}
+                                  />
+                                  <Stack direction="row" spacing={0.75} justifyContent="flex-end">
+                                    <Button size="small" disabled={isMutatingComment} onClick={() => setCommentEditTarget(null)}>취소</Button>
+                                    <Button size="small" variant="contained" disabled={isMutatingComment || !commentEditContent.trim()} onClick={submitCommentEdit}>
+                                      {isMutatingComment ? '저장 중…' : '저장'}
+                                    </Button>
+                                  </Stack>
+                                </Stack>
+                              ) : (
+                                <>
+                                  <Typography variant="body2">
+                                    <strong>{comment.authorUsername}</strong> {comment.content}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {comment.updatedAt && comment.updatedAt !== comment.createdAt ? '수정됨 · ' : ''}
+                                    {formatDate(comment.createdAt)}
+                                  </Typography>
+                                </>
+                              )}
+                            </Box>
+                            {isOwnComment && !isEditingComment && (
+                              <Stack direction="row" spacing={0.25}>
+                                <Tooltip title="댓글 수정">
+                                  <span>
+                                    <IconButton aria-label="댓글 수정" size="small" disabled={isMutatingComment} onClick={() => startCommentEdit(post.id, comment)}>
+                                      <EditOutlinedIcon fontSize="inherit" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                                <Tooltip title="댓글 삭제">
+                                  <span>
+                                    <IconButton aria-label="댓글 삭제" size="small" disabled={isMutatingComment} onClick={() => setCommentDeleteTarget({ postId: post.id, comment })}>
+                                      <DeleteOutlineIcon fontSize="inherit" />
+                                    </IconButton>
+                                  </span>
+                                </Tooltip>
+                              </Stack>
+                            )}
                           </Box>
-                        </Box>
-                      ))}
+                        );
+                      })}
                       <Stack direction="row" spacing={1}>
                         <TextField
                           fullWidth
@@ -583,16 +776,97 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       </Stack>
 
       {!isGuest && <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeSafetyMenu}>
-        <MenuItem onClick={handleHidePost}>
-          <VisibilityOffOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> 게시물 숨기기
-        </MenuItem>
-        <MenuItem onClick={openReportDialog}>
-          <ReportOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> 게시물 신고하기
-        </MenuItem>
-        <MenuItem onClick={handleBlockUser} sx={{ color: 'error.main' }}>
-          <BlockOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> 사용자 차단하기
-        </MenuItem>
+        {selectedPost && String(selectedPost.authorId) === String(currentUser?.id) ? [
+          <MenuItem key="edit" onClick={openPostEdit}>
+            <EditOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> 게시글 수정
+          </MenuItem>,
+          <MenuItem key="delete" onClick={confirmPostDelete} sx={{ color: 'error.main' }}>
+            <DeleteOutlineIcon fontSize="small" sx={{ mr: 1.5 }} /> 게시글 삭제
+          </MenuItem>,
+        ] : [
+          <MenuItem key="hide" onClick={handleHidePost}>
+            <VisibilityOffOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> 게시물 숨기기
+          </MenuItem>,
+          <MenuItem key="report" onClick={openReportDialog}>
+            <ReportOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> 게시물 신고하기
+          </MenuItem>,
+          <MenuItem key="block" onClick={handleBlockUser} sx={{ color: 'error.main' }}>
+            <BlockOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> 사용자 차단하기
+          </MenuItem>,
+        ]}
       </Menu>}
+
+      {!isGuest && <Dialog open={Boolean(postEditTarget)} onClose={() => !postMutationBusy && setPostEditTarget(null)} fullWidth maxWidth="sm">
+        <DialogTitle>게시글 수정</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {error && <Alert severity="error">{error}</Alert>}
+            <Alert severity="info">첨부한 사진과 동영상은 그대로 유지돼.</Alert>
+            <TextField
+              label="글 내용"
+              multiline
+              minRows={4}
+              fullWidth
+              required
+              value={postEditCaption}
+              disabled={postMutationBusy}
+              inputProps={{ maxLength: 1000 }}
+              helperText={`${postEditCaption.length} / 1000`}
+              onChange={(event) => setPostEditCaption(event.target.value)}
+            />
+            <TextField
+              label="관심사 태그"
+              fullWidth
+              value={postEditTags}
+              disabled={postMutationBusy}
+              helperText="쉼표로 나눠서 최대 10개까지 입력해줘."
+              onChange={(event) => setPostEditTags(event.target.value)}
+            />
+            <FormControlLabel
+              control={<Checkbox checked={postEditPublicPreview} disabled={postMutationBusy} onChange={(event) => setPostEditPublicPreview(event.target.checked)} />}
+              label="로그인 전 공개 미리보기 허용"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={postMutationBusy} onClick={() => setPostEditTarget(null)}>취소</Button>
+          <Button variant="contained" disabled={postMutationBusy || !postEditCaption.trim()} onClick={submitPostEdit}>
+            {postMutationBusy ? '저장 중…' : '저장'}
+          </Button>
+        </DialogActions>
+      </Dialog>}
+
+      {!isGuest && <Dialog open={Boolean(postDeleteTarget)} onClose={() => !postMutationBusy && setPostDeleteTarget(null)}>
+        <DialogTitle>게시글을 삭제할까?</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5}>
+            {error && <Alert severity="error">{error}</Alert>}
+            <Typography>사진·동영상과 댓글까지 함께 삭제되고 되돌릴 수 없어.</Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={postMutationBusy} onClick={() => setPostDeleteTarget(null)}>취소</Button>
+          <Button color="error" variant="contained" disabled={postMutationBusy} onClick={submitPostDelete}>
+            {postMutationBusy ? '삭제 중…' : '삭제'}
+          </Button>
+        </DialogActions>
+      </Dialog>}
+
+      {!isGuest && <Dialog open={Boolean(commentDeleteTarget)} onClose={() => !commentMutationId && setCommentDeleteTarget(null)}>
+        <DialogTitle>댓글을 삭제할까?</DialogTitle>
+        <DialogContent>
+          <Stack spacing={1.5}>
+            {error && <Alert severity="error">{error}</Alert>}
+            <Typography>삭제한 댓글은 되돌릴 수 없어.</Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={Boolean(commentMutationId)} onClick={() => setCommentDeleteTarget(null)}>취소</Button>
+          <Button color="error" variant="contained" disabled={Boolean(commentMutationId)} onClick={submitCommentDelete}>
+            {commentMutationId ? '삭제 중…' : '삭제'}
+          </Button>
+        </DialogActions>
+      </Dialog>}
 
       {!isGuest && <Dialog open={reportOpen} onClose={() => !safetySubmitting && setReportOpen(false)} fullWidth maxWidth="xs">
         <DialogTitle>게시물 신고하기</DialogTitle>
