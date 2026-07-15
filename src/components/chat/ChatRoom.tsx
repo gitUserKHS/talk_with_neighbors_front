@@ -27,10 +27,10 @@ import DescriptionOutlinedIcon from '@mui/icons-material/DescriptionOutlined';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
+import ForumOutlinedIcon from '@mui/icons-material/ForumOutlined';
 import MovieOutlinedIcon from '@mui/icons-material/MovieOutlined';
 import SendIcon from '@mui/icons-material/Send';
 import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
-import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { chatService } from '../../services/chatService';
@@ -59,11 +59,9 @@ import {
   ChatScheduleRsvpStatus,
   CreateChatScheduleRequest,
 } from '../../types/chatSchedule';
-import ChatScheduleCard from './schedule/ChatScheduleCard';
 import ChatScheduleDetailsDialog from './schedule/ChatScheduleDetailsDialog';
 import ChatScheduleFormDialog from './schedule/ChatScheduleFormDialog';
 import ChatScheduleListDialog from './schedule/ChatScheduleListDialog';
-import ChatScheduleUpcomingBar from './schedule/ChatScheduleUpcomingBar';
 
 const MAX_ATTACHMENT_COUNT = 5;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -174,6 +172,10 @@ const ChatRoom: React.FC = () => {
     )),
     [scheduleClock, schedules],
   );
+  const hasConversationMessages = useMemo(
+    () => messages.some((message) => message.type !== 'SCHEDULE'),
+    [messages],
+  );
 
   const refreshSchedules = useCallback(async () => {
     if (!roomId) return;
@@ -220,7 +222,7 @@ const ChatRoom: React.FC = () => {
               .filter((schedule): schedule is ChatSchedule => Boolean(schedule));
             setSchedules(schedulesFromMessages.reduce(upsertChatSchedule, loadedSchedules));
           } catch (scheduleError: any) {
-            setError(scheduleError.response?.data?.message || '채팅방 약속을 불러오지 못했어.');
+            setError(scheduleError.response?.data?.message || '모임 일정을 불러오지 못했어.');
           }
         }
         chatService.markMessagesAsRead(roomId).catch(() => undefined);
@@ -237,14 +239,15 @@ const ChatRoom: React.FC = () => {
     if (!roomId) return;
     const handleRoomMessage = (message: WebSocketResponse) => {
       const incoming = toChatMessage(message);
-      setMessages((current) => mergeChatMessage(current, incoming));
       if (incoming.type === 'SCHEDULE') {
         if (incoming.schedule) {
           setSchedules((current) => upsertChatSchedule(current, incoming.schedule!));
         } else if (room?.publicRoom) {
           void refreshSchedules().catch(() => undefined);
         }
+        return;
       }
+      setMessages((current) => mergeChatMessage(current, incoming));
       if (incoming.isDeleted) {
         setEditingMessageId((current) => current === incoming.id ? null : current);
         setDeleteTarget((current) => current?.id === incoming.id ? null : current);
@@ -455,6 +458,18 @@ const ChatRoom: React.FC = () => {
     setScheduleFormOpen(true);
   };
 
+  const closeScheduleForm = () => {
+    if (scheduleSaving) return;
+    setScheduleFormOpen(false);
+    setEditingSchedule(null);
+    setScheduleListOpen(true);
+  };
+
+  const closeScheduleDetails = () => {
+    setDetailScheduleId(null);
+    setScheduleListOpen(true);
+  };
+
   const openScheduleDetails = (schedule: ChatSchedule) => {
     if (!roomId) return;
     setScheduleListOpen(false);
@@ -463,7 +478,7 @@ const ChatRoom: React.FC = () => {
     void chatScheduleService.getSchedule(roomId, schedule.id)
       .then((latest) => setSchedules((current) => upsertChatSchedule(current, latest)))
       .catch((err: any) => {
-        setError(err.response?.data?.message || '약속 상세를 불러오지 못했어.');
+        setError(err.response?.data?.message || '일정 상세를 불러오지 못했어.');
       })
       .finally(() => setBusyScheduleId(null));
   };
@@ -503,7 +518,8 @@ const ChatRoom: React.FC = () => {
       setSchedules((current) => upsertChatSchedule(current, saved));
       setScheduleFormOpen(false);
       setEditingSchedule(null);
-      setDetailScheduleId(saved.id);
+      setDetailScheduleId(null);
+      setScheduleListOpen(true);
     } finally {
       setScheduleSaving(false);
     }
@@ -569,8 +585,8 @@ const ChatRoom: React.FC = () => {
             </Box>
             {room?.publicRoom && (
               <Stack direction="row" spacing={0.25} sx={{ flexShrink: 0 }}>
-                <Tooltip title="채팅방 약속">
-                  <IconButton aria-label="채팅방 약속 보기" onClick={() => setScheduleListOpen(true)}>
+                <Tooltip title="모임 달력">
+                  <IconButton aria-label="모임 달력 보기" onClick={() => setScheduleListOpen(true)}>
                     <Badge badgeContent={upcomingSchedules.length} color="primary" max={9}>
                       <CalendarMonthOutlinedIcon />
                     </Badge>
@@ -582,58 +598,21 @@ const ChatRoom: React.FC = () => {
               </Stack>
             )}
           </Box>
-          {room?.publicRoom && upcomingSchedules[0] && (
-            <ChatScheduleUpcomingBar
-              schedule={upcomingSchedules[0]}
-              remainingCount={Math.max(0, upcomingSchedules.length - 1)}
-              onOpen={openScheduleDetails}
-            />
-          )}
         </Box>
 
         <Box sx={{ overflowY: 'auto', p: 2, bgcolor: 'grey.50' }}>
           {error && <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>{error}</Alert>}
           <Stack spacing={1.5}>
-            {messages.length === 0 && room?.publicRoom && (
+            {!hasConversationMessages && room?.publicRoom && (
               <Box sx={{ py: 5, textAlign: 'center', color: 'text.secondary' }}>
-                <EventAvailableOutlinedIcon sx={{ fontSize: 40, mb: 1 }} />
+                <ForumOutlinedIcon sx={{ fontSize: 40, mb: 1 }} />
                 <Typography fontWeight={800}>아직 대화가 없어.</Typography>
-                <Typography variant="body2" sx={{ mb: 2 }}>첫 메시지와 함께 약속을 만들어볼까?</Typography>
-                <Button variant="outlined" startIcon={<CalendarMonthOutlinedIcon />} onClick={openScheduleCreate}>
-                  약속 만들기
-                </Button>
+                <Typography variant="body2">첫 인사를 건네볼까?</Typography>
               </Box>
             )}
             {messages.map((message) => {
               if (message.type === 'SCHEDULE') {
-                const embeddedSchedule = message.schedule;
-                const latestSchedule = embeddedSchedule
-                  ? schedules.find((schedule) => schedule.id === embeddedSchedule.id)
-                  : null;
-                const schedule = latestSchedule
-                  && latestSchedule.version >= (embeddedSchedule?.version ?? 0)
-                  ? latestSchedule
-                  : embeddedSchedule;
-                return (
-                  <Box key={message.id} sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
-                    {schedule ? (
-                      <ChatScheduleCard
-                        schedule={schedule}
-                        currentUserId={currentUser?.id}
-                        busy={busyScheduleId === schedule.id}
-                        onOpen={openScheduleDetails}
-                        onRsvp={(target, status) => void updateScheduleRsvp(target, status)}
-                      />
-                    ) : (
-                      <Paper variant="outlined" sx={{ width: '100%', maxWidth: 440, p: 2, textAlign: 'center' }}>
-                        <Typography color="text.secondary">약속 정보를 불러오는 중이야.</Typography>
-                        <Button size="small" onClick={() => void refreshSchedules()} sx={{ mt: 0.5 }}>
-                          다시 불러오기
-                        </Button>
-                      </Paper>
-                    )}
-                  </Box>
-                );
+                return null;
               }
               const isMine = String(message.senderId) === String(currentUser?.id);
               const isEditing = editingMessageId === message.id;
@@ -714,21 +693,6 @@ const ChatRoom: React.FC = () => {
             <Tooltip title="사진·동영상·파일 첨부 (최대 5개)">
               <span><IconButton aria-label="파일 첨부" disabled={sending || pendingAttachments.length >= MAX_ATTACHMENT_COUNT} onClick={() => fileInputRef.current?.click()}><AttachFileIcon /></IconButton></span>
             </Tooltip>
-            {room?.publicRoom && (
-              <Tooltip title="채팅방 약속 만들기">
-                <span>
-                  <IconButton
-                    type="button"
-                    aria-label="약속 만들기"
-                    color="primary"
-                    disabled={sending}
-                    onClick={openScheduleCreate}
-                  >
-                    <EventAvailableOutlinedIcon />
-                  </IconButton>
-                </span>
-              </Tooltip>
-            )}
             <TextField
               value={newMessage}
               onChange={(event) => setNewMessage(event.target.value)}
@@ -767,18 +731,14 @@ const ChatRoom: React.FC = () => {
             open={scheduleFormOpen}
             schedule={editingSchedule}
             saving={scheduleSaving}
-            onClose={() => {
-              if (scheduleSaving) return;
-              setScheduleFormOpen(false);
-              setEditingSchedule(null);
-            }}
+            onClose={closeScheduleForm}
             onSave={saveChatSchedule}
           />
           <ChatScheduleDetailsDialog
             schedule={detailSchedule}
             currentUserId={currentUser?.id}
             busy={Boolean(detailSchedule && busyScheduleId === detailSchedule.id)}
-            onClose={() => setDetailScheduleId(null)}
+            onClose={closeScheduleDetails}
             onEdit={editChatSchedule}
             onCancel={cancelChatSchedule}
             onRsvp={updateScheduleRsvp}

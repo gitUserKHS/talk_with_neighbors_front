@@ -51,11 +51,6 @@ export interface CreateHobbyMeetupRequest {
   longitude?: number;
   kakaoPlaceId?: string;
   maxParticipants: number;
-  /** Browser-local form value; meetupService normalizes it to UTC ISO-8601 before sending. */
-  scheduledAt?: string;
-  durationMinutes?: number;
-  /** Browser-local form value; meetupService normalizes it to UTC ISO-8601 before sending. */
-  registrationDeadline?: string;
 }
 
 export type UpdateHobbyMeetupRequest = CreateHobbyMeetupRequest;

@@ -51,9 +51,8 @@ describe('meetup host mutation API contract', () => {
     expect(get).toHaveBeenCalledWith('/meetups/room-1');
   });
 
-  it('normalizes local dates and sends explicit nulls when optional fields are cleared', async () => {
+  it('updates only profile fields and leaves the calendar projection server-owned', async () => {
     patch.mockResolvedValueOnce({ data: meetup });
-    const localStart = '2026-07-18T19:00';
 
     await meetupService.updateMeetup('room-1', {
       title: '저녁 산책',
@@ -61,9 +60,6 @@ describe('meetup host mutation API contract', () => {
       interestTags: ['산책'],
       location: '',
       maxParticipants: 8,
-      scheduledAt: localStart,
-      durationMinutes: 120,
-      registrationDeadline: '',
     });
 
     expect(patch).toHaveBeenCalledWith('/meetups/room-1', expect.objectContaining({
@@ -73,9 +69,11 @@ describe('meetup host mutation API contract', () => {
       latitude: null,
       longitude: null,
       kakaoPlaceId: null,
-      scheduledAt: new Date(2026, 6, 18, 19, 0, 0).toISOString(),
-      registrationDeadline: null,
     }));
+    const payload = patch.mock.calls[0][1] as Record<string, unknown>;
+    expect(payload).not.toHaveProperty('scheduledAt');
+    expect(payload).not.toHaveProperty('durationMinutes');
+    expect(payload).not.toHaveProperty('registrationDeadline');
   });
 
   it('deletes a meetup through the dedicated host endpoint', async () => {

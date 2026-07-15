@@ -65,7 +65,7 @@ const ChatScheduleListDialog: React.FC<ChatScheduleListDialogProps> = ({
       aria-labelledby="chat-schedule-list-title"
     >
       <DialogTitle id="chat-schedule-list-title" sx={{ pr: 7 }}>
-        채팅방 약속
+        모임 달력
         <IconButton
           aria-label="닫기"
           onClick={onClose}
@@ -78,7 +78,7 @@ const ChatScheduleListDialog: React.FC<ChatScheduleListDialogProps> = ({
         <Stack spacing={3}>
           <Box>
             <Typography variant="h6" sx={{ mb: 1.25, fontWeight: 900 }}>
-              다가오는 약속 {upcoming.length}
+              다가오는 일정 {upcoming.length}
             </Typography>
             {upcoming.length === 0 ? (
               <Box
@@ -93,12 +93,12 @@ const ChatScheduleListDialog: React.FC<ChatScheduleListDialogProps> = ({
                 }}
               >
                 <CalendarMonthOutlinedIcon color="action" sx={{ fontSize: 38, mb: 1 }} />
-                <Typography fontWeight={800}>아직 잡힌 약속이 없어.</Typography>
+                <Typography fontWeight={800}>다가오는 일정이 아직 없어.</Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 2 }}>
-                  채팅방 이웃들과 첫 약속을 만들어볼까?
+                  모임 이웃들과 날짜와 장소를 정해볼까?
                 </Typography>
                 <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>
-                  약속 만들기
+                  새 일정 만들기
                 </Button>
               </Box>
             ) : (
@@ -120,11 +120,11 @@ const ChatScheduleListDialog: React.FC<ChatScheduleListDialogProps> = ({
 
           <Box>
             <Typography variant="h6" sx={{ mb: 1.25, fontWeight: 900 }}>
-              지난 약속과 취소된 약속
+              지난 일정과 취소된 일정
             </Typography>
             {previous.length === 0 ? (
               <Typography variant="body2" color="text.secondary">
-                지난 약속이 아직 없어.
+                지난 일정이 아직 없어.
               </Typography>
             ) : (
               <Stack spacing={1.5}>
@@ -146,9 +146,11 @@ const ChatScheduleListDialog: React.FC<ChatScheduleListDialogProps> = ({
       </DialogContent>
       <DialogActions sx={{ px: 2, py: 1.5, pb: 'max(12px, env(safe-area-inset-bottom))' }}>
         <Button onClick={onClose}>닫기</Button>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>
-          새 약속
-        </Button>
+        {upcoming.length > 0 && (
+          <Button variant="contained" startIcon={<AddIcon />} onClick={onCreate}>
+            새 일정
+          </Button>
+        )}
       </DialogActions>
     </Dialog>
   );

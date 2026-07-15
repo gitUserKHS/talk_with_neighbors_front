@@ -105,6 +105,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
   const geocoderRef = useRef<InstanceType<KakaoMapsNamespace['services']['Geocoder']> | null>(null);
   const onChangeRef = useRef(onChange);
   const searchGeneration = useRef(0);
+  const searchInFlight = useRef(false);
   const [sdkState, setSdkState] = useState<'missing' | 'loading' | 'ready' | 'error'>(
     appKey ? 'loading' : 'missing',
   );
@@ -230,14 +231,15 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         ? items.map(meetupLocationFromAddress).filter((item): item is MapLocationSelection => item !== null)
         : [];
       setResults(selections);
+      searchInFlight.current = false;
       setSearching(false);
       setStatusMessage(selections.length > 0 ? `주소 검색 결과 ${selections.length}개를 찾았어.` : '검색 결과가 없어.');
       if (selections.length === 0) setSearchError('장소나 주소를 찾지 못했어. 검색어를 조금 더 자세히 입력해줘.');
     });
   };
 
-  const handleSearch = (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleSearch = () => {
+    if (searchInFlight.current) return;
     const normalizedQuery = query.trim();
     const maps = mapsRef.current;
     if (normalizedQuery.length < 2) {
@@ -250,6 +252,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
     }
 
     const requestId = ++searchGeneration.current;
+    searchInFlight.current = true;
     setSearching(true);
     setSearchError('');
     setResults([]);
@@ -262,12 +265,22 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         : [];
       if (selections.length > 0) {
         setResults(selections);
+        searchInFlight.current = false;
         setSearching(false);
         setStatusMessage(`장소 검색 결과 ${selections.length}개를 찾았어.`);
         return;
       }
       searchAddress(maps, normalizedQuery, requestId);
     });
+  };
+
+  const handleSearchKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key !== 'Enter') return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.nativeEvent.isComposing || event.repeat) return;
+    handleSearch();
   };
 
   const handleCurrentLocation = () => {
@@ -335,6 +348,12 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
     });
   };
 
+  const preventParentSubmitOnEnter = (event: React.KeyboardEvent) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   if (sdkState === 'missing' || sdkState === 'error') {
     return (
       <Stack spacing={1.5}>
@@ -349,6 +368,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
               label="장소명"
               value={value?.placeName ?? ''}
               onChange={(event) => updateManualLocation(event.target.value, value?.address ?? '')}
+              onKeyDown={preventParentSubmitOnEnter}
               inputProps={{ maxLength: 100 }}
               disabled={disabled}
               fullWidth
@@ -357,6 +377,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
               label="주소 또는 장소 안내"
               value={value?.address ?? ''}
               onChange={(event) => updateManualLocation(value?.placeName ?? '', event.target.value)}
+              onKeyDown={preventParentSubmitOnEnter}
               inputProps={{ maxLength: 255 }}
               disabled={disabled}
               fullWidth
@@ -366,6 +387,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         {allowCurrentLocation && (
           <>
             <Button
+              type="button"
               variant="outlined"
               startIcon={locating ? <CircularProgress size={16} /> : <MyLocationIcon />}
               onClick={handleCurrentLocation}
@@ -385,19 +407,21 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
 
   return (
     <Stack spacing={1.5}>
-      <Box component="form" onSubmit={handleSearch}>
+      <Box role="search" aria-label="장소 또는 주소 검색">
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
           <TextField
             label="장소 또는 주소 검색"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={handleSearchKeyDown}
             placeholder="예: 서울도서관, 망원한강공원"
             inputProps={{ 'aria-controls': results.length > 0 ? 'meetup-location-results' : undefined }}
             disabled={disabled || sdkState !== 'ready'}
             fullWidth
           />
           <Button
-            type="submit"
+            type="button"
+            onClick={handleSearch}
             variant="outlined"
             startIcon={searching ? <CircularProgress size={16} /> : <SearchIcon />}
             disabled={disabled || sdkState !== 'ready' || searching}
@@ -416,6 +440,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
       {allowCurrentLocation && (
         <>
           <Button
+            type="button"
             variant="outlined"
             startIcon={locating ? <CircularProgress size={16} /> : <MyLocationIcon />}
             onClick={handleCurrentLocation}
@@ -458,7 +483,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         <Alert
           severity="success"
           icon={<LocationOnOutlinedIcon />}
-          action={<Button color="inherit" size="small" onClick={() => onChange(null)} disabled={disabled}>지우기</Button>}
+          action={<Button type="button" color="inherit" size="small" onClick={() => onChange(null)} disabled={disabled}>지우기</Button>}
         >
           <Typography variant="subtitle2" fontWeight={800}>{value.placeName}</Typography>
           {value.address && <Typography variant="body2">{value.address}</Typography>}
