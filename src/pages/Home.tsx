@@ -17,6 +17,7 @@ import { RootState } from '../store/types';
 import Feed from './Feed';
 import { feedService } from '../services/feedService';
 import { meetupService } from '../services/meetupService';
+import { destinationAfterAuthentication } from '../services/profileSetup';
 import { formatMeetupDateTime } from '../services/meetupDateTime';
 import type { FeedPost } from '../types/feed';
 import type { HobbyMeetup } from '../types/meetup';
@@ -180,8 +181,8 @@ const Home: React.FC = () => {
     };
   }, [user]);
 
-  if (user?.profileComplete === false) {
-    return <Navigate to="/onboarding" replace />;
+  if (user && (user.nicknameSetupRequired === true || user.profileComplete === false)) {
+    return <Navigate to={destinationAfterAuthentication(user, '/')} replace />;
   }
 
   if (user) {

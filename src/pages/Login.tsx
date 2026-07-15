@@ -4,6 +4,7 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { authErrorPresentation, authService } from '../services/authService';
 import { returnToFromRouteState } from '../services/authNavigation';
+import { destinationAfterAuthentication } from '../services/profileSetup';
 import { setUser } from '../store/slices/authSlice';
 import { AppDispatch, RootState } from '../store/types';
 import AuthLayout from '../components/AuthLayout';
@@ -14,6 +15,7 @@ const Login: React.FC = () => {
   const location = useLocation();
   const dispatch = useDispatch<AppDispatch>();
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
+  const authenticatedUser = useSelector((state: RootState) => state.auth.user);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -21,10 +23,10 @@ const Login: React.FC = () => {
   const returnTo = useMemo(() => returnToFromRouteState(location.state), [location.state]);
 
   useEffect(() => {
-    if (isAuthenticated) {
-      navigate(returnTo, { replace: true });
+    if (isAuthenticated && authenticatedUser) {
+      navigate(destinationAfterAuthentication(authenticatedUser, returnTo), { replace: true });
     }
-  }, [isAuthenticated, navigate, returnTo]);
+  }, [authenticatedUser, isAuthenticated, navigate, returnTo]);
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -36,7 +38,7 @@ const Login: React.FC = () => {
       if (!user) throw new Error('사용자 정보를 받지 못했어.');
 
       dispatch(setUser(user));
-      navigate(returnTo, { replace: true });
+      navigate(destinationAfterAuthentication(user, returnTo), { replace: true });
     } catch (requestError) {
       setError(authErrorPresentation(
         requestError,

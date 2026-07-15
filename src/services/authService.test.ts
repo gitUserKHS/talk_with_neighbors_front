@@ -21,10 +21,12 @@ const user = {
 describe('cookie-backed authentication state', () => {
   const get = vi.mocked(api.get);
   const post = vi.mocked(api.post);
+  const put = vi.mocked(api.put);
 
   beforeEach(() => {
     get.mockReset();
     post.mockReset();
+    put.mockReset();
   });
 
   it('restores the signed-in user from /auth/me without a script-readable token', async () => {
@@ -108,6 +110,16 @@ describe('cookie-backed authentication state', () => {
     await expect(authService.checkUsernameDuplicate(' neighbor ')).resolves.toBe(true);
     expect(get).toHaveBeenCalledWith('/auth/check-duplicates', {
       params: { username: 'neighbor' },
+    });
+  });
+
+  it('updates only the nickname through the dedicated authenticated endpoint', async () => {
+    const updated = { ...user, username: 'dayun-neighbor', nicknameSetupRequired: false };
+    put.mockResolvedValueOnce({ data: updated });
+
+    await expect(authService.updateNickname('  dayun-neighbor  ')).resolves.toEqual(updated);
+    expect(put).toHaveBeenCalledWith('/auth/profile/nickname', {
+      nickname: 'dayun-neighbor',
     });
   });
 

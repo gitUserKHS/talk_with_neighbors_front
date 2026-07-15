@@ -5,6 +5,7 @@ import { useDispatch } from 'react-redux';
 import AuthLayout from '../components/AuthLayout';
 import { authService } from '../services/authService';
 import { sanitizeReturnTo } from '../services/authNavigation';
+import { destinationAfterAuthentication } from '../services/profileSetup';
 import { setUser } from '../store/slices/authSlice';
 import type { AppDispatch } from '../store/types';
 
@@ -40,7 +41,7 @@ const AuthCallback: React.FC = () => {
         if (!mounted) return;
         if (!user) throw new Error('세션 사용자 정보가 없어.');
         dispatch(setUser(user));
-        navigate(user.profileComplete === false ? '/onboarding' : returnTo, { replace: true });
+        navigate(destinationAfterAuthentication(user, returnTo), { replace: true });
       })
       .catch(() => {
         if (mounted) setError('로그인 세션을 확인하지 못했어. 다시 로그인해줘.');

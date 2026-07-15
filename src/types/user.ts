@@ -15,6 +15,7 @@ export interface User {
   latitude?: number;
   longitude?: number;
   interests?: string[];
+  nicknameSetupRequired?: boolean;
   profileComplete?: boolean;
   profileCompletion?: number;
   emailVerified?: boolean;

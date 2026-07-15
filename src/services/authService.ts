@@ -86,6 +86,8 @@ const normalizeEmailChallenge = (
 };
 
 const AUTH_ERROR_MESSAGES: Record<string, string> = {
+  NICKNAME_CHANGE_REQUIRED: '자동으로 만들어진 닉네임과 다른 이름을 정해줘.',
+  NICKNAME_INVALID: '닉네임은 공백 없이 2자 이상 30자 이하로 입력해줘.',
   INVALID_VERIFICATION_CODE: '인증번호가 맞지 않아. 다시 확인해줘.',
   EMAIL_VERIFICATION_CODE_INVALID_OR_EXPIRED: '인증번호가 맞지 않거나 만료됐어. 새 번호를 받아줘.',
   EMAIL_VERIFICATION_ATTEMPTS_EXHAUSTED: '인증번호를 너무 많이 틀렸어. 새 번호를 받아줘.',
@@ -211,6 +213,13 @@ class AuthService {
       params: { username: username.trim() },
     });
     return response.data.usernameExists;
+  }
+
+  async updateNickname(nickname: string): Promise<User> {
+    const response = await api.put<User>('/auth/profile/nickname', {
+      nickname: nickname.trim(),
+    });
+    return response.data;
   }
 
   async updateProfile(profileData: Partial<User>): Promise<User | null> {
