@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Alert, Box, Button, Chip, Container, FormControl, InputLabel, MenuItem,
   Paper, Select, Stack, Step, StepLabel, Stepper, TextField, Typography,
 } from '@mui/material';
 import { useDispatch, useSelector } from 'react-redux';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import LocationSelector from '../components/LocationSelector';
 import { authService } from '../services/authService';
+import { destinationAfterOnboarding } from '../services/profileSetup';
 import { setUser } from '../store/slices/authSlice';
 import { RootState, Location } from '../store/types';
 
@@ -16,7 +17,12 @@ const steps = ['기본 정보', '관심사', '우리 동네'];
 const Onboarding: React.FC = () => {
   const user = useSelector((state: RootState) => state.auth.user);
   const dispatch = useDispatch();
+  const routeLocation = useLocation();
   const navigate = useNavigate();
+  const returnTo = useMemo(
+    () => destinationAfterOnboarding(new URLSearchParams(routeLocation.search).get('returnTo')),
+    [routeLocation.search],
+  );
   const [step, setStep] = useState(0);
   const [age, setAge] = useState(user?.age?.toString() || '');
   const [gender, setGender] = useState(user?.gender || '');
@@ -58,7 +64,7 @@ const Onboarding: React.FC = () => {
         latitude: location.latitude, longitude: location.longitude, address: location.address,
       });
       dispatch(setUser(updated));
-      navigate('/matching', { replace: true });
+      navigate(returnTo, { replace: true });
     } catch {
       setError('프로필을 저장하지 못했어. 입력 내용을 확인해 줘.');
     } finally { setSaving(false); }

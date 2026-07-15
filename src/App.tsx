@@ -10,6 +10,12 @@ import { RootState } from './store/types';
 import { setUser } from './store/slices/authSlice';
 import { authService } from './services/authService';
 import { websocketService } from './services/websocketService';
+import {
+  NICKNAME_SETUP_PATH,
+  nicknameSetupDestination,
+  profileOnboardingDestination,
+  requiredProfileSetupPath,
+} from './services/profileSetup';
 import Navbar from './components/Navbar';
 import NotificationHandler from './components/notifications/NotificationHandler';
 import { getRouterBasename } from './routerBase';
@@ -28,6 +34,7 @@ const CreateChatRoom = React.lazy(() => import('./components/chat/CreateChatRoom
 const Profile = React.lazy(() => import('./pages/Profile'));
 const Notifications = React.lazy(() => import('./pages/Notifications'));
 const Onboarding = React.lazy(() => import('./pages/Onboarding'));
+const NicknameSetup = React.lazy(() => import('./pages/NicknameSetup'));
 
 const FullPageLoader = () => (
   <Box sx={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}>
@@ -44,19 +51,34 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (user && user.profileComplete === false && location.pathname !== '/onboarding') {
-    return <Navigate to="/onboarding" replace />;
+  const requiredSetup = requiredProfileSetupPath(user);
+  if (requiredSetup && location.pathname !== requiredSetup) {
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate
+      to={requiredSetup === NICKNAME_SETUP_PATH
+        ? nicknameSetupDestination(returnTo)
+        : profileOnboardingDestination(returnTo)}
+      replace
+    />;
   }
 
   return <>{children}</>;
 };
 
 const PublicReadableRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const location = useLocation();
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
   const user = useSelector((state: RootState) => state.auth.user);
 
-  if (isAuthenticated && user?.profileComplete === false) {
-    return <Navigate to="/onboarding" replace />;
+  const requiredSetup = requiredProfileSetupPath(user);
+  if (isAuthenticated && requiredSetup) {
+    const returnTo = `${location.pathname}${location.search}${location.hash}`;
+    return <Navigate
+      to={requiredSetup === NICKNAME_SETUP_PATH
+        ? nicknameSetupDestination(returnTo)
+        : profileOnboardingDestination(returnTo)}
+      replace
+    />;
   }
 
   const accessScope = isAuthenticated
@@ -100,7 +122,7 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
   }, [dispatch]);
 
   useEffect(() => {
-    if (user?.id) {
+    if (user?.id && user.nicknameSetupRequired !== true) {
       websocketService.setCurrentUserId(user.id);
       websocketService.initialize(user.id);
       return;
@@ -189,6 +211,10 @@ const AppContent: React.FC = () => (
           <Route
             path="/onboarding"
             element={<ProtectedRoute><Onboarding /></ProtectedRoute>}
+          />
+          <Route
+            path="/onboarding/nickname"
+            element={<ProtectedRoute><NicknameSetup /></ProtectedRoute>}
           />
           <Route
             path="/notifications"
