@@ -28,7 +28,6 @@ import HowToRegOutlinedIcon from '@mui/icons-material/HowToRegOutlined';
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import PeopleOutlineIcon from '@mui/icons-material/PeopleOutline';
 import SearchIcon from '@mui/icons-material/Search';
-import EventOutlinedIcon from '@mui/icons-material/EventOutlined';
 import VerifiedRoundedIcon from '@mui/icons-material/VerifiedRounded';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
@@ -38,7 +37,6 @@ import { meetupService } from '../services/meetupService';
 import { CreateHobbyMeetupRequest, HobbyMeetup } from '../types/meetup';
 import { RootState } from '../store/types';
 import MapLocationPicker from '../components/MapLocationPicker';
-import { formatMeetupDateTime, meetupDateTimeToLocalInput } from '../services/meetupDateTime';
 import {
   AccessScope,
   AccessScopedList,
@@ -56,9 +54,6 @@ const EMPTY_FORM: CreateHobbyMeetupRequest = {
   interestTags: [],
   location: '',
   maxParticipants: 6,
-  durationMinutes: 120,
-  scheduledAt: '',
-  registrationDeadline: '',
 };
 
 const toTags = (value: string) =>
@@ -209,12 +204,6 @@ const MeetupCard: React.FC<{
               </Box>
             </Stack>
           )}
-          {meetup.scheduledAt && (
-            <Stack direction="row" spacing={0.5} alignItems="center">
-              <EventOutlinedIcon fontSize="small" />
-              <Typography variant="body2">{formatMeetupDateTime(meetup.scheduledAt)}</Typography>
-            </Stack>
-          )}
         </Stack>
       </Stack>
     </CardContent>
@@ -355,8 +344,6 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
         location: form.location?.trim() || undefined,
         locationAddress: form.locationAddress?.trim() || undefined,
         kakaoPlaceId: form.kakaoPlaceId?.trim() || undefined,
-        scheduledAt: form.scheduledAt || undefined,
-        registrationDeadline: form.registrationDeadline || undefined,
         interestTags,
       };
       const meetup = editingMeetup
@@ -403,9 +390,6 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
         longitude: detail.longitude,
         kakaoPlaceId: detail.kakaoPlaceId,
         maxParticipants: detail.maxParticipants ?? Math.max(2, detail.participantCount),
-        scheduledAt: meetupDateTimeToLocalInput(detail.scheduledAt),
-        durationMinutes: detail.durationMinutes ?? 120,
-        registrationDeadline: meetupDateTimeToLocalInput(detail.registrationDeadline),
       });
       setCreateOpen(true);
     } catch (err: any) {
@@ -628,24 +612,32 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
                 required
                 fullWidth
               />
-              <MapLocationPicker
-                value={form.location || form.locationAddress ? {
-                  placeName: form.location ?? '',
-                  address: form.locationAddress,
-                  latitude: form.latitude,
-                  longitude: form.longitude,
-                  kakaoPlaceId: form.kakaoPlaceId,
-                } : null}
-                onChange={(selection) => setForm((current) => ({
-                  ...current,
-                  location: selection?.placeName ?? '',
-                  locationAddress: selection?.address,
-                  latitude: selection?.latitude,
-                  longitude: selection?.longitude,
-                  kakaoPlaceId: selection?.kakaoPlaceId,
-                }))}
-                disabled={creating}
-              />
+              <Box>
+                <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 0.75 }}>
+                  활동 지역 또는 대표 장소
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                  실제 만날 날짜·시간·장소는 모임을 만든 뒤 채팅방의 모임 달력에서 일정별로 정할 수 있어.
+                </Typography>
+                <MapLocationPicker
+                  value={form.location || form.locationAddress ? {
+                    placeName: form.location ?? '',
+                    address: form.locationAddress,
+                    latitude: form.latitude,
+                    longitude: form.longitude,
+                    kakaoPlaceId: form.kakaoPlaceId,
+                  } : null}
+                  onChange={(selection) => setForm((current) => ({
+                    ...current,
+                    location: selection?.placeName ?? '',
+                    locationAddress: selection?.address,
+                    latitude: selection?.latitude,
+                    longitude: selection?.longitude,
+                    kakaoPlaceId: selection?.kakaoPlaceId,
+                  }))}
+                  disabled={creating}
+                />
+              </Box>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
                   label="모집 인원"
@@ -657,33 +649,9 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
                   required
                 />
               </Stack>
-              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
-                <TextField
-                  label="모임 일정"
-                  type="datetime-local"
-                  value={form.scheduledAt || ''}
-                  onChange={(event) => setForm((current) => ({ ...current, scheduledAt: event.target.value }))}
-                  InputLabelProps={{ shrink: true }}
-                  fullWidth
-                />
-                <TextField
-                  label="예상 시간(분)"
-                  type="number"
-                  value={form.durationMinutes || 120}
-                  onChange={(event) => setForm((current) => ({ ...current, durationMinutes: Number(event.target.value) }))}
-                  inputProps={{ min: 30, max: 1440, step: 30 }}
-                  sx={{ width: { sm: 180 } }}
-                />
-              </Stack>
-              <TextField
-                label="신청 마감"
-                type="datetime-local"
-                value={form.registrationDeadline || ''}
-                onChange={(event) => setForm((current) => ({ ...current, registrationDeadline: event.target.value }))}
-                InputLabelProps={{ shrink: true }}
-                helperText="비워두면 모임 시작 전까지 신청할 수 있어."
-                fullWidth
-              />
+              <Alert severity="info">
+                일정은 채팅방의 <strong>모임 달력</strong> 한곳에서 만들고 수정해. 일정별 참석자도 함께 확인할 수 있어.
+              </Alert>
             </Stack>
           </DialogContent>
           <DialogActions>

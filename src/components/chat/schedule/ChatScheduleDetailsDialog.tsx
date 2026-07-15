@@ -62,7 +62,7 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
   const canRespond = !cancelled && !ended;
   const myStatus = currentUserScheduleStatus(schedule, currentUserId);
   const kakaoMapUrl = schedule.latitude !== undefined && schedule.longitude !== undefined
-    ? `https://map.kakao.com/link/map/${encodeURIComponent(schedule.location || schedule.locationAddress || '약속 장소')},${schedule.latitude},${schedule.longitude}`
+    ? `https://map.kakao.com/link/map/${encodeURIComponent(schedule.location || schedule.locationAddress || '일정 장소')},${schedule.latitude},${schedule.longitude}`
     : null;
 
   const confirmCancel = async () => {
@@ -71,7 +71,7 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
       await onCancel(schedule);
       setCancelOpen(false);
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || '약속을 취소하지 못했어.');
+      setError(err.response?.data?.message || err.message || '일정을 취소하지 못했어.');
       setCancelOpen(false);
     }
   };
@@ -88,7 +88,7 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
         aria-labelledby="chat-schedule-details-title"
       >
         <DialogTitle id="chat-schedule-details-title" sx={{ pr: 7 }}>
-          약속 상세
+          일정 상세
           <IconButton
             aria-label="닫기"
             onClick={onClose}
@@ -106,9 +106,9 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
                 <Chip
                   size="small"
                   color={cancelled ? 'default' : ended ? 'default' : 'primary'}
-                  label={cancelled ? '취소된 약속' : ended ? '지난 약속' : '다가오는 약속'}
+                  label={cancelled ? '취소된 일정' : ended ? '지난 일정' : '다가오는 일정'}
                 />
-                {isCreator && <Chip size="small" variant="outlined" label="내가 만든 약속" />}
+                {isCreator && <Chip size="small" variant="outlined" label="내가 만든 일정" />}
               </Stack>
               <Typography variant="h5" component="h2" sx={{ fontWeight: 900 }}>
                 {schedule.title}
@@ -195,7 +195,7 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
           {isCreator && !cancelled && !ended && (
             <>
               <Button color="error" onClick={() => setCancelOpen(true)} disabled={busy}>
-                약속 취소
+                일정 취소
               </Button>
               <Button startIcon={<EditOutlinedIcon />} onClick={() => onEdit(schedule)} disabled={busy}>
                 수정
@@ -208,16 +208,16 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
       </Dialog>
 
       <Dialog open={cancelOpen} onClose={() => !busy && setCancelOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>이 약속을 취소할까?</DialogTitle>
+        <DialogTitle>이 일정을 취소할까?</DialogTitle>
         <DialogContent>
           <Typography>
-            취소해도 채팅 카드와 참여 기록은 남고, 이웃들에게 취소된 약속으로 보여.
+            취소해도 일정과 참여 기록은 남고, 이웃들에게 취소된 일정으로 보여.
           </Typography>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCancelOpen(false)} disabled={busy}>돌아가기</Button>
           <Button color="error" variant="contained" onClick={() => void confirmCancel()} disabled={busy}>
-            {busy ? '취소하는 중…' : '약속 취소'}
+            {busy ? '취소하는 중…' : '일정 취소'}
           </Button>
         </DialogActions>
       </Dialog>

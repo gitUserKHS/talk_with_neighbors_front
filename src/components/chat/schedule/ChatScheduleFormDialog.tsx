@@ -61,15 +61,15 @@ const ChatScheduleFormDialog: React.FC<ChatScheduleFormDialogProps> = ({
   const handleSave = async () => {
     const title = values.title.trim();
     if (title.length < 2) {
-      setError('약속 이름은 두 글자 이상 입력해줘.');
+      setError('일정 이름은 두 글자 이상 입력해줘.');
       return;
     }
     if (!values.startsAt || Number.isNaN(new Date(values.startsAt).getTime())) {
-      setError('약속 날짜와 시간을 확인해줘.');
+      setError('일정 날짜와 시간을 확인해줘.');
       return;
     }
     if (new Date(values.startsAt).getTime() <= Date.now()) {
-      setError('약속 시간은 지금보다 이후로 정해줘.');
+      setError('일정 시간은 지금보다 이후로 정해줘.');
       return;
     }
     if (values.durationMinutes < 30 || values.durationMinutes > 1440) {
@@ -102,7 +102,7 @@ const ChatScheduleFormDialog: React.FC<ChatScheduleFormDialogProps> = ({
       aria-labelledby="chat-schedule-form-title"
     >
       <DialogTitle id="chat-schedule-form-title" sx={{ pr: 7 }}>
-        {schedule ? '약속 수정하기' : '새 약속 만들기'}
+        {schedule ? '일정 수정하기' : '새 일정 만들기'}
         <IconButton
           aria-label="닫기"
           onClick={onClose}
@@ -116,7 +116,7 @@ const ChatScheduleFormDialog: React.FC<ChatScheduleFormDialogProps> = ({
         <Stack spacing={2.25} sx={{ pt: 0.5 }}>
           {error && <Alert severity="error">{error}</Alert>}
           <TextField
-            label="약속 이름"
+            label="일정 이름"
             value={values.title}
             onChange={(event) => setValues((current) => ({ ...current, title: event.target.value }))}
             inputProps={{ maxLength: 80 }}
@@ -185,7 +185,7 @@ const ChatScheduleFormDialog: React.FC<ChatScheduleFormDialogProps> = ({
       <DialogActions sx={{ px: 2, py: 1.5, pb: 'max(12px, env(safe-area-inset-bottom))' }}>
         <Button onClick={onClose} disabled={saving}>닫기</Button>
         <Button variant="contained" onClick={handleSave} disabled={saving}>
-          {saving ? '저장하는 중…' : schedule ? '수정하기' : '약속 만들기'}
+          {saving ? '저장하는 중…' : schedule ? '수정하기' : '일정 만들기'}
         </Button>
       </DialogActions>
     </Dialog>
