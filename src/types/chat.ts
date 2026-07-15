@@ -1,6 +1,7 @@
 import { User } from './user';
+import type { ChatSchedule } from './chatSchedule';
 
-export type MessageType = 'ENTER' | 'LEAVE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'SYSTEM';
+export type MessageType = 'ENTER' | 'LEAVE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'SYSTEM' | 'SCHEDULE';
 export type ChatAttachmentType = 'IMAGE' | 'VIDEO' | 'FILE';
 
 export interface ChatAttachment {
@@ -55,6 +56,7 @@ export interface Message {
   isDeleted: boolean;
   readByUsers: number[];
   attachments?: ChatAttachment[];
+  schedule?: ChatSchedule;
 }
 
 export interface ChatMessageDto {
@@ -72,6 +74,7 @@ export interface ChatMessageDto {
   isDeleted?: boolean;
   readByUsers?: number[];
   attachments?: ChatAttachment[];
+  schedule?: ChatSchedule;
 }
 
 export interface MessageDto {
@@ -88,6 +91,7 @@ export interface MessageDto {
   isDeleted: boolean;
   readByUsers: number[];
   attachments?: ChatAttachment[];
+  schedule?: ChatSchedule;
 }
 
 export interface WebSocketMessage {
@@ -97,6 +101,7 @@ export interface WebSocketMessage {
   senderId: number;
   senderName: string;
   isRead?: boolean;
+  schedule?: ChatSchedule;
 }
 
 export interface WebSocketResponse {
@@ -114,6 +119,7 @@ export interface WebSocketResponse {
   isDeleted?: boolean;
   readByUsers?: number[];
   attachments?: ChatAttachment[];
+  schedule?: ChatSchedule;
 }
 
 export interface CreateRoomRequest {

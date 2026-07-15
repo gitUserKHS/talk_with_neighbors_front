@@ -5,6 +5,7 @@ import { websocketService } from './websocketService';
 import { store } from '../store';
 import axios, { AxiosError, AxiosProgressEvent } from 'axios';
 import { setUser } from '../store/slices/authSlice';
+import { normalizeChatSchedule } from './chatScheduleService';
 
 export interface CreateChatRoomDto {
   title: string;
@@ -47,6 +48,7 @@ const convertToChatMessageDto = (message: Message | WebSocketResponse): ChatMess
     isDeleted: msg.isDeleted,
     readByUsers: msg.readByUsers,
     attachments: msg.attachments ?? [],
+    schedule: msg.schedule ? normalizeChatSchedule(msg.schedule) : undefined,
   };
 };
 

@@ -1,7 +1,8 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
   Avatar,
+  Badge,
   Box,
   Button,
   Chip,
@@ -28,6 +29,8 @@ import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
 import MovieOutlinedIcon from '@mui/icons-material/MovieOutlined';
 import SendIcon from '@mui/icons-material/Send';
+import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined';
+import EventAvailableOutlinedIcon from '@mui/icons-material/EventAvailableOutlined';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { chatService } from '../../services/chatService';
@@ -42,6 +45,25 @@ import {
 import { RootState } from '../../store/types';
 import { meetupService } from '../../services/meetupService';
 import { mergeChatMessage } from '../../services/chatMessageState';
+import { chatScheduleService, normalizeChatSchedule } from '../../services/chatScheduleService';
+import {
+  browserTimeZone,
+  isUpcomingChatSchedule,
+  localDateTimeToUtcIso,
+  sortChatSchedules,
+} from '../../services/chatScheduleDateTime';
+import { upsertChatSchedule } from '../../services/chatScheduleState';
+import {
+  ChatSchedule,
+  ChatScheduleFormValues,
+  ChatScheduleRsvpStatus,
+  CreateChatScheduleRequest,
+} from '../../types/chatSchedule';
+import ChatScheduleCard from './schedule/ChatScheduleCard';
+import ChatScheduleDetailsDialog from './schedule/ChatScheduleDetailsDialog';
+import ChatScheduleFormDialog from './schedule/ChatScheduleFormDialog';
+import ChatScheduleListDialog from './schedule/ChatScheduleListDialog';
+import ChatScheduleUpcomingBar from './schedule/ChatScheduleUpcomingBar';
 
 const MAX_ATTACHMENT_COUNT = 5;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -99,6 +121,7 @@ const toChatMessage = (message: WebSocketResponse): ChatMessageDto => ({
   isDeleted: message.isDeleted,
   readByUsers: message.readByUsers,
   attachments: message.attachments ?? [],
+  schedule: message.schedule ? normalizeChatSchedule(message.schedule) : undefined,
 });
 
 const extensionOf = (name: string) => {
@@ -130,9 +153,33 @@ const ChatRoom: React.FC = () => {
   const [editingContent, setEditingContent] = useState('');
   const [mutatingMessageId, setMutatingMessageId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<ChatMessageDto | null>(null);
+  const [schedules, setSchedules] = useState<ChatSchedule[]>([]);
+  const [scheduleListOpen, setScheduleListOpen] = useState(false);
+  const [scheduleFormOpen, setScheduleFormOpen] = useState(false);
+  const [editingSchedule, setEditingSchedule] = useState<ChatSchedule | null>(null);
+  const [detailScheduleId, setDetailScheduleId] = useState<string | null>(null);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [busyScheduleId, setBusyScheduleId] = useState<string | null>(null);
+  const [scheduleClock, setScheduleClock] = useState(() => Date.now());
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingRef = useRef<PendingAttachment[]>([]);
+  const detailSchedule = useMemo(
+    () => schedules.find((schedule) => schedule.id === detailScheduleId) ?? null,
+    [detailScheduleId, schedules],
+  );
+  const upcomingSchedules = useMemo(
+    () => sortChatSchedules(schedules.filter(
+      (schedule) => isUpcomingChatSchedule(schedule, new Date(scheduleClock)),
+    )),
+    [scheduleClock, schedules],
+  );
+
+  const refreshSchedules = useCallback(async () => {
+    if (!roomId) return;
+    const loadedSchedules = await chatScheduleService.getSchedules(roomId);
+    setSchedules(loadedSchedules);
+  }, [roomId]);
 
   useEffect(() => {
     pendingRef.current = pendingAttachments;
@@ -143,17 +190,39 @@ const ChatRoom: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    const timer = window.setInterval(() => setScheduleClock(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     if (!roomId) return;
     const loadRoom = async () => {
       setLoading(true);
       setError(null);
+      setSchedules([]);
+      setScheduleListOpen(false);
+      setScheduleFormOpen(false);
+      setEditingSchedule(null);
+      setDetailScheduleId(null);
       try {
         const [roomData, messagePage] = await Promise.all([
           chatService.getRoom(roomId),
           chatService.getMessages(roomId, 0, 50),
         ]);
         setRoom(roomData);
-        setMessages([...messagePage.content].reverse());
+        const orderedMessages = [...messagePage.content].reverse();
+        setMessages(orderedMessages);
+        if (roomData.publicRoom) {
+          try {
+            const loadedSchedules = await chatScheduleService.getSchedules(roomId);
+            const schedulesFromMessages = orderedMessages
+              .map((message) => message.schedule)
+              .filter((schedule): schedule is ChatSchedule => Boolean(schedule));
+            setSchedules(schedulesFromMessages.reduce(upsertChatSchedule, loadedSchedules));
+          } catch (scheduleError: any) {
+            setError(scheduleError.response?.data?.message || '채팅방 약속을 불러오지 못했어.');
+          }
+        }
         chatService.markMessagesAsRead(roomId).catch(() => undefined);
       } catch {
         setError('채팅방을 불러오지 못했어. 잠시 후 다시 시도해줘.');
@@ -165,17 +234,35 @@ const ChatRoom: React.FC = () => {
   }, [roomId]);
 
   useEffect(() => {
-    if (!roomId || !websocketService.getIsConnected()) return;
-    websocketService.subscribeToRoom(roomId, (message) => {
+    if (!roomId) return;
+    const handleRoomMessage = (message: WebSocketResponse) => {
       const incoming = toChatMessage(message);
       setMessages((current) => mergeChatMessage(current, incoming));
+      if (incoming.type === 'SCHEDULE') {
+        if (incoming.schedule) {
+          setSchedules((current) => upsertChatSchedule(current, incoming.schedule!));
+        } else if (room?.publicRoom) {
+          void refreshSchedules().catch(() => undefined);
+        }
+      }
       if (incoming.isDeleted) {
         setEditingMessageId((current) => current === incoming.id ? null : current);
         setDeleteTarget((current) => current?.id === incoming.id ? null : current);
       }
+    };
+    const unsubscribeConnectionState = websocketService.registerConnectionStateChangeCallback((connected) => {
+      if (!connected) return;
+      // STOMP subscriptions are tied to one connection. Remove a stale entry
+      // before subscribing after the initial async connect or a reconnect.
+      websocketService.unsubscribeFromRoom(roomId);
+      websocketService.subscribeToRoom(roomId, handleRoomMessage);
     });
-    return () => websocketService.unsubscribeFromRoom(roomId);
-  }, [roomId]);
+
+    return () => {
+      unsubscribeConnectionState();
+      websocketService.unsubscribeFromRoom(roomId);
+    };
+  }, [refreshSchedules, room?.publicRoom, roomId]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -361,36 +448,193 @@ const ChatRoom: React.FC = () => {
     }
   };
 
+  const openScheduleCreate = () => {
+    setScheduleListOpen(false);
+    setDetailScheduleId(null);
+    setEditingSchedule(null);
+    setScheduleFormOpen(true);
+  };
+
+  const openScheduleDetails = (schedule: ChatSchedule) => {
+    if (!roomId) return;
+    setScheduleListOpen(false);
+    setDetailScheduleId(schedule.id);
+    setBusyScheduleId(schedule.id);
+    void chatScheduleService.getSchedule(roomId, schedule.id)
+      .then((latest) => setSchedules((current) => upsertChatSchedule(current, latest)))
+      .catch((err: any) => {
+        setError(err.response?.data?.message || '약속 상세를 불러오지 못했어.');
+      })
+      .finally(() => setBusyScheduleId(null));
+  };
+
+  const editChatSchedule = (schedule: ChatSchedule) => {
+    setDetailScheduleId(null);
+    setEditingSchedule(schedule);
+    setScheduleFormOpen(true);
+  };
+
+  const saveChatSchedule = async (values: ChatScheduleFormValues) => {
+    if (!roomId) return;
+    const request: CreateChatScheduleRequest = {
+      title: values.title,
+      // PATCH treats an explicit empty string as "remove the old description".
+      description: values.description,
+      startsAt: localDateTimeToUtcIso(values.startsAt),
+      durationMinutes: values.durationMinutes,
+      // The datetime-local control is interpreted in this browser's zone.
+      // Send the same zone on both create and edit so the saved display agrees.
+      timeZone: browserTimeZone(),
+      location: values.location || undefined,
+      locationAddress: values.locationAddress,
+      latitude: values.latitude,
+      longitude: values.longitude,
+      kakaoPlaceId: values.kakaoPlaceId,
+    };
+
+    setScheduleSaving(true);
+    try {
+      const saved = editingSchedule
+        ? await chatScheduleService.updateSchedule(roomId, editingSchedule.id, {
+          ...request,
+          version: editingSchedule.version,
+        })
+        : await chatScheduleService.createSchedule(roomId, request);
+      setSchedules((current) => upsertChatSchedule(current, saved));
+      setScheduleFormOpen(false);
+      setEditingSchedule(null);
+      setDetailScheduleId(saved.id);
+    } finally {
+      setScheduleSaving(false);
+    }
+  };
+
+  const updateScheduleRsvp = async (
+    schedule: ChatSchedule,
+    status: ChatScheduleRsvpStatus,
+  ) => {
+    if (!roomId || busyScheduleId) return;
+    setBusyScheduleId(schedule.id);
+    setError(null);
+    try {
+      const updated = await chatScheduleService.updateRsvp(roomId, schedule.id, status);
+      setSchedules((current) => upsertChatSchedule(current, updated));
+    } catch (err: any) {
+      setError(err.response?.data?.message || '참석 여부를 바꾸지 못했어.');
+    } finally {
+      setBusyScheduleId(null);
+    }
+  };
+
+  const cancelChatSchedule = async (schedule: ChatSchedule) => {
+    if (!roomId || busyScheduleId) return;
+    setBusyScheduleId(schedule.id);
+    try {
+      const cancelled = await chatScheduleService.cancelSchedule(roomId, schedule.id, schedule.version);
+      setSchedules((current) => upsertChatSchedule(current, cancelled));
+    } finally {
+      setBusyScheduleId(null);
+    }
+  };
+
   if (loading) {
-    return <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 'calc(100vh - 64px)' }}><CircularProgress /></Box>;
+    return <Box sx={{ display: 'grid', placeItems: 'center', minHeight: 'calc(100dvh - 72px)' }}><CircularProgress /></Box>;
   }
 
   return (
-    <Container maxWidth="md" sx={{ py: 0, height: 'calc(100vh - 64px)' }}>
-      <Paper variant="outlined" sx={{ height: '100%', display: 'grid', gridTemplateRows: 'auto 1fr auto', borderRadius: 0, overflow: 'hidden' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
-          <IconButton aria-label="채팅 목록으로" onClick={() => navigate('/chat')}><ArrowBackIcon /></IconButton>
-          <Avatar>{room?.roomName?.[0] || '채'}</Avatar>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="subtitle1" sx={{ fontWeight: 800 }} noWrap>{room?.roomName || '채팅방'}</Typography>
-            <Typography variant="caption" color="text.secondary">{room?.participantCount || 0}명 참여 중</Typography>
+    <Container
+      maxWidth="md"
+      disableGutters
+      sx={{
+        py: 0,
+        height: {
+          xs: 'calc(100dvh - 120px - env(safe-area-inset-bottom))',
+          sm: 'calc(100dvh - 72px)',
+        },
+      }}
+    >
+      <Paper variant="outlined" sx={{ height: '100%', display: 'grid', gridTemplateRows: 'auto minmax(0, 1fr) auto', borderRadius: 0, overflow: 'hidden' }}>
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, p: 1.5, borderBottom: 1, borderColor: 'divider' }}>
+            <IconButton aria-label="채팅 목록으로" onClick={() => navigate('/chat')}><ArrowBackIcon /></IconButton>
+            <Avatar>{room?.roomName?.[0] || '채'}</Avatar>
+            <Box sx={{ minWidth: 0, flexGrow: 1 }}>
+              <Typography variant="subtitle1" sx={{ fontWeight: 800 }} noWrap>{room?.roomName || '채팅방'}</Typography>
+              <Typography variant="caption" color="text.secondary">{room?.participantCount || 0}명 참여 중</Typography>
+              {room?.publicRoom && (
+                <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.5, display: { xs: 'none', sm: 'flex' } }}>
+                  {(room.interestTags ?? []).map((tag) => <Chip key={tag} label={tag} size="small" variant="outlined" />)}
+                </Stack>
+              )}
+            </Box>
             {room?.publicRoom && (
-              <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ mt: 0.5 }}>
-                {(room.interestTags ?? []).map((tag) => <Chip key={tag} label={tag} size="small" variant="outlined" />)}
+              <Stack direction="row" spacing={0.25} sx={{ flexShrink: 0 }}>
+                <Tooltip title="채팅방 약속">
+                  <IconButton aria-label="채팅방 약속 보기" onClick={() => setScheduleListOpen(true)}>
+                    <Badge badgeContent={upcomingSchedules.length} color="primary" max={9}>
+                      <CalendarMonthOutlinedIcon />
+                    </Badge>
+                  </IconButton>
+                </Tooltip>
+                <Tooltip title="모임 나가기">
+                  <IconButton aria-label="모임 나가기" onClick={() => setLeaveDialogOpen(true)}><ExitToAppIcon /></IconButton>
+                </Tooltip>
               </Stack>
             )}
           </Box>
-          {room?.publicRoom && (
-            <Tooltip title="모임 나가기">
-              <IconButton aria-label="모임 나가기" onClick={() => setLeaveDialogOpen(true)} sx={{ ml: 'auto' }}><ExitToAppIcon /></IconButton>
-            </Tooltip>
+          {room?.publicRoom && upcomingSchedules[0] && (
+            <ChatScheduleUpcomingBar
+              schedule={upcomingSchedules[0]}
+              remainingCount={Math.max(0, upcomingSchedules.length - 1)}
+              onOpen={openScheduleDetails}
+            />
           )}
         </Box>
 
         <Box sx={{ overflowY: 'auto', p: 2, bgcolor: 'grey.50' }}>
           {error && <Alert severity="error" onClose={() => setError(null)} sx={{ mb: 2 }}>{error}</Alert>}
           <Stack spacing={1.5}>
+            {messages.length === 0 && room?.publicRoom && (
+              <Box sx={{ py: 5, textAlign: 'center', color: 'text.secondary' }}>
+                <EventAvailableOutlinedIcon sx={{ fontSize: 40, mb: 1 }} />
+                <Typography fontWeight={800}>아직 대화가 없어.</Typography>
+                <Typography variant="body2" sx={{ mb: 2 }}>첫 메시지와 함께 약속을 만들어볼까?</Typography>
+                <Button variant="outlined" startIcon={<CalendarMonthOutlinedIcon />} onClick={openScheduleCreate}>
+                  약속 만들기
+                </Button>
+              </Box>
+            )}
             {messages.map((message) => {
+              if (message.type === 'SCHEDULE') {
+                const embeddedSchedule = message.schedule;
+                const latestSchedule = embeddedSchedule
+                  ? schedules.find((schedule) => schedule.id === embeddedSchedule.id)
+                  : null;
+                const schedule = latestSchedule
+                  && latestSchedule.version >= (embeddedSchedule?.version ?? 0)
+                  ? latestSchedule
+                  : embeddedSchedule;
+                return (
+                  <Box key={message.id} sx={{ display: 'flex', justifyContent: 'center', width: '100%' }}>
+                    {schedule ? (
+                      <ChatScheduleCard
+                        schedule={schedule}
+                        currentUserId={currentUser?.id}
+                        busy={busyScheduleId === schedule.id}
+                        onOpen={openScheduleDetails}
+                        onRsvp={(target, status) => void updateScheduleRsvp(target, status)}
+                      />
+                    ) : (
+                      <Paper variant="outlined" sx={{ width: '100%', maxWidth: 440, p: 2, textAlign: 'center' }}>
+                        <Typography color="text.secondary">약속 정보를 불러오는 중이야.</Typography>
+                        <Button size="small" onClick={() => void refreshSchedules()} sx={{ mt: 0.5 }}>
+                          다시 불러오기
+                        </Button>
+                      </Paper>
+                    )}
+                  </Box>
+                );
+              }
               const isMine = String(message.senderId) === String(currentUser?.id);
               const isEditing = editingMessageId === message.id;
               const isMutating = mutatingMessageId === message.id;
@@ -470,6 +714,21 @@ const ChatRoom: React.FC = () => {
             <Tooltip title="사진·동영상·파일 첨부 (최대 5개)">
               <span><IconButton aria-label="파일 첨부" disabled={sending || pendingAttachments.length >= MAX_ATTACHMENT_COUNT} onClick={() => fileInputRef.current?.click()}><AttachFileIcon /></IconButton></span>
             </Tooltip>
+            {room?.publicRoom && (
+              <Tooltip title="채팅방 약속 만들기">
+                <span>
+                  <IconButton
+                    type="button"
+                    aria-label="약속 만들기"
+                    color="primary"
+                    disabled={sending}
+                    onClick={openScheduleCreate}
+                  >
+                    <EventAvailableOutlinedIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            )}
             <TextField
               value={newMessage}
               onChange={(event) => setNewMessage(event.target.value)}
@@ -490,6 +749,42 @@ const ChatRoom: React.FC = () => {
           </Stack>
         </Box>
       </Paper>
+
+      {room?.publicRoom && (
+        <>
+          <ChatScheduleListDialog
+            open={scheduleListOpen}
+            schedules={schedules}
+            now={scheduleClock}
+            currentUserId={currentUser?.id}
+            busyScheduleId={busyScheduleId}
+            onClose={() => setScheduleListOpen(false)}
+            onCreate={openScheduleCreate}
+            onOpen={openScheduleDetails}
+            onRsvp={(schedule, status) => void updateScheduleRsvp(schedule, status)}
+          />
+          <ChatScheduleFormDialog
+            open={scheduleFormOpen}
+            schedule={editingSchedule}
+            saving={scheduleSaving}
+            onClose={() => {
+              if (scheduleSaving) return;
+              setScheduleFormOpen(false);
+              setEditingSchedule(null);
+            }}
+            onSave={saveChatSchedule}
+          />
+          <ChatScheduleDetailsDialog
+            schedule={detailSchedule}
+            currentUserId={currentUser?.id}
+            busy={Boolean(detailSchedule && busyScheduleId === detailSchedule.id)}
+            onClose={() => setDetailScheduleId(null)}
+            onEdit={editChatSchedule}
+            onCancel={cancelChatSchedule}
+            onRsvp={updateScheduleRsvp}
+          />
+        </>
+      )}
 
       <Dialog open={leaveDialogOpen} onClose={() => !leaving && setLeaveDialogOpen(false)}>
         <DialogTitle>모임에서 나갈까?</DialogTitle>

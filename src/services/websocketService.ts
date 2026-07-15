@@ -62,14 +62,19 @@ class WebSocketService {
       },
       onDisconnect: () => {
         this.isConnected = false;
+        this.roomSubscriptions.clear();
         this.emitConnectionState(false);
       },
       onStompError: () => {
         this.isConnected = false;
+        this.roomSubscriptions.clear();
         this.emitConnectionState(false);
       },
       onWebSocketClose: () => {
         this.isConnected = false;
+        // A STOMP subscription belongs to the socket that created it. Keeping
+        // the old handles would prevent ChatRoom from subscribing after retry.
+        this.roomSubscriptions.clear();
         this.emitConnectionState(false);
       },
     });
