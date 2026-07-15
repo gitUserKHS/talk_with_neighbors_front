@@ -8,7 +8,6 @@ import {
   CardActions,
   CardContent,
   CardHeader,
-  CardMedia,
   Chip,
   CircularProgress,
   Container,
@@ -455,15 +454,8 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                   </IconButton>
                 ) : undefined}
               />
-              {post.media?.length ? (
+              {post.media?.length || post.imageUrl?.trim() ? (
                 <PostMediaCarousel post={post} />
-              ) : post.imageUrl?.trim() ? (
-                <CardMedia
-                  component="img"
-                  image={post.imageUrl}
-                  alt={post.caption || '피드 이미지'}
-                  sx={{ aspectRatio: '1 / 1', objectFit: 'cover', bgcolor: 'grey.100' }}
-                />
               ) : (
                 <Box
                   role="img"

@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Box, Chip, IconButton, Stack } from '@mui/material';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import { FeedMedia, FeedPost } from '../../types/feed';
+import PostMediaLightbox from './PostMediaLightbox';
 
 interface PostMediaCarouselProps {
   post: FeedPost;
@@ -17,11 +19,17 @@ const PostMediaCarousel: React.FC<PostMediaCarouselProps> = ({ post }) => {
       ? [{ url: post.imageUrl, type: 'IMAGE', sortOrder: 0 }]
       : [];
   }, [post.imageUrl, post.media]);
+  const mediaSignature = useMemo(
+    () => media.map((item) => `${item.type}:${item.sortOrder}:${item.url}`).join('|'),
+    [media],
+  );
   const [activeIndex, setActiveIndex] = useState(0);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [post.id, media.length]);
+    setLightboxOpen(false);
+  }, [post.id, mediaSignature]);
 
   if (media.length === 0) {
     return null;
@@ -32,26 +40,57 @@ const PostMediaCarousel: React.FC<PostMediaCarouselProps> = ({ post }) => {
 
   return (
     <Box sx={{ position: 'relative', bgcolor: active.type === 'VIDEO' ? 'black' : 'grey.100' }}>
-      {active.type === 'VIDEO' ? (
-        <Box
-          component="video"
-          key={active.url}
-          src={active.url}
-          poster={active.thumbnailUrl}
-          controls
-          playsInline
-          preload="metadata"
-          sx={{ display: 'block', width: '100%', aspectRatio: '1 / 1', objectFit: 'contain' }}
-        />
-      ) : (
-        <Box
-          component="img"
-          src={active.url}
-          alt={post.caption || '게시글 사진'}
-          loading="lazy"
-          sx={{ display: 'block', width: '100%', aspectRatio: '1 / 1', objectFit: 'cover' }}
-        />
-      )}
+      <Box
+        component="button"
+        type="button"
+        aria-label={`${active.type === 'VIDEO' ? '동영상' : '사진'} 원본 비율로 크게 보기`}
+        aria-haspopup="dialog"
+        onClick={() => setLightboxOpen(true)}
+        sx={mediaOpenerSx}
+      >
+        {active.type === 'VIDEO' ? (
+          <>
+            <Box
+              component="video"
+              key={active.url}
+              src={active.url}
+              poster={active.thumbnailUrl}
+              muted
+              playsInline
+              preload="metadata"
+              aria-hidden="true"
+              sx={{
+                display: 'block',
+                width: '100%',
+                aspectRatio: '1 / 1',
+                objectFit: 'cover',
+                pointerEvents: 'none',
+              }}
+            />
+            <PlayCircleOutlineIcon
+              aria-hidden="true"
+              sx={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                color: 'common.white',
+                fontSize: 64,
+                filter: 'drop-shadow(0 2px 5px rgba(0,0,0,.55))',
+              }}
+            />
+          </>
+        ) : (
+          <Box
+            component="img"
+            src={active.url}
+            alt={post.caption || '게시글 사진'}
+            loading="lazy"
+            draggable={false}
+            sx={{ display: 'block', width: '100%', aspectRatio: '1 / 1', objectFit: 'cover' }}
+          />
+        )}
+      </Box>
 
       {hasMultiple && (
         <>
@@ -91,22 +130,48 @@ const PostMediaCarousel: React.FC<PostMediaCarouselProps> = ({ post }) => {
                 type="button"
                 key={`${item.url}-${index}`}
                 aria-label={`${index + 1}번째 미디어 보기`}
+                aria-current={index === activeIndex ? 'true' : undefined}
                 onClick={() => setActiveIndex(index)}
                 sx={{
-                  width: 8,
-                  height: 8,
+                  position: 'relative',
+                  width: 40,
+                  height: 40,
                   p: 0,
                   border: 0,
-                  borderRadius: '50%',
+                  borderRadius: 1,
                   cursor: 'pointer',
-                  bgcolor: index === activeIndex ? 'common.white' : 'rgba(255,255,255,0.5)',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.35)',
+                  bgcolor: 'transparent',
+                  '&::before': {
+                    content: '\"\"',
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    width: 8,
+                    height: 8,
+                    transform: 'translate(-50%, -50%)',
+                    borderRadius: '50%',
+                    bgcolor: index === activeIndex ? 'common.white' : 'rgba(255,255,255,0.5)',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.35)',
+                  },
+                  '&:focus-visible': {
+                    outline: '2px solid white',
+                    outlineOffset: -4,
+                  },
                 }}
               />
             ))}
           </Stack>
         </>
       )}
+
+      <PostMediaLightbox
+        open={lightboxOpen}
+        media={media}
+        activeIndex={activeIndex}
+        alt={post.caption || '게시글 사진'}
+        onClose={() => setLightboxOpen(false)}
+        onIndexChange={setActiveIndex}
+      />
     </Box>
   );
 };
@@ -115,10 +180,28 @@ const navigationButtonSx = (side: 'left' | 'right') => ({
   position: 'absolute',
   top: '50%',
   [side]: 10,
+  width: 44,
+  height: 44,
   transform: 'translateY(-50%)',
   color: 'common.white',
   bgcolor: 'rgba(0, 0, 0, 0.36)',
   '&:hover': { bgcolor: 'rgba(0, 0, 0, 0.58)' },
 });
+
+const mediaOpenerSx = {
+  position: 'relative',
+  display: 'block',
+  width: '100%',
+  p: 0,
+  border: 0,
+  bgcolor: 'transparent',
+  cursor: 'zoom-in',
+  lineHeight: 0,
+  '&:focus-visible': {
+    outline: '3px solid',
+    outlineColor: 'primary.main',
+    outlineOffset: -3,
+  },
+};
 
 export default PostMediaCarousel;
