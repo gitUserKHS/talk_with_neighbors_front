@@ -19,6 +19,7 @@ RUN npm run build
 FROM nginx:1.30-alpine-slim@sha256:d5b51cfc7d55fc7a7bcf4d1d577b9c3738331df56d68f0b1d8ac9795b9470a5a
 RUN apk upgrade --no-cache
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
+COPY deploy/security-headers.conf /etc/nginx/security-headers.inc
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80
