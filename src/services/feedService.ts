@@ -9,8 +9,9 @@ import {
 import type { AxiosProgressEvent } from 'axios';
 import { resolveMediaUrl } from './mediaUrl';
 import { translate } from '../i18n/I18nProvider';
+import type { FeedDiscoveryMode } from './feedDiscovery';
 
-interface PageResponse<T> {
+export interface PageResponse<T> {
   content: T[];
   totalPages: number;
   totalElements: number;
@@ -19,6 +20,10 @@ interface PageResponse<T> {
 }
 
 export type FeedAccess = 'authenticated' | 'public';
+
+export interface FeedQueryOptions {
+  mode?: FeedDiscoveryMode;
+}
 
 export interface PublicFeedMediaDto {
   url: string;
@@ -120,17 +125,18 @@ export const feedService = {
     page = 0,
     size = 20,
     access: FeedAccess = 'authenticated',
+    options: FeedQueryOptions = {},
   ): Promise<PageResponse<FeedPost>> {
     if (access === 'public') {
       const response = await api.get<PageResponse<PublicFeedPostDto> | PublicFeedPostDto[]>(
         '/public/feed',
-        { params: { page, size } },
+        { params: { page, size, ...(options.mode ? { mode: options.mode } : {}) } },
       );
       return mapPage(response.data, page, mapPublicFeedPost);
     }
 
     const response = await api.get<PageResponse<FeedPost> | FeedPost[]>('/feed', {
-      params: { page, size },
+      params: { page, size, ...(options.mode ? { mode: options.mode } : {}) },
     });
     return mapPage(response.data, page, mapAuthenticatedPost);
   },

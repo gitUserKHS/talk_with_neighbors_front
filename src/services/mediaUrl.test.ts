@@ -7,7 +7,7 @@ describe('resolveMediaUrl', () => {
       resolveMediaUrl(
         '/uploads/feed/photo.jpg?version=2',
         'https://api.example.com/api',
-        'https://portfolio.github.io',
+        'https://frontend.example.com',
       ),
     ).toBe('https://api.example.com/uploads/feed/photo.jpg?version=2');
 
@@ -15,7 +15,7 @@ describe('resolveMediaUrl', () => {
       resolveMediaUrl(
         'uploads/avatars/neighbor.webp',
         'https://api.example.com/api/',
-        'https://portfolio.github.io',
+        'https://frontend.example.com',
       ),
     ).toBe('https://api.example.com/uploads/avatars/neighbor.webp');
   });
@@ -24,7 +24,7 @@ describe('resolveMediaUrl', () => {
     const values = [
       'https://cdn.example.com/photo.jpg',
       'data:image/png;base64,abc',
-      'blob:https://portfolio.github.io/asset',
+      'blob:https://frontend.example.com/asset',
       '/images/static-logo.png',
     ];
 

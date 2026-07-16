@@ -7,6 +7,7 @@ import {
   Button,
   Divider,
   IconButton,
+  ListItemIcon,
   ListItemText,
   Menu,
   MenuItem,
@@ -21,7 +22,9 @@ import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
+import LocationOnRoundedIcon from '@mui/icons-material/LocationOnRounded';
 import NotificationsNoneRoundedIcon from '@mui/icons-material/NotificationsNoneRounded';
+import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
 import TravelExploreRoundedIcon from '@mui/icons-material/TravelExploreRounded';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -32,6 +35,7 @@ import notificationService, { InboxNotification } from '../services/notification
 import { resolveMediaUrl } from '../services/mediaUrl';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useI18n } from '../i18n/I18nProvider';
+import SignOutDialog from './auth/SignOutDialog';
 
 interface NavigationItem {
   label: string;
@@ -45,7 +49,11 @@ const Navbar: React.FC = () => {
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
   const { t } = useI18n();
-  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const [notificationAnchor, setNotificationAnchor] = useState<HTMLElement | null>(null);
+  const [accountAnchor, setAccountAnchor] = useState<HTMLElement | null>(null);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
+  const [logoutBusy, setLogoutBusy] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
   const [inboxNotifications, setInboxNotifications] = useState<InboxNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -83,14 +91,37 @@ const Navbar: React.FC = () => {
   }, [loadNotifications]);
 
   const handleLogout = async () => {
-    await authService.logout();
-    dispatch(setUser(null));
-    navigate('/login', { replace: true });
+    setLogoutBusy(true);
+    setLogoutError(null);
+    try {
+      await authService.logout();
+      dispatch(setUser(null));
+      setLogoutConfirmOpen(false);
+      setAccountAnchor(null);
+      navigate('/login', { replace: true });
+    } catch {
+      setLogoutError(t(
+        '로그아웃 요청을 완료하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.',
+        'Could not complete sign-out. Check your connection and try again.',
+      ));
+    } finally {
+      setLogoutBusy(false);
+    }
+  };
+
+  const openLogoutDialog = () => {
+    setLogoutError(null);
+    setLogoutConfirmOpen(true);
+  };
+
+  const closeLogoutDialog = () => {
+    setLogoutError(null);
+    setLogoutConfirmOpen(false);
   };
 
   const handleNotificationClick = async (notification: InboxNotification) => {
     if (!notification.readAt) await notificationService.markRead(notification.id);
-    setAnchorEl(null);
+    setNotificationAnchor(null);
     if (notification.actionUrl) navigate(notification.actionUrl);
   };
 
@@ -103,6 +134,7 @@ const Navbar: React.FC = () => {
     location.pathname === path || (path !== '/feed' && location.pathname.startsWith(`${path}/`));
 
   const mobileItems = user ? navItems : browseItems;
+  const neighborhood = user?.address?.trim() || t('동네 설정', 'Set neighborhood');
 
   return (
     <>
@@ -117,7 +149,7 @@ const Navbar: React.FC = () => {
           backdropFilter: 'blur(18px)',
         }}
       >
-        <Toolbar sx={{ gap: { xs: 0.75, sm: 1.25 }, width: '100%', maxWidth: 1280, mx: 'auto', minHeight: { xs: 62, sm: 70 } }}>
+        <Toolbar sx={{ gap: { xs: 0.5, sm: 1.25 }, width: '100%', maxWidth: 1280, mx: 'auto', minHeight: { xs: 62, sm: 70 } }}>
           <Stack
             component={RouterLink}
             to="/"
@@ -125,18 +157,42 @@ const Navbar: React.FC = () => {
             spacing={1.1}
             alignItems="center"
             aria-label={t('이웃톡 홈', 'Neighbor Talk home')}
-            sx={{ color: 'text.primary', flexGrow: { xs: 1, lg: 0 }, mr: { lg: 2.5 }, textDecoration: 'none', minWidth: 0 }}
+            sx={{ color: 'text.primary', display: { xs: user ? 'none' : 'flex', sm: 'flex' }, flexGrow: { xs: user ? 0 : 1, lg: 0 }, mr: { lg: 2.5 }, textDecoration: 'none', minWidth: 0 }}
           >
             <Box sx={{ display: 'grid', placeItems: 'center', width: 38, height: 38, flexShrink: 0, borderRadius: 2.5, color: '#fff', bgcolor: 'primary.main' }}>
               <TravelExploreRoundedIcon fontSize="small" />
             </Box>
-            <Box sx={{ minWidth: 0 }}>
+            <Box sx={{ minWidth: 0, display: { xs: user ? 'none' : 'block', sm: 'block' } }}>
               <Typography variant="h6" sx={{ lineHeight: 1.05 }}>{t('이웃톡', 'Neighbor Talk')}</Typography>
               <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', xl: 'block' }, whiteSpace: 'nowrap' }}>
                 {t('우리 동네 취향 커뮤니티', 'Your neighborhood community')}
               </Typography>
             </Box>
           </Stack>
+
+          {user && (
+            <Button
+              component={RouterLink}
+              to="/mypage"
+              color="inherit"
+              startIcon={<LocationOnRoundedIcon fontSize="small" />}
+              aria-label={t(`현재 동네 ${neighborhood}`, `Current neighborhood: ${neighborhood}`)}
+              sx={{
+                display: { xs: 'inline-flex', lg: 'none' },
+                flexGrow: 1,
+                justifyContent: 'flex-start',
+                minWidth: 0,
+                maxWidth: { xs: 140, sm: 220 },
+                px: 0.75,
+                color: 'text.primary',
+                '& .MuiButton-startIcon': { mr: 0.35 },
+              }}
+            >
+              <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {neighborhood}
+              </Box>
+            </Button>
+          )}
 
           {user ? (
             <Box component="nav" aria-label={t('주요 메뉴', 'Primary navigation')} sx={{ display: { xs: 'none', lg: 'flex' }, gap: 0.5, flexGrow: 1 }}>
@@ -182,15 +238,22 @@ const Navbar: React.FC = () => {
               <Tooltip title={t('알림', 'Notifications')}>
                 <IconButton
                   aria-label={t('알림', 'Notifications')}
-                  onClick={(event) => { setAnchorEl(event.currentTarget); loadNotifications(); }}
+                  onClick={(event) => { setNotificationAnchor(event.currentTarget); loadNotifications(); }}
                 >
                   <Badge badgeContent={unreadCount} color="error" max={99}>
                     <NotificationsNoneRoundedIcon />
                   </Badge>
                 </IconButton>
               </Tooltip>
-              <Tooltip title={t('내 프로필', 'My profile')}>
-                <IconButton component={RouterLink} to="/mypage" aria-label={t('마이페이지', 'My page')} sx={{ p: 0.5 }}>
+              <Tooltip title={t('계정 메뉴', 'Account menu')}>
+                <IconButton
+                  aria-label={t('계정 메뉴 열기', 'Open account menu')}
+                  aria-haspopup="menu"
+                  aria-expanded={Boolean(accountAnchor) ? 'true' : undefined}
+                  aria-controls={accountAnchor ? 'account-menu' : undefined}
+                  onClick={(event) => setAccountAnchor(event.currentTarget)}
+                  sx={{ p: 0.5 }}
+                >
                   <Avatar src={resolveMediaUrl(user.profileImage)} sx={{ width: 34, height: 34, bgcolor: 'secondary.main', fontSize: 15 }}>
                     {user.username?.[0]}
                   </Avatar>
@@ -199,7 +262,7 @@ const Navbar: React.FC = () => {
               <Button
                 color="inherit"
                 startIcon={<LogoutRoundedIcon />}
-                onClick={handleLogout}
+                onClick={openLogoutDialog}
                 sx={{ display: { xs: 'none', xl: 'inline-flex' }, color: 'text.secondary' }}
               >
                 {t('로그아웃', 'Sign out')}
@@ -217,6 +280,35 @@ const Navbar: React.FC = () => {
           )}
         </Toolbar>
       </AppBar>
+
+      {user && (
+        <Menu
+          id="account-menu"
+          anchorEl={accountAnchor}
+          open={Boolean(accountAnchor)}
+          onClose={() => setAccountAnchor(null)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          PaperProps={{ sx: { width: 230, mt: 1, borderRadius: 2.5, border: 1, borderColor: 'divider' } }}
+        >
+          <Box sx={{ px: 2, py: 1.25, minWidth: 0 }}>
+            <Typography variant="subtitle2" noWrap>{user.username}</Typography>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>{neighborhood}</Typography>
+          </Box>
+          <Divider />
+          <MenuItem component={RouterLink} to="/mypage" onClick={() => setAccountAnchor(null)}>
+            <ListItemIcon><PersonRoundedIcon fontSize="small" /></ListItemIcon>
+            <ListItemText primary={t('마이페이지', 'My account')} />
+          </MenuItem>
+          <MenuItem
+            onClick={() => { setAccountAnchor(null); openLogoutDialog(); }}
+            sx={{ color: 'error.main' }}
+          >
+            <ListItemIcon><LogoutRoundedIcon color="error" fontSize="small" /></ListItemIcon>
+            <ListItemText primary={t('로그아웃', 'Sign out')} />
+          </MenuItem>
+        </Menu>
+      )}
 
       <Box
         component="nav"
@@ -263,9 +355,9 @@ const Navbar: React.FC = () => {
       </Box>
 
       <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={() => setAnchorEl(null)}
+        anchorEl={notificationAnchor}
+        open={Boolean(notificationAnchor)}
+        onClose={() => setNotificationAnchor(null)}
         PaperProps={{ sx: { width: 380, maxWidth: 'calc(100vw - 24px)', mt: 1, borderRadius: 3, border: 1, borderColor: 'divider' } }}
       >
         <Box sx={{ px: 2, py: 1.25, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -296,10 +388,18 @@ const Navbar: React.FC = () => {
           </MenuItem>
         ))}
         <Divider />
-        <MenuItem component={RouterLink} to="/notifications" onClick={() => setAnchorEl(null)}>
+        <MenuItem component={RouterLink} to="/notifications" onClick={() => setNotificationAnchor(null)}>
           <ListItemText primary={t('전체 알림 보기', 'View all notifications')} primaryTypographyProps={{ textAlign: 'center', fontWeight: 700 }} />
         </MenuItem>
       </Menu>
+
+      <SignOutDialog
+        open={logoutConfirmOpen}
+        busy={logoutBusy}
+        error={logoutError}
+        onClose={closeLogoutDialog}
+        onConfirm={() => void handleLogout()}
+      />
     </>
   );
 };

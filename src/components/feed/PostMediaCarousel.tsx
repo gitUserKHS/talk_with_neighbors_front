@@ -66,8 +66,8 @@ const PostMediaCarousel: React.FC<PostMediaCarouselProps> = ({ post }) => {
               sx={{
                 display: 'block',
                 width: '100%',
-                aspectRatio: '1 / 1',
-                objectFit: 'cover',
+                maxHeight: { xs: '72vh', sm: 720 },
+                objectFit: 'contain',
                 pointerEvents: 'none',
               }}
             />
@@ -91,7 +91,7 @@ const PostMediaCarousel: React.FC<PostMediaCarouselProps> = ({ post }) => {
             alt={post.caption || t('게시글 사진', 'Post photo')}
             loading="lazy"
             draggable={false}
-            sx={{ display: 'block', width: '100%', aspectRatio: '1 / 1', objectFit: 'cover' }}
+            sx={{ display: 'block', width: '100%', height: 'auto', maxHeight: { xs: '72vh', sm: 720 }, objectFit: 'contain' }}
           />
         )}
       </Box>
@@ -201,6 +201,8 @@ const mediaOpenerSx = {
   bgcolor: 'transparent',
   cursor: 'zoom-in',
   lineHeight: 0,
+  maxHeight: { xs: '72vh', sm: 720 },
+  overflow: 'hidden',
   '&:focus-visible': {
     outline: '3px solid',
     outlineColor: 'primary.main',

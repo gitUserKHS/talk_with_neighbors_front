@@ -76,9 +76,16 @@ const NicknameSetup: React.FC = () => {
   };
 
   const signOut = async () => {
-    await authService.logout();
-    dispatch(logout());
-    navigate('/login', { replace: true });
+    try {
+      await authService.logout();
+      dispatch(logout());
+      navigate('/login', { replace: true });
+    } catch {
+      setError(t(
+        '로그아웃 요청을 완료하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.',
+        'Could not complete sign-out. Check your connection and try again.',
+      ));
+    }
   };
 
   return (

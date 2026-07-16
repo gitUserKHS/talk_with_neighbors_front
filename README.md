@@ -2,49 +2,59 @@
 
 [![Frontend CI](https://github.com/gitUserKHS/talk_with_neighbors_front/actions/workflows/ci.yml/badge.svg)](https://github.com/gitUserKHS/talk_with_neighbors_front/actions/workflows/ci.yml)
 
-관심사와 거리를 바탕으로 가까운 이웃을 연결하는 React 19 + Vite 애플리케이션이야.
+관심사와 거리를 바탕으로 가까운 이웃의 이야기, 모임, 대화를 연결하는 React 19 + Vite 웹 애플리케이션입니다.
 
-**라이브 서비스:** [https://talk-with-neighbors.duckdns.org](https://talk-with-neighbors.duckdns.org)
+**운영 서비스:** [https://talk-with-neighbors.duckdns.org](https://talk-with-neighbors.duckdns.org)
 
-## 시작하기
+```mermaid
+flowchart LR
+  Browser["브라우저"] -->|HTTPS| Edge["DuckDNS · Traefik"]
+  Edge -->|/| Frontend["Frontend Nginx"]
+  Edge -->|/api · /ws · /uploads| Backend["Spring Boot Backend"]
+  Backend --> MySQL[(MySQL)]
+  Backend --> Redis[(Redis)]
+  Backend --> S3[(비공개 S3)]
+```
 
-Node.js 22를 권장해.
+## 핵심 사용자 흐름
+
+- 로그인 전에는 공개 피드와 공개 모임을 둘러볼 수 있습니다.
+- 이메일 또는 카카오 계정으로 로그인한 뒤 닉네임, 관심사, 동네를 설정할 수 있습니다.
+- 추천·가까운·최신 기준으로 피드를 살펴보고 게시글, 사진·동영상, 댓글과 좋아요를 관리할 수 있습니다.
+- 관심사가 맞는 이웃을 찾고 모임에 참여하며 채팅방에서 대화와 약속 일정을 관리할 수 있습니다.
+- 마이페이지에서 활동, 공개 범위, 차단·숨김·신고 내역과 로그인 보안을 관리할 수 있습니다.
+- 한국어와 영어 UI를 지원하며 선택한 언어는 브라우저에 저장됩니다.
+
+## 로컬 실행
+
+Node.js 22 사용을 권장합니다.
 
 ```bash
 npm ci
 npm run dev
 ```
 
-백엔드 저장소를 이 저장소와 같은 상위 폴더에 clone하면, 백엔드 저장소에 포함된 Compose 파일로 전체 스택을 실행할 수 있어.
+백엔드 저장소가 같은 상위 폴더에 있다면 백엔드의 Compose 구성으로 전체 스택을 실행할 수 있습니다.
 
 ```bash
 cd ../talk_with_neighbors_back
 docker compose -f compose.local.yml up --build -d
 ```
 
-브라우저는 `http://localhost:3000`, 백엔드 API는 `http://localhost:8080`에서 확인해. 종료는 백엔드 저장소에서 `docker compose -f compose.local.yml down`을 실행하면 돼.
+프런트는 `http://localhost:3000`, API는 `http://localhost:8080`에서 확인할 수 있습니다. 종료할 때는 백엔드 저장소에서 다음 명령을 실행합니다.
 
-### 카카오 지도 장소 선택
+```bash
+docker compose -f compose.local.yml down
+```
 
-모임 생성 화면의 장소 검색·지도 클릭 선택을 사용하려면 `.env.example`을 참고해
-`VITE_KAKAO_MAP_JAVASCRIPT_KEY`를 설정해. 카카오디벨로퍼스 앱에서 **카카오맵 사용 설정을 켜고**,
-`[앱 > 플랫폼 키 > JavaScript 키 > JavaScript SDK 도메인]`에 로컬 주소와 운영 origin
-`https://talk-with-neighbors.duckdns.org`를 각각 등록해야 해. 지도 SDK에는 REST API 키나 어드민 키를
-사용하지 않아.
+## 카카오 지도 설정
 
-JavaScript 키는 브라우저에서 지도 SDK를 호출하기 위한 플랫폼 키라 빌드 결과에서 숨길 수 없어.
-키를 소스에 직접 커밋하지 말고 로컬 환경 변수와 GitHub
-`VITE_KAKAO_MAP_JAVASCRIPT_KEY` 시크릿으로 주입하며, 등록 도메인 제한을 유지해.
-키가 없는 개발·PR 빌드에서는 좌표 없이 장소명과 안내 주소를 입력하는 대체 UI가 표시돼.
-프로필·온보딩의 `현재 위치 사용`은 브라우저 보안 정책상 HTTPS 또는 localhost에서만 동작하므로,
-실제 배포에서는 TLS가 적용된 등록 도메인으로 접속해야 해.
+모임 생성·수정 화면에서 장소 검색과 지도 선택을 사용하려면 `.env.example`을 참고하여 `VITE_KAKAO_MAP_JAVASCRIPT_KEY`를 설정합니다. 카카오디벨로퍼스 앱에서 카카오맵을 활성화하고 JavaScript SDK 허용 도메인에 로컬 주소와 운영 origin인 `https://talk-with-neighbors.duckdns.org`를 등록해야 합니다.
+
+JavaScript 키는 브라우저에서 지도 SDK를 호출하기 위한 플랫폼 키입니다. 소스에 직접 커밋하지 않고 로컬 환경 변수와 GitHub `VITE_KAKAO_MAP_JAVASCRIPT_KEY` 시크릿으로 주입하며, 허용 도메인 제한을 유지합니다. 키가 없는 개발·PR 빌드에서는 장소명과 안내 주소를 직접 입력하는 대체 UI가 표시됩니다. 현재 위치 기능은 브라우저 보안 정책에 따라 HTTPS 또는 localhost에서만 동작합니다.
 
 - [카카오맵 시작하기](https://developers.kakao.com/docs/ko/kakaomap/common)
 - [Kakao 지도 Web API 가이드](https://apis.map.kakao.com/web/guide/)
-
-## 공개 둘러보기
-
-로그인하지 않아도 `/feed`에서 작성자가 공개 미리보기에 동의한 게시글을 읽고, `/meetups`에서 공개 모임을 검색하고 둘러볼 수 있어. 댓글 확인과 작성, 좋아요, 글·모임 생성, 모임 참여, 매칭, 채팅과 안전 관리 동작은 로그인이 필요해.
 
 ## 검증
 
@@ -54,17 +64,8 @@ npm run typecheck
 npm run build
 ```
 
-PR과 `main`, `codex/**`, `agent/**` 브랜치 푸시에서는 GitHub Actions가 테스트, 같은 출처(`/api`, `/ws`) 프로덕션 빌드, Nginx 컨테이너 헬스 체크를 실행해.
+GitHub Actions는 PR과 관리 브랜치의 테스트, 타입 검사, 같은 출처(`/api`, `/ws`) 프로덕션 빌드와 Nginx 컨테이너 헬스 체크를 실행합니다. 검증을 통과한 `main`과 버전 태그 이미지만 GHCR에 게시됩니다.
 
-로그인 세션은 `SameSite=Lax` HttpOnly 쿠키를 사용하므로 프런트와 API를 같은 사이트에서 제공해야 해.
-별도 `github.io` 출처에서 API를 호출하던 Pages 미리보기는 이 계약과 맞지 않아 제거했고, 포트폴리오
-라이브 서비스는 AWS의 같은 출처(`/api`, `/ws`) 배포를 기준으로 해. `main`과 버전 태그의 GHCR 이미지는
-같은 품질 검증을 모두 통과한 뒤에만 게시돼. 프런트 `main` 게시가 끝나면 `production-dispatch`
-Environment의 최소 권한 GitHub App 자격 증명으로 백엔드 저장소에 배포 이벤트를 보내고, 백엔드
-워크플로가 이벤트 digest와 현재 검증된 프런트 `:main`이 같은지 확인한 뒤 기존 k3s 프런트
-Deployment만 교체해. DB·Redis·백엔드·Secret·migration은 이 경로에서 건드리지 않고, 실제 배포
-중인 백엔드 digest와 새 프런트 digest를 함께 기록해. App은 백엔드 저장소 한 곳에만 설치하고
-`Contents: read and write` 하나만 허용하며, Environment 변수 `BACKEND_DEPLOY_APP_ID`와 secret
-`BACKEND_DEPLOY_APP_PRIVATE_KEY`로 관리해. 장기 개인 액세스 토큰은 사용하지 않아.
+프런트 `main` 이미지 게시가 완료되면 최소 권한 GitHub App이 백엔드 저장소에 배포 이벤트를 전달합니다. 백엔드 워크플로는 전달받은 digest를 검증하고 k3s의 프런트 Deployment만 교체합니다. 이 경로에서는 DB, Redis, 백엔드, Secret과 migration을 변경하지 않습니다.
 
-게시글·채팅 미디어는 같은 출처의 `/uploads` 경로로 요청하고, 백엔드가 실행 환경에 따라 로컬 볼륨 또는 비공개 S3에서 제공해.
+로그인 세션은 `SameSite=Lax` HttpOnly 쿠키를 사용하므로 프런트와 API를 같은 사이트에서 제공합니다. 게시글과 채팅 미디어는 같은 출처의 `/uploads` 경로로 요청하며, 백엔드는 실행 환경에 따라 로컬 볼륨 또는 비공개 S3에서 파일을 제공합니다.

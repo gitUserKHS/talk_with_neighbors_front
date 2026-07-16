@@ -81,6 +81,30 @@ describe('public content service access', () => {
     expect(get.mock.calls.some(([url]) => String(url).includes('/comments'))).toBe(false);
   });
 
+  it('sends the selected discovery mode to the authenticated feed', async () => {
+    get.mockResolvedValueOnce({
+      data: { content: [], totalPages: 1, totalElements: 0, number: 0, last: true },
+    });
+
+    await feedService.getFeed(0, 12, 'authenticated', { mode: 'NEARBY' });
+
+    expect(get).toHaveBeenCalledWith('/feed', {
+      params: { page: 0, size: 12, mode: 'NEARBY' },
+    });
+  });
+
+  it('also forwards an explicitly selected mode to the privacy-safe public feed', async () => {
+    get.mockResolvedValueOnce({
+      data: { content: [], totalPages: 1, totalElements: 0, number: 0, last: true },
+    });
+
+    await feedService.getFeed(0, 12, 'public', { mode: 'LATEST' });
+
+    expect(get).toHaveBeenCalledWith('/public/feed', {
+      params: { page: 0, size: 12, mode: 'LATEST' },
+    });
+  });
+
   it('keeps an explicit false public-preview opt-in in the multipart request', async () => {
     post.mockResolvedValueOnce({
       data: {
