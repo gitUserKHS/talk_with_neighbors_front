@@ -22,11 +22,19 @@ import CloseIcon from '@mui/icons-material/Close';
 import MovieOutlinedIcon from '@mui/icons-material/MovieOutlined';
 import { useNavigate } from 'react-router-dom';
 import feedService from '../services/feedService';
+import { useI18n } from '../i18n/I18nProvider';
+import {
+  MAX_VIDEO_BYTES,
+  MAX_VIDEO_COUNT,
+  MAX_MEDIA_REQUEST_BYTES,
+  VIDEO_UPLOAD_GUIDANCE,
+  mediaUploadStatusText,
+} from '../services/mediaUploadPolicy';
 
 const MAX_MEDIA_COUNT = 10;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
-const MAX_TOTAL_BYTES = 200 * 1024 * 1024;
+const VIDEO_COUNT_POLICY_COPY = '동영상은 한 번에 1개만 업로드할 수 있습니다.';
+const TOTAL_SIZE_POLICY_COPY = '첨부 파일의 전체 크기는 120MB를 초과할 수 없습니다.';
 const ACCEPTED_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -46,6 +54,7 @@ interface SelectedMedia {
 }
 
 const NewPost: React.FC = () => {
+  const { locale, t } = useI18n();
   const navigate = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const mediaRef = useRef<SelectedMedia[]>([]);
@@ -56,6 +65,14 @@ const NewPost: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+
+  const requestError = (request: any, korean: string, english: string) => (
+    locale === 'ko' && typeof request?.response?.data?.message === 'string'
+      ? request.response.data.message
+      : t(korean, english)
+  );
+
+  const uploadStatus = mediaUploadStatusText(uploadProgress);
 
   useEffect(() => {
     mediaRef.current = media;
@@ -81,33 +98,38 @@ const NewPost: React.FC = () => {
     setError(null);
     const availableSlots = MAX_MEDIA_COUNT - media.length;
     if (availableSlots <= 0) {
-      setError('사진과 동영상은 합쳐서 최대 10개까지 올릴 수 있어.');
+      setError(t('사진과 동영상은 합쳐서 최대 10개까지 업로드할 수 있습니다.', 'You can upload up to 10 photos and videos in total.'));
       return;
     }
 
     const existingIds = new Set(media.map((item) => item.id));
+    const existingVideoCount = media.filter((item) => item.type === 'VIDEO').length;
     const accepted: SelectedMedia[] = [];
     const errors: string[] = [];
 
     for (const file of files) {
       if (accepted.length >= availableSlots) {
-        errors.push('최대 10개까지만 추가했어.');
+        errors.push(t('최대 10개까지만 추가했습니다.', 'Only the first 10 files were added.'));
         break;
       }
       if (!ACCEPTED_TYPES.has(file.type)) {
-        errors.push(`${file.name}: 지원하지 않는 형식이야.`);
+        errors.push(t(`${file.name}: 지원하지 않는 파일 형식입니다.`, `${file.name}: This file type is not supported.`));
         continue;
       }
       const isVideo = file.type.startsWith('video/');
       const maxBytes = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
       if (file.size > maxBytes) {
-        errors.push(`${file.name}: ${isVideo ? '100MB' : '10MB'}를 넘을 수 없어.`);
+        errors.push(t(`${file.name}: ${isVideo ? '30MB' : '10MB'}를 초과할 수 없습니다.`, `${file.name}: The file must be ${isVideo ? '30 MB' : '10 MB'} or smaller.`));
+        continue;
+      }
+      if (isVideo && existingVideoCount + accepted.filter((item) => item.type === 'VIDEO').length >= MAX_VIDEO_COUNT) {
+        errors.push(t(`${file.name}: ${VIDEO_COUNT_POLICY_COPY}`, `${file.name}: You can upload one video at a time.`));
         continue;
       }
 
       const id = `${file.name}-${file.size}-${file.lastModified}`;
       if (existingIds.has(id)) {
-        errors.push(`${file.name}: 이미 선택한 파일이야.`);
+        errors.push(t(`${file.name}: 이미 선택한 파일입니다.`, `${file.name}: This file is already selected.`));
         continue;
       }
 
@@ -121,9 +143,12 @@ const NewPost: React.FC = () => {
     }
 
     const nextTotal = [...media, ...accepted].reduce((sum, item) => sum + item.file.size, 0);
-    if (nextTotal > MAX_TOTAL_BYTES) {
+    if (nextTotal > MAX_MEDIA_REQUEST_BYTES) {
       accepted.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-      setError('첨부 파일 전체 크기는 200MB를 넘을 수 없어.');
+      setError(t(
+        TOTAL_SIZE_POLICY_COPY,
+        'The total attachment size must be 120 MB or less.',
+      ));
       return;
     }
 
@@ -167,11 +192,11 @@ const NewPost: React.FC = () => {
     event.preventDefault();
     setError(null);
     if (media.length === 0) {
-      setError('사진 또는 동영상을 한 개 이상 선택해 줘.');
+      setError(t('사진 또는 동영상을 하나 이상 선택해 주세요.', 'Select at least one photo or video.'));
       return;
     }
     if (!caption.trim()) {
-      setError('게시글 내용을 입력해 줘.');
+      setError(t('게시글 내용을 입력해 주세요.', 'Enter a caption for your post.'));
       return;
     }
 
@@ -185,22 +210,27 @@ const NewPost: React.FC = () => {
       );
       navigate('/feed');
     } catch (err: any) {
-      setError(err.response?.data?.message || '게시글을 저장하지 못했어. 잠시 후 다시 시도해 줘.');
+      setError(requestError(err, '게시글을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'Could not publish your post. Please try again shortly.'));
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
+    <Container component="main" maxWidth="md" sx={{ py: { xs: 2.5, sm: 4.5 } }}>
       <Stack spacing={2.5}>
-        <Box>
-          <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }}>
-            새 게시글
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            사진과 동영상을 원하는 순서로 최대 10개까지 올릴 수 있어.
-          </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25 }}>
+          <IconButton aria-label={t('피드로 돌아가기', 'Back to feed')} onClick={() => navigate('/feed')}>
+            <ArrowBackIcon />
+          </IconButton>
+          <Box>
+            <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }}>
+              {t('새 게시글', 'Create post')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {t('사진과 동영상을 원하는 순서로 최대 10개까지 업로드할 수 있습니다.', 'Upload up to 10 photos and videos in the order you want.')}
+            </Typography>
+          </Box>
         </Box>
 
         {error && (
@@ -209,8 +239,8 @@ const NewPost: React.FC = () => {
           </Alert>
         )}
 
-        <Card variant="outlined" sx={{ borderRadius: 3 }}>
-          <CardContent>
+        <Card variant="outlined" sx={{ borderRadius: 3.5, overflow: 'hidden' }}>
+          <CardContent sx={{ p: { xs: 2, sm: 3.5 }, '&:last-child': { pb: { xs: 2, sm: 3.5 } } }}>
             <Stack component="form" spacing={2.5} onSubmit={handleSubmit}>
               <Box
                 onDragOver={(event) => event.preventDefault()}
@@ -218,6 +248,7 @@ const NewPost: React.FC = () => {
                 onClick={() => inputRef.current?.click()}
                 role="button"
                 tabIndex={0}
+                aria-label={t('게시글에 첨부할 사진 또는 동영상 선택', 'Select photos or videos for this post')}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter' || event.key === ' ') inputRef.current?.click();
                 }}
@@ -249,16 +280,19 @@ const NewPost: React.FC = () => {
                   <AddPhotoAlternateOutlinedIcon />
                   <MovieOutlinedIcon />
                 </Stack>
-                <Typography sx={{ fontWeight: 700 }}>클릭하거나 파일을 끌어다 놓아 줘</Typography>
+                <Typography sx={{ fontWeight: 700 }}>{t('클릭하거나 파일을 끌어다 놓아 주세요', 'Choose files or drag and drop them here')}</Typography>
                 <Typography variant="caption" color="text.secondary">
-                  JPG·PNG·GIF·WebP는 각 10MB, MP4·WebM·MOV는 각 100MB 이하
+                  {t(
+                    `JPG·PNG·GIF·WebP는 각 10MB 이하입니다. ${VIDEO_UPLOAD_GUIDANCE}`,
+                    'JPG, PNG, GIF, and WebP files must be 10 MB or smaller. Upload one video up to 30 MB, 60 seconds, and Full HD (1080p).',
+                  )}
                 </Typography>
               </Box>
 
               {media.length > 0 && (
                 <>
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
-                    <Typography variant="subtitle2">선택한 미디어</Typography>
+                    <Typography variant="subtitle2">{t('선택한 미디어', 'Selected media')}</Typography>
                     <Chip size="small" label={`${media.length} / ${MAX_MEDIA_COUNT}`} />
                   </Stack>
                   <Box
@@ -291,18 +325,18 @@ const NewPost: React.FC = () => {
                             <Box
                               component="img"
                               src={item.previewUrl}
-                              alt={`${index + 1}번째 선택 사진`}
+                              alt={t(`${index + 1}번째 선택 사진`, `Selected photo ${index + 1}`)}
                               sx={{ display: 'block', width: '100%', aspectRatio: '1 / 1', objectFit: 'cover' }}
                             />
                           )}
                           <Chip
                             size="small"
-                            label={`${index + 1} · ${item.type === 'VIDEO' ? '동영상' : '사진'}`}
+                            label={`${index + 1} · ${item.type === 'VIDEO' ? t('동영상', 'Video') : t('사진', 'Photo')}`}
                             sx={{ position: 'absolute', top: 8, left: 8, bgcolor: 'rgba(255,255,255,0.9)' }}
                           />
                           <IconButton
                             size="small"
-                            aria-label={`${index + 1}번째 미디어 삭제`}
+                            aria-label={t(`${index + 1}번째 미디어 삭제`, `Remove media ${index + 1}`)}
                             onClick={(event) => {
                               event.stopPropagation();
                               removeMedia(item.id);
@@ -315,7 +349,7 @@ const NewPost: React.FC = () => {
                         <Stack direction="row" justifyContent="center" sx={{ mt: 0.5 }}>
                           <IconButton
                             size="small"
-                            aria-label={`${index + 1}번째 미디어를 앞으로 이동`}
+                            aria-label={t(`${index + 1}번째 미디어를 앞으로 이동`, `Move media ${index + 1} earlier`)}
                             disabled={index === 0}
                             onClick={() => moveMedia(index, -1)}
                           >
@@ -323,7 +357,7 @@ const NewPost: React.FC = () => {
                           </IconButton>
                           <IconButton
                             size="small"
-                            aria-label={`${index + 1}번째 미디어를 뒤로 이동`}
+                            aria-label={t(`${index + 1}번째 미디어를 뒤로 이동`, `Move media ${index + 1} later`)}
                             disabled={index === media.length - 1}
                             onClick={() => moveMedia(index, 1)}
                           >
@@ -337,7 +371,7 @@ const NewPost: React.FC = () => {
               )}
 
               <TextField
-                label="글 내용"
+                label={t('글 내용', 'Caption')}
                 value={caption}
                 onChange={(event) => setCaption(event.target.value)}
                 multiline
@@ -348,11 +382,11 @@ const NewPost: React.FC = () => {
                 helperText={`${caption.length} / 1000`}
               />
               <TextField
-                label="관심사 태그"
+                label={t('관심사 태그', 'Interest tags')}
                 value={tags}
                 onChange={(event) => setTags(event.target.value)}
-                placeholder="카페, 산책, 영화"
-                helperText="쉼표로 구분해서 최대 10개까지 입력해 줘."
+                placeholder={t('카페, 산책, 영화', 'coffee, walking, movies')}
+                helperText={t('쉼표로 구분해 최대 10개까지 입력해 주세요.', 'Enter up to 10 tags, separated by commas.')}
                 fullWidth
               />
 
@@ -373,12 +407,14 @@ const NewPost: React.FC = () => {
                       disabled={submitting}
                     />
                   )}
-                  label="로그인 전 공개 미리보기 허용"
+                  label={t('로그인 전 공개 미리보기 허용', 'Allow a public preview before sign-in')}
                   sx={{ m: 0, '& .MuiFormControlLabel-label': { fontWeight: 700 } }}
                 />
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75, ml: 4 }}>
-                  기본값은 비공개야. 선택하면 이 글의 사진·동영상, 본문과 관심사 태그를
-                  로그인하지 않은 방문자도 볼 수 있어.
+                  {t(
+                    '기본은 비공개입니다. 선택하면 로그인하지 않은 방문자도 사진·동영상, 본문과 관심사 태그를 볼 수 있습니다.',
+                    'Posts are private by default. Turn this on to let signed-out visitors see the media, caption, and interest tags.',
+                  )}
                 </Typography>
               </Box>
 
@@ -386,15 +422,15 @@ const NewPost: React.FC = () => {
                 <Box>
                   <LinearProgress variant={uploadProgress > 0 ? 'determinate' : 'indeterminate'} value={uploadProgress} />
                   <Typography variant="caption" color="text.secondary">
-                    {uploadProgress > 0 ? `업로드 중 ${uploadProgress}%` : '업로드를 준비하고 있어…'}
+                    {uploadStatus}
                   </Typography>
                 </Box>
               )}
 
               <Stack direction="row" spacing={1} justifyContent="flex-end">
-                <Button onClick={() => navigate('/feed')} disabled={submitting}>취소</Button>
+                <Button onClick={() => navigate('/feed')} disabled={submitting}>{t('취소', 'Cancel')}</Button>
                 <Button type="submit" variant="contained" disabled={submitting || media.length === 0}>
-                  게시하기
+                  {submitting ? t('게시 중…', 'Publishing…') : t('게시하기', 'Publish')}
                 </Button>
               </Stack>
             </Stack>

@@ -6,7 +6,6 @@ import {
   UpdateHobbyMeetupRequest,
 } from '../types/meetup';
 import { Page } from '../types/chat';
-import { localDateTimeToUtcIso } from './meetupDateTime';
 import { resolveMediaUrl } from './mediaUrl';
 
 export type MeetupAccess = 'authenticated' | 'public';
@@ -89,11 +88,7 @@ export const meetupService = {
   },
 
   async createMeetup(request: CreateHobbyMeetupRequest): Promise<HobbyMeetup> {
-    const response = await api.post<HobbyMeetup>('/meetups', {
-      ...request,
-      scheduledAt: localDateTimeToUtcIso(request.scheduledAt),
-      registrationDeadline: localDateTimeToUtcIso(request.registrationDeadline),
-    });
+    const response = await api.post<HobbyMeetup>('/meetups', request);
     return mapAuthenticatedMeetup(response.data);
   },
 
@@ -111,10 +106,6 @@ export const meetupService = {
       latitude: request.latitude ?? null,
       longitude: request.longitude ?? null,
       kakaoPlaceId: request.kakaoPlaceId?.trim() || null,
-      scheduledAt: request.scheduledAt ? localDateTimeToUtcIso(request.scheduledAt) : null,
-      registrationDeadline: request.registrationDeadline
-        ? localDateTimeToUtcIso(request.registrationDeadline)
-        : null,
     });
     return mapAuthenticatedMeetup(response.data);
   },

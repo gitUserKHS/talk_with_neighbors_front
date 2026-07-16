@@ -13,8 +13,8 @@ import CalendarMonthOutlinedIcon from '@mui/icons-material/CalendarMonthOutlined
 import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import { ChatSchedule, ChatScheduleRsvpStatus } from '../../../types/chatSchedule';
-import { formatChatScheduleDateTime } from '../../../services/chatScheduleDateTime';
 import { currentUserScheduleStatus } from '../../../services/chatScheduleState';
+import { useI18n } from '../../../i18n/I18nProvider';
 import ChatScheduleParticipants from './ChatScheduleParticipants';
 
 interface ChatScheduleCardProps {
@@ -34,6 +34,7 @@ const ChatScheduleCard: React.FC<ChatScheduleCardProps> = ({
   onOpen,
   onRsvp,
 }) => {
+  const { t, formatDate, formatNumber } = useI18n();
   const cancelled = schedule.status === 'CANCELLED';
   const ended = new Date(schedule.startsAt).getTime() < Date.now();
   const isCreator = String(schedule.creatorId) === String(currentUserId);
@@ -54,7 +55,7 @@ const ChatScheduleCard: React.FC<ChatScheduleCardProps> = ({
     >
       <ButtonBase
         onClick={() => onOpen(schedule)}
-        aria-label={`${schedule.title} 일정 상세 보기`}
+        aria-label={t(`${schedule.title} 일정 상세 보기`, `View details for ${schedule.title}`)}
         sx={{ display: 'block', width: '100%', textAlign: 'left' }}
       >
         <CardContent sx={{ pb: canRespond ? 1.25 : '16px !important' }}>
@@ -65,9 +66,13 @@ const ChatScheduleCard: React.FC<ChatScheduleCardProps> = ({
                   <Chip
                     size="small"
                     color={cancelled ? 'default' : ended ? 'default' : 'primary'}
-                    label={cancelled ? '취소됨' : ended ? '지난 일정' : '다가오는 일정'}
+                    label={cancelled
+                      ? t('취소됨', 'Cancelled')
+                      : ended
+                        ? t('지난 일정', 'Past')
+                        : t('다가오는 일정', 'Upcoming')}
                   />
-                  {isCreator && <Chip size="small" variant="outlined" label="내가 만든 일정" />}
+                  {isCreator && <Chip size="small" variant="outlined" label={t('내가 만든 일정', 'Created by you')} />}
                 </Stack>
                 <Typography
                   variant="subtitle1"
@@ -83,8 +88,14 @@ const ChatScheduleCard: React.FC<ChatScheduleCardProps> = ({
               <Stack direction="row" spacing={0.75} alignItems="center">
                 <CalendarMonthOutlinedIcon fontSize="small" />
                 <Typography variant="body2" fontWeight={700}>
-                  {formatChatScheduleDateTime(schedule.startsAt, schedule.timeZone)}
-                  {schedule.durationMinutes ? ` · ${schedule.durationMinutes}분` : ''}
+                  {formatDate(schedule.startsAt, {
+                    dateStyle: 'medium',
+                    timeStyle: 'short',
+                    timeZone: schedule.timeZone,
+                  })}
+                  {schedule.durationMinutes
+                    ? t(` · ${formatNumber(schedule.durationMinutes)}분`, ` · ${formatNumber(schedule.durationMinutes)} min`)
+                    : ''}
                 </Typography>
               </Stack>
               {(schedule.location || schedule.locationAddress) && (
@@ -120,7 +131,7 @@ const ChatScheduleCard: React.FC<ChatScheduleCardProps> = ({
               disabled={busy}
               onClick={() => onRsvp(schedule, 'ATTENDING')}
             >
-              참석
+              {t('참석', 'Attending')}
             </Button>
             <Button
               fullWidth
@@ -130,7 +141,7 @@ const ChatScheduleCard: React.FC<ChatScheduleCardProps> = ({
               disabled={busy || isCreator}
               onClick={() => onRsvp(schedule, 'NOT_ATTENDING')}
             >
-              불참
+              {t('불참', 'Not attending')}
             </Button>
           </Stack>
         </Box>

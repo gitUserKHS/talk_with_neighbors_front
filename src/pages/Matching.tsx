@@ -37,10 +37,12 @@ import {
   clearPendingMatchOffer,
   setMatchStatusMessage,
 } from '../store/slices/notificationSlice';
+import { useI18n } from '../i18n/I18nProvider';
 
 const Matching: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const navigate = useNavigate();
+  const { locale, t, formatNumber } = useI18n();
   const currentUser = useSelector((state: RootState) => state.auth.user);
   const { pendingMatchOffer, activeMatchRoomInfo, matchStatusMessage } = useSelector(
     (state: RootState) => state.notifications
@@ -58,6 +60,20 @@ const Matching: React.FC = () => {
   const [requesting, setRequesting] = useState<Record<string, boolean>>({});
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  const apiError = (err: any, korean: string, english: string) => (
+    locale === 'ko' ? err.response?.data?.message || korean : english
+  );
+
+  const genderLabel = (gender?: string) => {
+    switch (gender?.toLowerCase()) {
+      case 'male': return t('남성', 'Man');
+      case 'female': return t('여성', 'Woman');
+      case 'non_binary':
+      case 'non-binary': return t('논바이너리', 'Non-binary');
+      default: return gender || '';
+    }
+  };
 
   useEffect(() => {
     setPreferences((prev) => ({
@@ -77,7 +93,9 @@ const Matching: React.FC = () => {
       dispatch(
         addNotification({
           type: 'success',
-          message: matchStatusMessage || '매칭이 성사되어 채팅방이 만들어졌어.',
+          message: locale === 'ko' && matchStatusMessage
+            ? matchStatusMessage
+            : t('매칭이 성사되어 채팅방이 만들어졌습니다.', 'It’s a match. Your chat room is ready.'),
           navigateTo: `/chat/${activeMatchRoomInfo.id}`,
         })
       );
@@ -108,7 +126,10 @@ const Matching: React.FC = () => {
       const result = await matchingService.getRecommendations();
       setRecommendations(result);
     } catch {
-      setError('추천 후보를 불러오지 못했어. 프로필과 위치 정보를 확인해줘.');
+      setError(t(
+        '추천 이웃을 불러오지 못했습니다. 프로필과 위치 정보를 확인해 주세요.',
+        'Recommendations could not be loaded. Check your profile and location details.',
+      ));
     } finally {
       setLoading(false);
     }
@@ -119,7 +140,7 @@ const Matching: React.FC = () => {
       const result = await matchingService.getIncomingRequests();
       setIncomingRequests(result);
     } catch {
-      setError('받은 매칭 요청을 불러오지 못했어.');
+      setError(t('받은 매칭 요청을 불러오지 못했습니다.', 'Incoming match requests could not be loaded.'));
     }
   };
 
@@ -130,9 +151,9 @@ const Matching: React.FC = () => {
     try {
       await matchingService.saveMatchingPreferences(buildPreferences());
       await loadRecommendations();
-      setSuccess('매칭 조건을 저장하고 추천을 갱신했어.');
+      setSuccess(t('매칭 조건을 저장하고 추천을 새로고침했습니다.', 'Your matching preferences were saved and recommendations refreshed.'));
     } catch (err: any) {
-      setError(err.response?.data?.message || '매칭 조건 저장에 실패했어.');
+      setError(apiError(err, '매칭 조건을 저장하지 못했습니다.', 'Matching preferences could not be saved.'));
     } finally {
       setLoading(false);
     }
@@ -144,9 +165,12 @@ const Matching: React.FC = () => {
 
     try {
       await matchingService.requestMatch(profile.id);
-      setSuccess(`${profile.username}님에게 매칭 요청을 보냈어.`);
+      setSuccess(t(
+        `${profile.username}님에게 매칭 요청을 보냈습니다.`,
+        `A match request was sent to ${profile.username}.`,
+      ));
     } catch (err: any) {
-      setError(err.response?.data?.message || '매칭 요청을 보낼 수 없어.');
+      setError(apiError(err, '매칭 요청을 보내지 못했습니다.', 'The match request could not be sent.'));
     } finally {
       setRequesting((prev) => ({ ...prev, [profile.id]: false }));
     }
@@ -158,9 +182,11 @@ const Matching: React.FC = () => {
       if (sentiment === 'NEGATIVE') {
         setRecommendations((items) => items.filter((item) => item.id !== profile.id));
       }
-      setSuccess(sentiment === 'POSITIVE' ? '좋은 추천으로 기억할게.' : '다음 추천에 반영할게.');
+      setSuccess(sentiment === 'POSITIVE'
+        ? t('선호도에 반영했습니다.', 'Your feedback has been saved.')
+        : t('다음 추천에 반영하겠습니다.', 'We’ll use this to improve your next recommendations.'));
     } catch {
-      setError('추천 피드백을 저장하지 못했어.');
+      setError(t('추천 피드백을 저장하지 못했습니다.', 'Recommendation feedback could not be saved.'));
     }
   };
 
@@ -174,9 +200,12 @@ const Matching: React.FC = () => {
         navigate(`/chat/${chatRoom.id}`);
         return;
       }
-      dispatch(setMatchStatusMessage('수락했어. 상대방 응답을 기다리는 중이야.'));
+      dispatch(setMatchStatusMessage(t(
+        '매칭 요청을 수락했습니다. 상대방의 응답을 기다리고 있습니다.',
+        'Match request accepted. Waiting for the other person to respond.',
+      )));
     } catch (err: any) {
-      setError(err.response?.data?.message || '매칭 수락에 실패했어.');
+      setError(apiError(err, '매칭 요청을 수락하지 못했습니다.', 'The match request could not be accepted.'));
     }
   };
 
@@ -188,7 +217,7 @@ const Matching: React.FC = () => {
       dispatch(clearPendingMatchOffer());
       dispatch(setMatchStatusMessage(null));
     } catch (err: any) {
-      setError(err.response?.data?.message || '매칭 거절에 실패했어.');
+      setError(apiError(err, '매칭 요청을 거절하지 못했습니다.', 'The match request could not be declined.'));
     }
   };
 
@@ -204,10 +233,13 @@ const Matching: React.FC = () => {
       if (chatRoom?.id) {
         navigate(`/chat/${chatRoom.id}`);
       } else {
-        setSuccess('매칭을 수락했어. 상대방의 응답을 기다리는 중이야.');
+        setSuccess(t(
+          '매칭 요청을 수락했습니다. 상대방의 응답을 기다리고 있습니다.',
+          'Match request accepted. Waiting for the other person to respond.',
+        ));
       }
     } catch (err: any) {
-      setError(err.response?.data?.message || '매칭 수락에 실패했어.');
+      setError(apiError(err, '매칭 요청을 수락하지 못했습니다.', 'The match request could not be accepted.'));
     } finally {
       setRequesting((prev) => ({ ...prev, [requestKey]: false }));
     }
@@ -223,21 +255,24 @@ const Matching: React.FC = () => {
       await matchingService.rejectMatch(request.matchId);
       setIncomingRequests((prev) => prev.filter((item) => item.matchId !== request.matchId));
     } catch (err: any) {
-      setError(err.response?.data?.message || '매칭 거절에 실패했어.');
+      setError(apiError(err, '매칭 요청을 거절하지 못했습니다.', 'The match request could not be declined.'));
     } finally {
       setRequesting((prev) => ({ ...prev, [requestKey]: false }));
     }
   };
 
   return (
-    <Container maxWidth="md" sx={{ py: 4 }}>
+    <Container component="main" maxWidth="md" sx={{ py: { xs: 3, md: 5 } }}>
       <Stack spacing={3}>
         <Box>
-          <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }}>
-            관심사 매칭
+          <Typography variant="h4" component="h1" sx={{ fontWeight: 900 }}>
+            {t('이웃 추천', 'Neighbor matches')}
           </Typography>
-          <Typography color="text.secondary">
-            관심사, 거리, 나이 조건을 기준으로 잘 맞는 이웃을 추천해.
+          <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+            {t(
+              '관심사, 거리, 나이 조건을 바탕으로 잘 맞는 이웃을 추천해 드립니다.',
+              'Discover neighbors who match your interests, distance, and age preferences.',
+            )}
           </Typography>
         </Box>
 
@@ -246,22 +281,35 @@ const Matching: React.FC = () => {
         {!currentUser?.latitude || !currentUser?.longitude ? (
           <Alert
             severity="warning"
-            action={<Button onClick={() => navigate('/profile')}>프로필로 이동</Button>}
+            action={<Button onClick={() => navigate('/profile')}>{t('프로필 설정', 'Set up profile')}</Button>}
           >
-            거리 점수를 쓰려면 프로필에서 위치를 저장해줘.
+            {t(
+              '거리 기반 추천을 사용하려면 프로필에 동네 위치를 저장해 주세요.',
+              'Add your neighborhood to your profile to use distance-based recommendations.',
+            )}
           </Alert>
         ) : null}
 
-        <Card variant="outlined" sx={{ borderRadius: 2 }}>
-          <CardContent>
+        <Card variant="outlined" sx={{ borderRadius: 3 }}>
+          <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
             <Stack spacing={3}>
               <Box>
-                <Typography gutterBottom>최대 거리: {preferences.maxDistance}km</Typography>
+                <Typography variant="h6" fontWeight={850}>{t('추천 조건', 'Match preferences')}</Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {t('조건을 조정하면 추천 결과에 바로 반영됩니다.', 'Adjust these preferences to refine your recommendations.')}
+                </Typography>
+              </Box>
+              <Box>
+                <Typography gutterBottom>{t(
+                  `최대 거리: ${formatNumber(preferences.maxDistance)}km`,
+                  `Maximum distance: ${formatNumber(preferences.maxDistance)} km`,
+                )}</Typography>
                 <Slider
                   min={1}
                   max={50}
                   value={preferences.maxDistance}
                   valueLabelDisplay="auto"
+                  aria-label={t('최대 거리', 'Maximum distance')}
                   onChange={(_, value) =>
                     setPreferences((prev) => ({ ...prev, maxDistance: value as number }))
                   }
@@ -269,13 +317,17 @@ const Matching: React.FC = () => {
               </Box>
               <Box>
                 <Typography gutterBottom>
-                  나이 범위: {preferences.ageRange[0]}세 - {preferences.ageRange[1]}세
+                  {t(
+                    `나이 범위: ${formatNumber(preferences.ageRange[0])}세–${formatNumber(preferences.ageRange[1])}세`,
+                    `Age range: ${formatNumber(preferences.ageRange[0])}–${formatNumber(preferences.ageRange[1])}`,
+                  )}
                 </Typography>
                 <Slider
                   min={18}
                   max={80}
                   value={preferences.ageRange}
                   valueLabelDisplay="auto"
+                  aria-label={t('나이 범위', 'Age range')}
                   onChange={(_, value) =>
                     setPreferences((prev) => ({ ...prev, ageRange: value as [number, number] }))
                   }
@@ -283,33 +335,33 @@ const Matching: React.FC = () => {
               </Box>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <FormControl fullWidth>
-                  <InputLabel>성별</InputLabel>
+                  <InputLabel>{t('성별', 'Gender')}</InputLabel>
                   <Select
-                    label="성별"
+                    label={t('성별', 'Gender')}
                     value={preferences.gender || 'any'}
                     onChange={(event) =>
                       setPreferences((prev) => ({ ...prev, gender: event.target.value }))
                     }
                   >
-                    <MenuItem value="any">모두</MenuItem>
-                    <MenuItem value="male">남성</MenuItem>
-                    <MenuItem value="female">여성</MenuItem>
+                    <MenuItem value="any">{t('모두', 'Any')}</MenuItem>
+                    <MenuItem value="male">{t('남성', 'Man')}</MenuItem>
+                    <MenuItem value="female">{t('여성', 'Woman')}</MenuItem>
                   </Select>
                 </FormControl>
                 <TextField
                   fullWidth
-                  label="관심사"
+                  label={t('관심사', 'Interests')}
                   value={interestInput}
                   onChange={(event) => setInterestInput(event.target.value)}
-                  helperText="쉼표로 구분해줘."
+                  helperText={t('여러 관심사는 쉼표로 구분해 주세요.', 'Separate multiple interests with commas.')}
                 />
               </Stack>
               <Stack direction="row" spacing={1} justifyContent="flex-end">
                 <Button startIcon={<RefreshIcon />} onClick={loadRecommendations} disabled={loading}>
-                  추천 새로고침
+                  {t('추천 새로고침', 'Refresh matches')}
                 </Button>
                 <Button variant="contained" onClick={handleSavePreferences} disabled={loading}>
-                  조건 저장
+                  {t('조건 저장', 'Save preferences')}
                 </Button>
               </Stack>
             </Stack>
@@ -319,14 +371,14 @@ const Matching: React.FC = () => {
         {incomingRequests.length > 0 && (
           <Box>
             <Typography variant="h6" sx={{ fontWeight: 800 }}>
-              받은 매칭 요청
+              {t('받은 매칭 요청', 'Incoming match requests')}
             </Typography>
             <Stack spacing={1.5} sx={{ mt: 1.5 }}>
               {incomingRequests.map((request) => {
                 const requestKey = `incoming-${request.matchId}`;
                 return (
-                  <Card key={request.matchId} variant="outlined" sx={{ borderRadius: 2 }}>
-                    <CardContent>
+                  <Card key={request.matchId} variant="outlined" sx={{ borderRadius: 3 }}>
+                    <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
                       <Stack
                         direction={{ xs: 'column', sm: 'row' }}
                         spacing={2}
@@ -343,7 +395,10 @@ const Matching: React.FC = () => {
                             <Chip
                               size="small"
                               color="primary"
-                              label={`궁합 ${Math.round(request.compatibilityScore || 0)}점`}
+                              label={t(
+                                `궁합 ${formatNumber(Math.round(request.compatibilityScore || 0))}점`,
+                                `${formatNumber(Math.round(request.compatibilityScore || 0))}% match`,
+                              )}
                             />
                           </Stack>
                           {request.bio && <Typography sx={{ mt: 0.75 }}>{request.bio}</Typography>}
@@ -359,7 +414,7 @@ const Matching: React.FC = () => {
                             disabled={requesting[requestKey]}
                             onClick={() => handleRejectIncoming(request)}
                           >
-                            거절
+                            {t('거절', 'Decline')}
                           </Button>
                           <Button
                             variant="contained"
@@ -367,7 +422,7 @@ const Matching: React.FC = () => {
                             disabled={requesting[requestKey]}
                             onClick={() => handleAcceptIncoming(request)}
                           >
-                            수락하고 채팅하기
+                            {t('수락하고 채팅하기', 'Accept and chat')}
                           </Button>
                         </Stack>
                       </Stack>
@@ -380,9 +435,18 @@ const Matching: React.FC = () => {
         )}
 
         <Stack spacing={2}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6" fontWeight={850}>{t('추천 이웃', 'Recommended neighbors')}</Typography>
+            {!loading && recommendations.length > 0 && (
+              <Chip size="small" variant="outlined" label={t(
+                `${formatNumber(recommendations.length)}명`,
+                `${formatNumber(recommendations.length)} ${recommendations.length === 1 ? 'person' : 'people'}`,
+              )} />
+            )}
+          </Stack>
           {recommendations.map((profile) => (
-            <Card key={profile.id} variant="outlined" sx={{ borderRadius: 2 }}>
-              <CardContent>
+            <Card key={profile.id} variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }}>
                   <Avatar src={profile.profileImage || profile.imageUrl} sx={{ width: 64, height: 64 }}>
                     {profile.username?.[0]}
@@ -392,13 +456,19 @@ const Matching: React.FC = () => {
                       <Typography variant="h6" sx={{ fontWeight: 800 }}>
                         {profile.username}
                       </Typography>
-                      <Chip color="primary" label={`${Math.round(profile.compatibilityScore || 0)}점`} />
+                      <Chip color="primary" label={t(
+                        `${formatNumber(Math.round(profile.compatibilityScore || 0))}점`,
+                        `${formatNumber(Math.round(profile.compatibilityScore || 0))}% match`,
+                      )} />
                       {profile.distance !== undefined && (
-                        <Chip variant="outlined" label={`${profile.distance.toFixed(1)}km`} />
+                        <Chip variant="outlined" label={t(
+                          `${profile.distance.toFixed(1)}km`,
+                          `${profile.distance.toFixed(1)} km away`,
+                        )} />
                       )}
                     </Stack>
                     <Typography variant="body2" color="text.secondary">
-                      {[profile.age && `${profile.age}세`, profile.gender].filter(Boolean).join(' · ')}
+                      {[profile.age && t(`${formatNumber(profile.age)}세`, `${formatNumber(profile.age)} years old`), genderLabel(profile.gender)].filter(Boolean).join(' · ')}
                     </Typography>
                     {profile.bio && <Typography sx={{ mt: 1 }}>{profile.bio}</Typography>}
                     <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1 }}>
@@ -410,12 +480,12 @@ const Matching: React.FC = () => {
                     </Stack>
                     {(profile.explanationReasons || []).length > 0 && (
                       <Alert severity="info" icon={false} sx={{ mt: 1.5, py: 0.5 }}>
-                        추천한 이유 · {profile.explanationReasons?.join(' · ')}
+                        {t('추천한 이유', 'Why this match')} · {profile.explanationReasons?.join(' · ')}
                       </Alert>
                     )}
                     <Stack direction="row" spacing={0.5} sx={{ mt: 1 }}>
-                      <Button size="small" startIcon={<ThumbUpAltOutlinedIcon />} onClick={() => handleFeedback(profile, 'POSITIVE')}>잘 맞아요</Button>
-                      <Button size="small" color="inherit" startIcon={<ThumbDownAltOutlinedIcon />} onClick={() => handleFeedback(profile, 'NEGATIVE')}>다른 추천</Button>
+                      <Button size="small" startIcon={<ThumbUpAltOutlinedIcon />} onClick={() => handleFeedback(profile, 'POSITIVE')}>{t('잘 맞아요', 'Good match')}</Button>
+                      <Button size="small" color="inherit" startIcon={<ThumbDownAltOutlinedIcon />} onClick={() => handleFeedback(profile, 'NEGATIVE')}>{t('다른 추천', 'Show another')}</Button>
                     </Stack>
                   </Box>
                   <Button
@@ -424,7 +494,7 @@ const Matching: React.FC = () => {
                     disabled={requesting[profile.id]}
                     onClick={() => handleRequestMatch(profile)}
                   >
-                    매칭 요청
+                    {t('매칭 요청', 'Send match request')}
                   </Button>
                 </Stack>
               </CardContent>
@@ -432,10 +502,16 @@ const Matching: React.FC = () => {
           ))}
 
           {!loading && recommendations.length === 0 && (
-            <Card variant="outlined" sx={{ borderRadius: 2 }}>
-              <CardContent>
-                <Typography color="text.secondary">
-                  아직 추천 후보가 없어. 프로필 관심사를 채우고 조건을 조금 넓혀봐.
+            <Card variant="outlined" sx={{ borderRadius: 3 }}>
+              <CardContent sx={{ py: 5, textAlign: 'center' }}>
+                <Typography variant="h6" fontWeight={800}>
+                  {t('현재 조건에 맞는 추천 이웃이 없습니다.', 'No neighbors match your current preferences.')}
+                </Typography>
+                <Typography color="text.secondary" sx={{ mt: 0.75 }}>
+                  {t(
+                    '프로필에 관심사를 추가하거나 거리와 나이 범위를 넓혀 보세요.',
+                    'Add interests to your profile or broaden the distance and age range.',
+                  )}
                 </Typography>
               </CardContent>
             </Card>
@@ -444,34 +520,41 @@ const Matching: React.FC = () => {
       </Stack>
 
       <Dialog open={Boolean(pendingMatchOffer) && !activeMatchRoomInfo} onClose={() => dispatch(clearPendingMatchOffer())}>
-        <DialogTitle>매칭 요청</DialogTitle>
+        <DialogTitle>{t('매칭 요청', 'Match request')}</DialogTitle>
         <DialogContent>
           <Typography sx={{ mb: 1 }}>
-            {pendingMatchOffer?.username}님과 매칭할까?
+            {t(
+              `${pendingMatchOffer?.username ?? ''}님과 매칭하시겠어요?`,
+              `Accept the match request from ${pendingMatchOffer?.username ?? 'this neighbor'}?`,
+            )}
           </Typography>
           {matchStatusMessage && (
             <Typography variant="body2" color="text.secondary">
-              {matchStatusMessage}
+              {locale === 'ko'
+                ? matchStatusMessage
+                : t('매칭 요청 상태가 업데이트되었습니다.', 'Your match request status has been updated.')}
             </Typography>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={handleRejectMatch}>거절</Button>
+          <Button onClick={handleRejectMatch}>{t('거절', 'Decline')}</Button>
           <Button variant="contained" onClick={handleAcceptMatch}>
-            수락
+            {t('수락', 'Accept')}
           </Button>
         </DialogActions>
       </Dialog>
 
       <Dialog open={Boolean(activeMatchRoomInfo)} onClose={() => dispatch(clearActiveMatchRoomInfo())}>
-        <DialogTitle>매칭 성공</DialogTitle>
+        <DialogTitle>{t('매칭되었습니다', 'It’s a match')}</DialogTitle>
         <DialogContent>
-          <Typography>{activeMatchRoomInfo?.message || '채팅방이 만들어졌어.'}</Typography>
+          <Typography>{locale === 'ko' && activeMatchRoomInfo?.message
+            ? activeMatchRoomInfo.message
+            : t('채팅방이 만들어졌습니다.', 'Your chat room is ready.')}</Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => dispatch(clearActiveMatchRoomInfo())}>닫기</Button>
+          <Button onClick={() => dispatch(clearActiveMatchRoomInfo())}>{t('닫기', 'Close')}</Button>
           <Button variant="contained" onClick={() => navigate(`/chat/${activeMatchRoomInfo?.id}`)}>
-            채팅으로 이동
+            {t('채팅으로 이동', 'Open chat')}
           </Button>
         </DialogActions>
       </Dialog>

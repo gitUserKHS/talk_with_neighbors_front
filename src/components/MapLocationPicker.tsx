@@ -26,6 +26,7 @@ import {
   loadKakaoMaps,
 } from '../services/kakaoMapsLoader';
 import { MapLocationSelection } from '../types/location';
+import { translate, useI18n } from '../i18n/I18nProvider';
 
 interface MapLocationPickerProps {
   value?: MapLocationSelection | null;
@@ -61,6 +62,7 @@ export const meetupLocationFromPlace = (
 
 export const meetupLocationFromAddress = (
   result: KakaoAddressSearchResult,
+  fallbackPlaceName = translate('지도에서 선택한 장소', 'Location selected on the map'),
 ): MapLocationSelection | null => {
   const latitude = numberFromKakao(result.y);
   const longitude = numberFromKakao(result.x);
@@ -68,7 +70,7 @@ export const meetupLocationFromAddress = (
 
   const address = result.road_address?.address_name || result.address_name || result.address?.address_name;
   return {
-    placeName: result.road_address?.building_name?.trim() || address || '지도에서 선택한 장소',
+    placeName: result.road_address?.building_name?.trim() || address || fallbackPlaceName,
     address: address || undefined,
     latitude,
     longitude,
@@ -79,10 +81,11 @@ const meetupLocationFromReverseGeocode = (
   result: KakaoReverseGeocodeResult,
   latitude: number,
   longitude: number,
+  fallbackPlaceName = translate('지도에서 선택한 장소', 'Location selected on the map'),
 ): MapLocationSelection => {
   const address = result.road_address?.address_name || result.address.address_name;
   return {
-    placeName: result.road_address?.building_name?.trim() || address || '지도에서 선택한 장소',
+    placeName: result.road_address?.building_name?.trim() || address || fallbackPlaceName,
     address,
     latitude,
     longitude,
@@ -95,8 +98,15 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
   disabled,
   allowCurrentLocation = false,
   requireCoordinates = false,
-  helperText = '공개 모임에는 집 주소 대신 카페·공원 같은 공공장소를 선택해줘.',
+  helperText,
 }) => {
+  const { t, formatNumber } = useI18n();
+  const resolvedHelperText = helperText ?? t(
+    '공개 모임에는 집 주소 대신 카페나 공원 같은 공공장소를 선택해 주세요.',
+    'For public meetups, choose a public place such as a cafe or park instead of a home address.',
+  );
+  const translateRef = useRef(t);
+  translateRef.current = t;
   const appKey = kakaoMapsJavaScriptKey();
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<KakaoMap | null>(null);
@@ -105,6 +115,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
   const geocoderRef = useRef<InstanceType<KakaoMapsNamespace['services']['Geocoder']> | null>(null);
   const onChangeRef = useRef(onChange);
   const searchGeneration = useRef(0);
+  const searchInFlight = useRef(false);
   const [sdkState, setSdkState] = useState<'missing' | 'loading' | 'ready' | 'error'>(
     appKey ? 'loading' : 'missing',
   );
@@ -138,7 +149,10 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
   const selectLocation = (selection: MapLocationSelection) => {
     positionMarker(selection);
     onChangeRef.current(selection);
-    setStatusMessage(`${selection.placeName}을(를) 모임 장소로 선택했어.`);
+    setStatusMessage(translateRef.current(
+      `${selection.placeName}을(를) 모임 장소로 선택했습니다.`,
+      `${selection.placeName} has been selected as the meetup location.`,
+    ));
     setSearchError('');
   };
 
@@ -172,19 +186,26 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         clickHandler = (event) => {
           const latitudeAtClick = event.latLng.getLat();
           const longitudeAtClick = event.latLng.getLng();
-          setStatusMessage('클릭한 위치의 주소를 확인하고 있어.');
+          setStatusMessage(translateRef.current(
+            '선택한 위치의 주소를 확인하고 있습니다.',
+            'Finding the address for the selected point…',
+          ));
           geocoderRef.current?.coord2Address(
             longitudeAtClick,
             latitudeAtClick,
             (items, status) => {
               if (status !== maps.services.Status.OK || !items[0]) {
-                setSearchError('선택한 위치의 주소를 찾지 못했어. 장소나 주소로 검색해줘.');
+                setSearchError(translateRef.current(
+                  '선택한 위치의 주소를 찾지 못했습니다. 장소명이나 주소로 검색해 주세요.',
+                  'We could not find an address for that point. Search by place name or address instead.',
+                ));
                 return;
               }
               selectLocation(meetupLocationFromReverseGeocode(
                 items[0],
                 latitudeAtClick,
                 longitudeAtClick,
+                translateRef.current('지도에서 선택한 장소', 'Location selected on the map'),
               ));
             },
           );
@@ -197,7 +218,10 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
       .catch((error: unknown) => {
         if (cancelled) return;
         setSdkState('error');
-        setSdkError(error instanceof Error ? error.message : '카카오 지도를 불러오지 못했어.');
+        setSdkError(translateRef.current(
+          '카카오 지도를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+          'Kakao Map could not be loaded. Please try again shortly.',
+        ));
       });
 
     return () => {
@@ -227,33 +251,54 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
     geocoderRef.current?.addressSearch(normalizedQuery, (items, status) => {
       if (requestId !== searchGeneration.current) return;
       const selections = status === maps.services.Status.OK
-        ? items.map(meetupLocationFromAddress).filter((item): item is MapLocationSelection => item !== null)
+        ? items
+          .map((item) => meetupLocationFromAddress(
+            item,
+            translateRef.current('지도에서 선택한 장소', 'Location selected on the map'),
+          ))
+          .filter((item): item is MapLocationSelection => item !== null)
         : [];
       setResults(selections);
+      searchInFlight.current = false;
       setSearching(false);
-      setStatusMessage(selections.length > 0 ? `주소 검색 결과 ${selections.length}개를 찾았어.` : '검색 결과가 없어.');
-      if (selections.length === 0) setSearchError('장소나 주소를 찾지 못했어. 검색어를 조금 더 자세히 입력해줘.');
+      setStatusMessage(selections.length > 0
+        ? translateRef.current(
+          `주소 검색 결과 ${formatNumber(selections.length)}개를 찾았습니다.`,
+          `${formatNumber(selections.length)} address ${selections.length === 1 ? 'result' : 'results'} found.`,
+        )
+        : translateRef.current('검색 결과가 없습니다.', 'No results found.'));
+      if (selections.length === 0) setSearchError(translateRef.current(
+        '장소나 주소를 찾지 못했습니다. 검색어를 조금 더 자세히 입력해 주세요.',
+        'No matching place or address was found. Try a more specific search.',
+      ));
     });
   };
 
-  const handleSearch = (event: React.FormEvent) => {
-    event.preventDefault();
+  const handleSearch = () => {
+    if (searchInFlight.current) return;
     const normalizedQuery = query.trim();
     const maps = mapsRef.current;
     if (normalizedQuery.length < 2) {
-      setSearchError('장소나 주소를 두 글자 이상 입력해줘.');
+      setSearchError(t(
+        '장소명이나 주소를 두 글자 이상 입력해 주세요.',
+        'Enter at least two characters for a place or address.',
+      ));
       return;
     }
     if (!maps || !geocoderRef.current) {
-      setSearchError('지도가 준비된 다음 다시 검색해줘.');
+      setSearchError(t(
+        '지도가 준비된 후 다시 검색해 주세요.',
+        'Please wait for the map to finish loading, then search again.',
+      ));
       return;
     }
 
     const requestId = ++searchGeneration.current;
+    searchInFlight.current = true;
     setSearching(true);
     setSearchError('');
     setResults([]);
-    setStatusMessage('장소를 검색하고 있어.');
+    setStatusMessage(t('장소를 검색하고 있습니다.', 'Searching for places…'));
     const places = new maps.services.Places();
     places.keywordSearch(normalizedQuery, (items, status) => {
       if (requestId !== searchGeneration.current) return;
@@ -262,27 +307,46 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         : [];
       if (selections.length > 0) {
         setResults(selections);
+        searchInFlight.current = false;
         setSearching(false);
-        setStatusMessage(`장소 검색 결과 ${selections.length}개를 찾았어.`);
+        setStatusMessage(t(
+          `장소 검색 결과 ${formatNumber(selections.length)}개를 찾았습니다.`,
+          `${formatNumber(selections.length)} place ${selections.length === 1 ? 'result' : 'results'} found.`,
+        ));
         return;
       }
       searchAddress(maps, normalizedQuery, requestId);
     });
   };
 
+  const handleSearchKeyDown = (event: React.KeyboardEvent) => {
+    if (event.key !== 'Enter') return;
+
+    event.preventDefault();
+    event.stopPropagation();
+    if (event.nativeEvent.isComposing || event.repeat) return;
+    handleSearch();
+  };
+
   const handleCurrentLocation = () => {
     if (typeof window === 'undefined' || !window.isSecureContext) {
-      setSearchError('현재 위치는 HTTPS 또는 localhost에서만 사용할 수 있어.');
+      setSearchError(t(
+        '현재 위치 기능은 HTTPS 또는 localhost에서만 사용할 수 있습니다.',
+        'Current location is available only over HTTPS or on localhost.',
+      ));
       return;
     }
     if (!navigator.geolocation) {
-      setSearchError('이 브라우저는 현재 위치 확인을 지원하지 않아.');
+      setSearchError(t(
+        '이 브라우저에서는 현재 위치를 확인할 수 없습니다.',
+        'This browser does not support location access.',
+      ));
       return;
     }
 
     setLocating(true);
     setSearchError('');
-    setStatusMessage('현재 위치를 확인하고 있어.');
+    setStatusMessage(t('현재 위치를 확인하고 있습니다.', 'Finding your current location…'));
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const latitude = position.coords.latitude;
@@ -291,8 +355,8 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         const geocoder = geocoderRef.current;
         if (!maps || !geocoder) {
           selectLocation({
-            placeName: '현재 위치',
-            address: '현재 위치',
+            placeName: t('현재 위치', 'Current location'),
+            address: t('현재 위치', 'Current location'),
             latitude,
             longitude,
           });
@@ -302,11 +366,16 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
 
         geocoder.coord2Address(longitude, latitude, (items, status) => {
           if (status === maps.services.Status.OK && items[0]) {
-            selectLocation(meetupLocationFromReverseGeocode(items[0], latitude, longitude));
+            selectLocation(meetupLocationFromReverseGeocode(
+              items[0],
+              latitude,
+              longitude,
+              t('지도에서 선택한 장소', 'Location selected on the map'),
+            ));
           } else {
             selectLocation({
-              placeName: '현재 위치',
-              address: '현재 위치',
+              placeName: t('현재 위치', 'Current location'),
+              address: t('현재 위치', 'Current location'),
               latitude,
               longitude,
             });
@@ -316,7 +385,10 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
       },
       () => {
         setLocating(false);
-        setSearchError('현재 위치를 가져오지 못했어. 브라우저의 위치 권한을 확인해줘.');
+        setSearchError(t(
+          '현재 위치를 가져오지 못했습니다. 브라우저의 위치 권한을 확인해 주세요.',
+          'Your current location could not be retrieved. Check your browser location permission.',
+        ));
       },
       { enableHighAccuracy: false, timeout: 10_000, maximumAge: 60_000 },
     );
@@ -335,28 +407,42 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
     });
   };
 
+  const preventParentSubmitOnEnter = (event: React.KeyboardEvent) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    event.stopPropagation();
+  };
+
   if (sdkState === 'missing' || sdkState === 'error') {
     return (
       <Stack spacing={1.5}>
         <Alert severity={sdkState === 'error' ? 'warning' : 'info'}>
           {sdkError || (requireCoordinates
-            ? '동네 좌표 선택에는 카카오 지도 설정 또는 HTTPS 현재 위치 권한이 필요해.'
-            : '지도 설정이 아직 준비되지 않아 장소명을 직접 입력할 수 있어.')}
+            ? t(
+              '동네 위치를 선택하려면 카카오 지도 설정 또는 현재 위치 권한이 필요합니다.',
+              'Kakao Map configuration or current-location permission is required to choose a neighborhood.',
+            )
+            : t(
+              '지도를 사용할 수 없어 장소 정보를 직접 입력할 수 있습니다.',
+              'The map is unavailable, but you can enter the place details manually.',
+            ))}
         </Alert>
         {!requireCoordinates && (
           <>
             <TextField
-              label="장소명"
+              label={t('장소명', 'Place name')}
               value={value?.placeName ?? ''}
               onChange={(event) => updateManualLocation(event.target.value, value?.address ?? '')}
+              onKeyDown={preventParentSubmitOnEnter}
               inputProps={{ maxLength: 100 }}
               disabled={disabled}
               fullWidth
             />
             <TextField
-              label="주소 또는 장소 안내"
+              label={t('주소 또는 장소 안내', 'Address or directions')}
               value={value?.address ?? ''}
               onChange={(event) => updateManualLocation(value?.placeName ?? '', event.target.value)}
+              onKeyDown={preventParentSubmitOnEnter}
               inputProps={{ maxLength: 255 }}
               disabled={disabled}
               fullWidth
@@ -366,71 +452,86 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         {allowCurrentLocation && (
           <>
             <Button
+              type="button"
               variant="outlined"
               startIcon={locating ? <CircularProgress size={16} /> : <MyLocationIcon />}
               onClick={handleCurrentLocation}
               disabled={disabled || locating}
             >
-              현재 위치 사용
+              {t('현재 위치 사용', 'Use current location')}
             </Button>
             <Typography variant="caption" color="text.secondary">
-              현재 위치 확인은 HTTPS 또는 localhost에서만 동작해.
+              {t(
+                '현재 위치 기능은 HTTPS 또는 localhost에서만 사용할 수 있습니다.',
+                'Current location is available only over HTTPS or on localhost.',
+              )}
             </Typography>
           </>
         )}
-        <Typography variant="caption" color="text.secondary">{helperText}</Typography>
+        <Typography variant="caption" color="text.secondary">{resolvedHelperText}</Typography>
       </Stack>
     );
   }
 
   return (
     <Stack spacing={1.5}>
-      <Box component="form" onSubmit={handleSearch}>
+      <Box role="search" aria-label={t('장소 또는 주소 검색', 'Search for a place or address')}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
           <TextField
-            label="장소 또는 주소 검색"
+            label={t('장소 또는 주소 검색', 'Search for a place or address')}
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="예: 서울도서관, 망원한강공원"
+            onKeyDown={handleSearchKeyDown}
+            placeholder={t('예: 서울도서관, 망원한강공원', 'e.g. Seoul Metropolitan Library')}
             inputProps={{ 'aria-controls': results.length > 0 ? 'meetup-location-results' : undefined }}
             disabled={disabled || sdkState !== 'ready'}
             fullWidth
           />
           <Button
-            type="submit"
+            type="button"
+            onClick={handleSearch}
             variant="outlined"
             startIcon={searching ? <CircularProgress size={16} /> : <SearchIcon />}
             disabled={disabled || sdkState !== 'ready' || searching}
             sx={{ minWidth: 104 }}
           >
-            검색
+            {t('검색', 'Search')}
           </Button>
         </Stack>
       </Box>
 
       {searchError && <Alert severity="warning">{searchError}</Alert>}
       <Typography role="status" aria-live="polite" variant="caption" color="text.secondary">
-        {sdkState === 'loading' ? '지도를 불러오는 중이야.' : statusMessage || '장소를 검색하거나 지도를 클릭해서 선택해줘.'}
+        {sdkState === 'loading'
+          ? t('지도를 불러오고 있습니다.', 'Loading map…')
+          : statusMessage || t(
+            '장소를 검색하거나 지도를 클릭해 선택해 주세요.',
+            'Search for a place or click the map to choose a location.',
+          )}
       </Typography>
 
       {allowCurrentLocation && (
         <>
           <Button
+            type="button"
             variant="outlined"
             startIcon={locating ? <CircularProgress size={16} /> : <MyLocationIcon />}
             onClick={handleCurrentLocation}
             disabled={disabled || sdkState !== 'ready' || locating}
           >
-            현재 위치 사용
+            {t('현재 위치 사용', 'Use current location')}
           </Button>
           <Typography variant="caption" color="text.secondary">
-            현재 위치 확인은 HTTPS 또는 localhost에서만 동작해.
+            {t(
+              '현재 위치 기능은 HTTPS 또는 localhost에서만 사용할 수 있습니다.',
+              'Current location is available only over HTTPS or on localhost.',
+            )}
           </Typography>
         </>
       )}
 
       {results.length > 0 && (
-        <List id="meetup-location-results" aria-label="장소 검색 결과" sx={{ border: 1, borderColor: 'divider', borderRadius: 1, py: 0 }}>
+        <List id="meetup-location-results" aria-label={t('장소 검색 결과', 'Place search results')} sx={{ border: 1, borderColor: 'divider', borderRadius: 2, py: 0, overflow: 'hidden' }}>
           {results.map((result) => (
             <ListItem
               key={result.kakaoPlaceId ?? `${result.latitude}-${result.longitude}`}
@@ -450,22 +551,25 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
       <Box
         ref={mapContainerRef}
         role="region"
-        aria-label="모임 장소 지도. 지도를 클릭하면 그 위치를 선택해."
-        sx={{ width: '100%', height: 280, borderRadius: 1.5, overflow: 'hidden', bgcolor: 'action.hover' }}
+        aria-label={t(
+          '모임 장소 지도입니다. 지도를 클릭하면 위치를 선택할 수 있습니다.',
+          'Meetup location map. Click the map to choose a location.',
+        )}
+        sx={{ width: '100%', height: { xs: 240, sm: 300 }, borderRadius: 2.5, overflow: 'hidden', bgcolor: 'action.hover', border: 1, borderColor: 'divider' }}
       />
 
       {value?.placeName && (
         <Alert
           severity="success"
           icon={<LocationOnOutlinedIcon />}
-          action={<Button color="inherit" size="small" onClick={() => onChange(null)} disabled={disabled}>지우기</Button>}
+          action={<Button type="button" color="inherit" size="small" onClick={() => onChange(null)} disabled={disabled}>{t('지우기', 'Clear')}</Button>}
         >
           <Typography variant="subtitle2" fontWeight={800}>{value.placeName}</Typography>
           {value.address && <Typography variant="body2">{value.address}</Typography>}
         </Alert>
       )}
       <Typography variant="caption" color="text.secondary">
-        {helperText}
+        {resolvedHelperText}
       </Typography>
     </Stack>
   );

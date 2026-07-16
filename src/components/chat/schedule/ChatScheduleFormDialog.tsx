@@ -19,6 +19,7 @@ import {
   defaultScheduleDateTimeInput,
   toLocalDateTimeInput,
 } from '../../../services/chatScheduleDateTime';
+import { useI18n } from '../../../i18n/I18nProvider';
 
 interface ChatScheduleFormDialogProps {
   open: boolean;
@@ -48,6 +49,7 @@ const ChatScheduleFormDialog: React.FC<ChatScheduleFormDialogProps> = ({
   onSave,
 }) => {
   const theme = useTheme();
+  const { locale, t, formatNumber } = useI18n();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const [values, setValues] = useState<ChatScheduleFormValues>(() => createInitialValues(schedule));
   const [error, setError] = useState<string | null>(null);
@@ -61,19 +63,22 @@ const ChatScheduleFormDialog: React.FC<ChatScheduleFormDialogProps> = ({
   const handleSave = async () => {
     const title = values.title.trim();
     if (title.length < 2) {
-      setError('약속 이름은 두 글자 이상 입력해줘.');
+      setError(t('일정 이름은 두 글자 이상 입력해 주세요.', 'Enter at least two characters for the schedule name.'));
       return;
     }
     if (!values.startsAt || Number.isNaN(new Date(values.startsAt).getTime())) {
-      setError('약속 날짜와 시간을 확인해줘.');
+      setError(t('일정 날짜와 시간을 확인해 주세요.', 'Check the schedule date and time.'));
       return;
     }
     if (new Date(values.startsAt).getTime() <= Date.now()) {
-      setError('약속 시간은 지금보다 이후로 정해줘.');
+      setError(t('일정 시간은 현재 시각보다 이후로 설정해 주세요.', 'Choose a time in the future.'));
       return;
     }
     if (values.durationMinutes < 30 || values.durationMinutes > 1440) {
-      setError('예상 시간은 30분에서 1440분 사이로 입력해줘.');
+      setError(t(
+        `예상 시간은 ${formatNumber(30)}분에서 ${formatNumber(1440)}분 사이로 입력해 주세요.`,
+        `Enter an estimated duration between ${formatNumber(30)} and ${formatNumber(1440)} minutes.`,
+      ));
       return;
     }
 
@@ -87,7 +92,8 @@ const ChatScheduleFormDialog: React.FC<ChatScheduleFormDialogProps> = ({
         locationAddress: values.locationAddress?.trim() || undefined,
       });
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || '일정을 저장하지 못했어.');
+      const fallback = t('일정을 저장하지 못했습니다.', 'We could not save the schedule.');
+      setError(locale === 'ko' ? err.response?.data?.message || err.message || fallback : fallback);
     }
   };
 
@@ -102,9 +108,9 @@ const ChatScheduleFormDialog: React.FC<ChatScheduleFormDialogProps> = ({
       aria-labelledby="chat-schedule-form-title"
     >
       <DialogTitle id="chat-schedule-form-title" sx={{ pr: 7 }}>
-        {schedule ? '약속 수정하기' : '새 약속 만들기'}
+        {schedule ? t('일정 수정하기', 'Edit schedule') : t('새 일정 만들기', 'Create a schedule')}
         <IconButton
-          aria-label="닫기"
+          aria-label={t('닫기', 'Close')}
           onClick={onClose}
           disabled={saving}
           sx={{ position: 'absolute', right: 12, top: 12 }}
@@ -116,7 +122,7 @@ const ChatScheduleFormDialog: React.FC<ChatScheduleFormDialogProps> = ({
         <Stack spacing={2.25} sx={{ pt: 0.5 }}>
           {error && <Alert severity="error">{error}</Alert>}
           <TextField
-            label="약속 이름"
+            label={t('일정 이름', 'Schedule name')}
             value={values.title}
             onChange={(event) => setValues((current) => ({ ...current, title: event.target.value }))}
             inputProps={{ maxLength: 80 }}
@@ -126,7 +132,7 @@ const ChatScheduleFormDialog: React.FC<ChatScheduleFormDialogProps> = ({
             disabled={saving}
           />
           <TextField
-            label="함께 볼 메모"
+            label={t('함께 볼 메모', 'Notes for the group')}
             value={values.description}
             onChange={(event) => setValues((current) => ({ ...current, description: event.target.value }))}
             inputProps={{ maxLength: 500 }}
@@ -137,7 +143,7 @@ const ChatScheduleFormDialog: React.FC<ChatScheduleFormDialogProps> = ({
           />
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
             <TextField
-              label="날짜와 시간"
+              label={t('날짜와 시간', 'Date and time')}
               type="datetime-local"
               value={values.startsAt}
               onChange={(event) => setValues((current) => ({ ...current, startsAt: event.target.value }))}
@@ -147,7 +153,7 @@ const ChatScheduleFormDialog: React.FC<ChatScheduleFormDialogProps> = ({
               disabled={saving}
             />
             <TextField
-              label="예상 시간(분)"
+              label={t('예상 시간(분)', 'Estimated duration (minutes)')}
               type="number"
               value={values.durationMinutes}
               onChange={(event) => setValues((current) => ({
@@ -178,14 +184,21 @@ const ChatScheduleFormDialog: React.FC<ChatScheduleFormDialogProps> = ({
             }))}
             allowCurrentLocation
             disabled={saving}
-            helperText="모임 채팅방 멤버에게 공유할 카페·공원 같은 장소를 선택해줘."
+            helperText={t(
+              '모임 채팅방 멤버에게 공유할 카페·공원 같은 장소를 선택해 주세요.',
+              'Choose a public place, such as a cafe or park, to share with the group.',
+            )}
           />
         </Stack>
       </DialogContent>
       <DialogActions sx={{ px: 2, py: 1.5, pb: 'max(12px, env(safe-area-inset-bottom))' }}>
-        <Button onClick={onClose} disabled={saving}>닫기</Button>
+        <Button onClick={onClose} disabled={saving}>{t('닫기', 'Close')}</Button>
         <Button variant="contained" onClick={handleSave} disabled={saving}>
-          {saving ? '저장하는 중…' : schedule ? '수정하기' : '약속 만들기'}
+          {saving
+            ? t('저장하는 중…', 'Saving…')
+            : schedule
+              ? t('수정하기', 'Save changes')
+              : t('일정 만들기', 'Create schedule')}
         </Button>
       </DialogActions>
     </Dialog>

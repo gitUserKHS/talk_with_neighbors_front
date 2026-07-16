@@ -9,6 +9,7 @@ import { setUser } from '../store/slices/authSlice';
 import { AppDispatch, RootState } from '../store/types';
 import AuthLayout from '../components/AuthLayout';
 import SocialLoginButtons from '../components/auth/SocialLoginButtons';
+import { useI18n } from '../i18n/I18nProvider';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -16,6 +17,7 @@ const Login: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const isAuthenticated = useSelector((state: RootState) => state.auth.isAuthenticated);
   const authenticatedUser = useSelector((state: RootState) => state.auth.user);
+  const { t } = useI18n();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -35,14 +37,14 @@ const Login: React.FC = () => {
 
     try {
       const user = await authService.login(email, password);
-      if (!user) throw new Error('사용자 정보를 받지 못했어.');
+      if (!user) throw new Error(t('사용자 정보를 확인하지 못했습니다.', 'We could not retrieve your account information.'));
 
       dispatch(setUser(user));
       navigate(destinationAfterAuthentication(user, returnTo), { replace: true });
     } catch (requestError) {
       setError(authErrorPresentation(
         requestError,
-        '로그인에 실패했어. 이메일과 비밀번호를 확인해줘.',
+        t('로그인하지 못했습니다. 이메일과 비밀번호를 확인해 주세요.', 'We could not sign you in. Check your email and password.'),
       ).message);
     } finally {
       setIsLoading(false);
@@ -51,9 +53,9 @@ const Login: React.FC = () => {
 
   return (
     <AuthLayout
-      eyebrow="WELCOME BACK"
-      title="다시 만나서 반가워."
-      description="이웃의 새 소식과 도착한 매칭을 확인해봐."
+      eyebrow={t('다시 오신 것을 환영합니다', 'WELCOME BACK')}
+      title={t('다시 만나서 반갑습니다.', 'Good to see you again.')}
+      description={t('이웃의 새로운 소식과 도착한 매칭을 확인해 보세요.', 'See what is new nearby and check your latest matches.')}
     >
       <Stack spacing={2.25}>
         <Stack spacing={2.25} component="form" onSubmit={handleSubmit}>
@@ -61,7 +63,7 @@ const Login: React.FC = () => {
           <TextField
             required
             fullWidth
-            label="이메일"
+            label={t('이메일', 'Email')}
             type="email"
             autoComplete="email"
             value={email}
@@ -70,7 +72,7 @@ const Login: React.FC = () => {
           <TextField
             required
             fullWidth
-            label="비밀번호"
+            label={t('비밀번호', 'Password')}
             type="password"
             autoComplete="current-password"
             value={password}
@@ -84,17 +86,17 @@ const Login: React.FC = () => {
             fullWidth
             sx={{ minHeight: 50 }}
           >
-            {isLoading ? '로그인 중...' : '로그인'}
+            {isLoading ? t('로그인 중...', 'Signing in...') : t('로그인', 'Sign in')}
           </Button>
         </Stack>
 
         <SocialLoginButtons returnTo={returnTo} />
 
-        <Divider>처음 왔어?</Divider>
+        <Divider>{t('이웃톡이 처음이신가요?', 'New to Neighbor Talk?')}</Divider>
         <Typography variant="body2" color="text.secondary" textAlign="center">
-          아직 계정이 없다면{' '}
+          {t('아직 계정이 없다면', 'If you do not have an account yet')}{' '}
           <Button component={RouterLink} to="/register" size="small" sx={{ minHeight: 0, p: 0.5 }}>
-            회원가입하기
+            {t('회원가입', 'Create an account')}
           </Button>
         </Typography>
       </Stack>

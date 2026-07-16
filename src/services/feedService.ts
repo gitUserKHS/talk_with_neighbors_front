@@ -8,6 +8,7 @@ import {
 } from '../types/feed';
 import type { AxiosProgressEvent } from 'axios';
 import { resolveMediaUrl } from './mediaUrl';
+import { translate } from '../i18n/I18nProvider';
 
 interface PageResponse<T> {
   content: T[];
@@ -80,7 +81,7 @@ export const mapPublicFeedPost = (post: PublicFeedPostDto): FeedPost => ({
   id: post.id,
   official: post.official ?? false,
   authorId: 0,
-  authorUsername: post.authorDisplayName?.trim() || '이웃',
+  authorUsername: post.authorDisplayName?.trim() || translate('이웃', 'Neighbor'),
   authorProfileImage: undefined,
   imageUrl: resolveMediaUrl(post.imageUrl) ?? '',
   media: post.media?.map(mapPublicMedia),

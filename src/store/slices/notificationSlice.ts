@@ -7,6 +7,7 @@ import {
   NotificationState,
   OfflineNotification,
 } from '../../store/types';
+import { translate } from '../../i18n/I18nProvider';
 
 const initialState: NotificationState = {
   notifications: [],
@@ -44,7 +45,7 @@ const notificationSlice = createSlice({
     setPendingMatchOffer: (state, action: PayloadAction<MatchProfile | null>) => {
       state.pendingMatchOffer = action.payload;
       state.matchStatusMessage = action.payload
-        ? `${action.payload.username}님에게서 매칭 요청이 왔어.`
+        ? translate(`${action.payload.username}님에게서 매칭 요청이 도착했습니다.`, `You received a match request from ${action.payload.username}.`)
         : null;
     },
     clearPendingMatchOffer: (state) => {
@@ -53,10 +54,10 @@ const notificationSlice = createSlice({
     },
     setMatchAccepted: (state, action: PayloadAction<{ matchId: string; message?: string }>) => {
       state.matchStatusMessage =
-        action.payload.message || '매칭을 수락했어. 상대방 응답을 기다리는 중이야.';
+        action.payload.message || translate('매칭을 수락했습니다. 상대방의 응답을 기다리고 있습니다.', 'Match accepted. Waiting for the other person to respond.');
     },
     setMatchRejected: (state, action: PayloadAction<{ matchId?: string; message?: string }>) => {
-      state.matchStatusMessage = action.payload.message || '매칭이 거절되었어.';
+      state.matchStatusMessage = action.payload.message || translate('매칭 요청이 거절되었습니다.', 'The match request was declined.');
       state.pendingMatchOffer = null;
       state.activeMatchRoomInfo = null;
     },
@@ -64,7 +65,7 @@ const notificationSlice = createSlice({
       state.activeMatchRoomInfo = action.payload;
       state.pendingMatchOffer = null;
       state.matchStatusMessage =
-        action.payload.message || `매칭 성공! '${action.payload.name}' 채팅방이 열렸어.`;
+        action.payload.message || translate(`매칭이 성사되어 '${action.payload.name}' 채팅방이 열렸습니다.`, `It is a match! The '${action.payload.name}' chat is now open.`);
     },
     clearActiveMatchRoomInfo: (state) => {
       state.activeMatchRoomInfo = null;
@@ -135,7 +136,7 @@ const notificationSlice = createSlice({
       state.offlineNotifications.unshift({
         id: createId(),
         type: 'NOTIFICATION_SUMMARY',
-        title: '오프라인 알림',
+        title: translate('오프라인 알림', 'Offline notifications'),
         message: action.payload.message,
         priority: 8,
         createdAt: new Date().toISOString(),

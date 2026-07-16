@@ -13,6 +13,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import CloseIcon from '@mui/icons-material/Close';
 import { FeedMedia } from '../../types/feed';
+import { useI18n } from '../../i18n/I18nProvider';
 
 interface PostMediaLightboxProps {
   open: boolean;
@@ -31,6 +32,7 @@ const PostMediaLightbox: React.FC<PostMediaLightboxProps> = ({
   onClose,
   onIndexChange,
 }) => {
+  const { t } = useI18n();
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const titleId = React.useId();
@@ -79,7 +81,7 @@ const PostMediaLightbox: React.FC<PostMediaLightboxProps> = ({
       }}
     >
       <DialogTitle id={titleId} sx={visuallyHiddenSx}>
-        게시글 미디어 크게 보기
+        {t('게시글 미디어 크게 보기', 'View post media')}
       </DialogTitle>
       <Box
         onTouchStart={(event) => {
@@ -135,7 +137,7 @@ const PostMediaLightbox: React.FC<PostMediaLightboxProps> = ({
           <Box
             component="img"
             src={active.url}
-            alt={`${alt} 크게 보기`}
+            alt={t(`${alt} 크게 보기`, `${alt}, full-size view`)}
             draggable={false}
             sx={{
               display: 'block',
@@ -149,9 +151,9 @@ const PostMediaLightbox: React.FC<PostMediaLightboxProps> = ({
           />
         )}
 
-        <Tooltip title="닫기">
+        <Tooltip title={t('닫기', 'Close')}>
           <IconButton
-            aria-label="크게 보기 닫기"
+            aria-label={t('크게 보기 닫기', 'Close full-size view')}
             onClick={onClose}
             autoFocus
             sx={{
@@ -167,7 +169,7 @@ const PostMediaLightbox: React.FC<PostMediaLightboxProps> = ({
         {hasMultiple && (
           <>
             <IconButton
-              aria-label="이전 미디어 크게 보기"
+              aria-label={t('이전 미디어 크게 보기', 'View previous media')}
               onClick={() => move(-1)}
               sx={{
                 ...overlayButtonSx,
@@ -179,7 +181,7 @@ const PostMediaLightbox: React.FC<PostMediaLightboxProps> = ({
               <ChevronLeftIcon />
             </IconButton>
             <IconButton
-              aria-label="다음 미디어 크게 보기"
+              aria-label={t('다음 미디어 크게 보기', 'View next media')}
               onClick={() => move(1)}
               sx={{
                 ...overlayButtonSx,

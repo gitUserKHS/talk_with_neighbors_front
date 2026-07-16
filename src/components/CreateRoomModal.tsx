@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ChatRoomType } from '../types/chat';
 import { chatService } from '../services/chatService';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface CreateRoomModalProps {
   isOpen: boolean;
@@ -9,6 +10,7 @@ interface CreateRoomModalProps {
 }
 
 export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ isOpen, onClose, onRoomCreated }) => {
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [type, setType] = useState<ChatRoomType>(ChatRoomType.GROUP);
   const [participantInput, setParticipantInput] = useState('');
@@ -27,7 +29,7 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ isOpen, onClos
       onRoomCreated();
       onClose();
     } catch (error) {
-      console.error('채팅방 생성 실패:', error);
+      console.error('Failed to create conversation:', error);
     }
   };
 
@@ -36,10 +38,10 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ isOpen, onClos
   return (
     <div className="modal">
       <div className="modal-content">
-        <h2>새 채팅방 만들기</h2>
+        <h2>{t('새 채팅방 만들기', 'Create a conversation')}</h2>
         <form onSubmit={handleSubmit}>
           <div>
-            <label>채팅방 이름:</label>
+            <label>{t('채팅방 이름:', 'Conversation name:')}</label>
             <input
               type="text"
               value={name}
@@ -48,27 +50,27 @@ export const CreateRoomModal: React.FC<CreateRoomModalProps> = ({ isOpen, onClos
             />
           </div>
           <div>
-            <label>채팅방 타입:</label>
+            <label>{t('채팅방 유형:', 'Conversation type:')}</label>
             <select
               value={type}
               onChange={(e) => setType(e.target.value as ChatRoomType)}
             >
-              <option value={ChatRoomType.ONE_ON_ONE}>1:1 채팅</option>
-              <option value={ChatRoomType.GROUP}>그룹 채팅</option>
+              <option value={ChatRoomType.ONE_ON_ONE}>{t('1:1 채팅', 'One-to-one')}</option>
+              <option value={ChatRoomType.GROUP}>{t('그룹 채팅', 'Group')}</option>
             </select>
           </div>
           <div>
-            <label>참여자 닉네임:</label>
+            <label>{t('참여자 닉네임:', 'Participant nicknames:')}</label>
             <input
               type="text"
               value={participantInput}
               onChange={(e) => setParticipantInput(e.target.value)}
-              placeholder="쉼표로 구분"
+              placeholder={t('쉼표로 구분해 주세요', 'Separate with commas')}
             />
           </div>
           <div className="modal-buttons">
-            <button type="submit">생성</button>
-            <button type="button" onClick={onClose}>취소</button>
+            <button type="submit">{t('생성', 'Create')}</button>
+            <button type="button" onClick={onClose}>{t('취소', 'Cancel')}</button>
           </div>
         </form>
       </div>

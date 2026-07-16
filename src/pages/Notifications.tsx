@@ -8,18 +8,16 @@ import DoneAllIcon from '@mui/icons-material/DoneAll';
 import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import { useNavigate } from 'react-router-dom';
 import notificationService, { InboxNotification } from '../services/notificationService';
-
-const labels: Record<string, string> = {
-  NEW_MESSAGE: '새 메시지', MATCH_REQUEST: '매칭 요청', MATCH_ACCEPTED: '매칭 수락',
-  MATCH_REJECTED: '매칭 알림', SYSTEM_NOTICE: '서비스 알림', ROOM_DELETED: '채팅방 알림',
-};
-
-const formatDate = (value: string) => new Intl.DateTimeFormat('ko-KR', {
-  month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-}).format(new Date(value));
+import { useI18n } from '../i18n/I18nProvider';
 
 const Notifications: React.FC = () => {
   const navigate = useNavigate();
+  const { t, formatDate } = useI18n();
+  const labels: Record<string, string> = {
+    NEW_MESSAGE: t('새 메시지', 'New message'), MATCH_REQUEST: t('매칭 요청', 'Match request'),
+    MATCH_ACCEPTED: t('매칭 수락', 'Match accepted'), MATCH_REJECTED: t('매칭 알림', 'Match update'),
+    SYSTEM_NOTICE: t('서비스 알림', 'Service notice'), ROOM_DELETED: t('채팅방 알림', 'Chat update'),
+  };
   const [items, setItems] = useState<InboxNotification[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,7 +27,7 @@ const Notifications: React.FC = () => {
       setLoading(true);
       setItems((await notificationService.getNotifications()).content);
     } catch {
-      setError('알림을 불러오지 못했어. 잠시 후 다시 시도해 줘.');
+      setError(t('알림을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.', 'We could not load your notifications. Please try again shortly.'));
     } finally {
       setLoading(false);
     }
@@ -61,11 +59,11 @@ const Notifications: React.FC = () => {
       <Stack spacing={2}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Box>
-            <Typography variant="h5" fontWeight={800}>알림함</Typography>
-            <Typography variant="body2" color="text.secondary">최근 30일의 소식을 다시 확인할 수 있어.</Typography>
+            <Typography variant="h5" fontWeight={800}>{t('알림', 'Notifications')}</Typography>
+            <Typography variant="body2" color="text.secondary">{t('최근 30일 동안 도착한 소식을 확인할 수 있습니다.', 'Review updates from the last 30 days.')}</Typography>
           </Box>
           {items.some((item) => !item.readAt) && (
-            <Button startIcon={<DoneAllIcon />} onClick={markAll}>모두 읽음</Button>
+            <Button startIcon={<DoneAllIcon />} onClick={markAll}>{t('모두 읽음', 'Mark all read')}</Button>
           )}
         </Box>
         {error && <Alert severity="error">{error}</Alert>}
@@ -73,7 +71,7 @@ const Notifications: React.FC = () => {
           : items.length === 0 ? (
             <Card variant="outlined"><CardContent sx={{ textAlign: 'center', py: 7 }}>
               <NotificationsNoneIcon color="disabled" sx={{ fontSize: 48 }} />
-              <Typography color="text.secondary" sx={{ mt: 1 }}>아직 도착한 알림이 없어.</Typography>
+              <Typography color="text.secondary" sx={{ mt: 1 }}>{t('아직 도착한 알림이 없습니다.', 'You do not have any notifications yet.')}</Typography>
             </CardContent></Card>
           ) : items.map((item) => (
             <Card key={item.id} variant="outlined" onClick={() => openItem(item)}
@@ -81,12 +79,12 @@ const Notifications: React.FC = () => {
               <CardContent sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
                 <Box sx={{ flex: 1 }}>
                   <Stack direction="row" spacing={1} alignItems="center">
-                    <Chip size="small" label={labels[item.type] || '알림'} color={item.readAt ? 'default' : 'primary'} />
-                    <Typography variant="caption" color="text.secondary">{formatDate(item.createdAt)}</Typography>
+                    <Chip size="small" label={labels[item.type] || t('알림', 'Notification')} color={item.readAt ? 'default' : 'primary'} />
+                    <Typography variant="caption" color="text.secondary">{formatDate(item.createdAt, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</Typography>
                   </Stack>
-                  <Typography sx={{ mt: 1, fontWeight: item.readAt ? 500 : 750 }}>{item.message || '새로운 소식이 도착했어.'}</Typography>
+                  <Typography sx={{ mt: 1, fontWeight: item.readAt ? 500 : 750 }}>{item.message || t('새로운 소식이 도착했습니다.', 'You have a new update.')}</Typography>
                 </Box>
-                <IconButton aria-label="알림 삭제" onClick={(event) => remove(event, item.id)}><DeleteOutlineIcon /></IconButton>
+                <IconButton aria-label={t('알림 삭제', 'Delete notification')} onClick={(event) => remove(event, item.id)}><DeleteOutlineIcon /></IconButton>
               </CardContent>
             </Card>
           ))}

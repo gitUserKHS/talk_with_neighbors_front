@@ -12,6 +12,7 @@ import MyLocationIcon from '@mui/icons-material/MyLocation';
 import { Location } from '../store/types';
 import { MapLocationSelection } from '../types/location';
 import MapLocationPicker from './MapLocationPicker';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface LocationSelectorProps {
   onLocationSelect: (location: Location) => void;
@@ -24,10 +25,11 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
   initialLocation,
   disabled,
 }) => {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [selection, setSelection] = useState<MapLocationSelection | null>(
     initialLocation ? {
-      placeName: initialLocation.address || '선택한 위치',
+      placeName: initialLocation.address || t('선택한 위치', 'Selected location'),
       address: initialLocation.address,
       latitude: initialLocation.latitude,
       longitude: initialLocation.longitude,
@@ -37,7 +39,7 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
 
   const handleOpen = () => {
     setSelection(initialLocation ? {
-      placeName: initialLocation.address || '선택한 위치',
+      placeName: initialLocation.address || t('선택한 위치', 'Selected location'),
       address: initialLocation.address,
       latitude: initialLocation.latitude,
       longitude: initialLocation.longitude,
@@ -53,7 +55,10 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
       || selection?.latitude === undefined
       || selection.longitude === undefined
     ) {
-      setError('카카오 지도에서 동네를 선택하거나 HTTPS 현재 위치 권한을 허용해줘.');
+      setError(t(
+        '카카오 지도에서 동네를 선택하거나 현재 위치 권한을 허용해 주세요.',
+        'Select your neighborhood on Kakao Map or allow access to your current location.',
+      ));
       return;
     }
 
@@ -73,11 +78,11 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
         startIcon={<MyLocationIcon />}
         disabled={disabled}
       >
-        {initialLocation?.address || '위치 선택'}
+        {initialLocation?.address || t('위치 선택', 'Choose location')}
       </Button>
 
       <Dialog open={open} onClose={() => setOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle>동네 위치 선택</DialogTitle>
+        <DialogTitle>{t('동네 위치 선택', 'Choose your neighborhood')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             {error && <Alert severity="error">{error}</Alert>}
@@ -89,14 +94,17 @@ const LocationSelector: React.FC<LocationSelectorProps> = ({
               }}
               allowCurrentLocation
               requireCoordinates
-              helperText="동네 중심이나 가까운 공공장소를 선택해줘. 정확한 좌표는 다른 사용자에게 직접 공개되지 않아."
+              helperText={t(
+                '동네 중심이나 가까운 공공장소를 선택해 주세요. 정확한 좌표는 다른 사용자에게 공개되지 않습니다.',
+                'Choose the center of your neighborhood or a nearby public place. Your exact coordinates are not shown to other users.',
+              )}
             />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setOpen(false)}>취소</Button>
+          <Button onClick={() => setOpen(false)}>{t('취소', 'Cancel')}</Button>
           <Button variant="contained" onClick={handleConfirm}>
-            확인
+            {t('이 위치 사용', 'Use this location')}
           </Button>
         </DialogActions>
       </Dialog>

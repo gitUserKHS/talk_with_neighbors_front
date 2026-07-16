@@ -67,19 +67,10 @@ import {
   replaceFeedComment,
   replaceFeedPost,
 } from '../services/contentMutationState';
-
-const formatDate = (value?: string | null) => {
-  if (!value) return '';
-
-  return new Intl.DateTimeFormat('ko-KR', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
-};
+import { useI18n } from '../i18n/I18nProvider';
 
 const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ currentUser }) => {
+  const { locale, t, formatNumber, formatDate } = useI18n();
   const isGuest = !currentUser;
   const accessScope = accessScopeForUser(currentUser?.id);
   const [postSnapshot, setPostSnapshot] = useState<AccessScopedList<FeedPost>>({
@@ -114,6 +105,16 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
   const feedRequestGeneration = useRef(0);
   const viewGeneration = useRef(0);
 
+  const requestError = (request: any, korean: string, english: string) => (
+    locale === 'ko' && typeof request?.response?.data?.message === 'string'
+      ? request.response.data.message
+      : t(korean, english)
+  );
+
+  const displayDate = (value?: string | null) => value
+    ? formatDate(value, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+    : '';
+
   const setPosts = (update: React.SetStateAction<FeedPost[]>) => {
     setPostSnapshot((snapshot) => updateScopedItems(snapshot, accessScope, update));
   };
@@ -129,7 +130,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       setPostSnapshot({ scope: requestScope, items: page.content ?? [] });
     } catch {
       if (!isLatestRequest(requestId, feedRequestGeneration.current)) return;
-      setError('피드를 불러오지 못했어. 잠시 후 다시 시도해줘.');
+      setError(t('피드를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.', 'Could not load the feed. Please try again shortly.'));
     } finally {
       if (isLatestRequest(requestId, feedRequestGeneration.current)) {
         setLoading(false);
@@ -174,9 +175,9 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
     if (loading) return '';
     if (posts.length > 0) return '';
     return isGuest
-      ? '아직 공개된 게시글이 없어. 조금 뒤에 다시 둘러봐줘.'
-      : '아직 올라온 게시글이 없어. 첫 취향을 공유해볼까?';
-  }, [isGuest, loading, posts.length]);
+      ? t('아직 공개된 게시글이 없습니다.', 'There are no public posts yet.')
+      : t('아직 게시글이 없습니다.', 'There are no posts yet.');
+  }, [isGuest, loading, posts.length, t]);
   const handleToggleLike = async (post: FeedPost) => {
     if (isGuest) return;
     const generation = viewGeneration.current;
@@ -203,7 +204,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       }
     } catch {
       if (!isLatestRequest(generation, viewGeneration.current)) return;
-      setError('좋아요 처리를 실패했어.');
+      setError(t('좋아요를 처리하지 못했습니다.', 'Could not update the like.'));
       void loadFeed();
     }
   };
@@ -222,7 +223,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
         setComments((prev) => ({ ...prev, [postId]: result }));
       } catch {
         if (!isLatestRequest(generation, viewGeneration.current)) return;
-        setError('댓글을 불러오지 못했어.');
+        setError(t('댓글을 불러오지 못했습니다.', 'Could not load comments.'));
       }
     }
   };
@@ -249,7 +250,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       );
     } catch {
       if (!isLatestRequest(generation, viewGeneration.current)) return;
-      setError('댓글 작성을 실패했어.');
+      setError(t('댓글을 등록하지 못했습니다.', 'Could not post your comment.'));
     }
   };
 
@@ -263,10 +264,10 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
     try {
       await matchingService.requestMatch(post.authorId);
       if (!isLatestRequest(generation, viewGeneration.current)) return;
-      setSuccess(`${post.authorUsername}님에게 매칭 요청을 보냈어.`);
+      setSuccess(t(`${post.authorUsername}님에게 매칭 요청을 보냈습니다.`, `Match request sent to ${post.authorUsername}.`));
     } catch (err: any) {
       if (!isLatestRequest(generation, viewGeneration.current)) return;
-      setError(err.response?.data?.message || '매칭 요청을 보낼 수 없었어.');
+      setError(requestError(err, '매칭 요청을 보내지 못했습니다.', 'Could not send the match request.'));
     } finally {
       if (isLatestRequest(generation, viewGeneration.current)) {
         setRequestingMatch((prev) => ({ ...prev, [post.id]: false }));
@@ -302,7 +303,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       .filter((tag, index, values) => values.indexOf(tag) === index)
       .slice(0, 10);
     if (!caption) {
-      setError('게시글 내용을 입력해줘.');
+      setError(t('게시글 내용을 입력해 주세요.', 'Enter a caption for your post.'));
       return;
     }
 
@@ -317,9 +318,9 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       setPosts((items) => replaceFeedPost(items, updated));
       setSelectedPost(updated);
       setPostEditTarget(null);
-      setSuccess('게시글을 수정했어.');
+      setSuccess(t('게시글을 수정했습니다.', 'Post updated.'));
     } catch (err: any) {
-      setError(err.response?.data?.message || '게시글을 수정하지 못했어.');
+      setError(requestError(err, '게시글을 수정하지 못했습니다.', 'Could not update the post.'));
     } finally {
       setPostMutationBusy(false);
     }
@@ -346,9 +347,9 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       });
       setPostDeleteTarget(null);
       setSelectedPost(null);
-      setSuccess('게시글을 삭제했어.');
+      setSuccess(t('게시글을 삭제했습니다.', 'Post deleted.'));
     } catch (err: any) {
-      setError(err.response?.data?.message || '게시글을 삭제하지 못했어.');
+      setError(requestError(err, '게시글을 삭제하지 못했습니다.', 'Could not delete the post.'));
     } finally {
       setPostMutationBusy(false);
     }
@@ -363,7 +364,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
     if (!commentEditTarget || commentMutationId) return;
     const content = commentEditContent.trim();
     if (!content) {
-      setError('댓글 내용을 입력해줘.');
+      setError(t('댓글 내용을 입력해 주세요.', 'Enter a comment.'));
       return;
     }
     const { postId, comment } = commentEditTarget;
@@ -373,9 +374,9 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       const updated = await feedService.updateComment(comment.id, content);
       setComments((current) => replaceFeedComment(current, postId, updated));
       setCommentEditTarget(null);
-      setSuccess('댓글을 수정했어.');
+      setSuccess(t('댓글을 수정했습니다.', 'Comment updated.'));
     } catch (err: any) {
-      setError(err.response?.data?.message || '댓글을 수정하지 못했어.');
+      setError(requestError(err, '댓글을 수정하지 못했습니다.', 'Could not update the comment.'));
     } finally {
       setCommentMutationId(null);
     }
@@ -392,9 +393,9 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       setPosts((items) => decrementPostCommentCount(items, postId));
       setCommentDeleteTarget(null);
       if (commentEditTarget?.comment.id === comment.id) setCommentEditTarget(null);
-      setSuccess('댓글을 삭제했어.');
+      setSuccess(t('댓글을 삭제했습니다.', 'Comment deleted.'));
     } catch (err: any) {
-      setError(err.response?.data?.message || '댓글을 삭제하지 못했어.');
+      setError(requestError(err, '댓글을 삭제하지 못했습니다.', 'Could not delete the comment.'));
     } finally {
       setCommentMutationId(null);
     }
@@ -409,10 +410,10 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       await safetyService.hide('FEED_POST', post.id);
       if (!isLatestRequest(generation, viewGeneration.current)) return;
       setPosts((prev) => prev.filter((item) => item.id !== post.id));
-      setSuccess('이 게시물을 내 피드에서 숨겼어.');
+      setSuccess(t('이 게시물을 내 피드에서 숨겼습니다.', 'This post is now hidden from your feed.'));
     } catch {
       if (!isLatestRequest(generation, viewGeneration.current)) return;
-      setError('게시물을 숨기지 못했어. 잠시 후 다시 시도해 줘.');
+      setError(t('게시물을 숨기지 못했습니다. 잠시 후 다시 시도해 주세요.', 'Could not hide the post. Please try again shortly.'));
     }
   };
 
@@ -421,15 +422,18 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
     const generation = viewGeneration.current;
     const post = selectedPost;
     closeSafetyMenu();
-    if (!window.confirm(`${post.authorUsername}님을 차단할까? 서로의 추천과 피드, 1:1 채팅에서 제외돼.`)) return;
+    if (!window.confirm(t(
+      `${post.authorUsername}님을 차단하시겠어요? 서로의 추천, 피드, 1:1 채팅에서 제외됩니다.`,
+      `Block ${post.authorUsername}? You will no longer see each other in recommendations, the feed, or one-to-one chats.`,
+    ))) return;
     try {
       await safetyService.blockUser(post.authorId);
       if (!isLatestRequest(generation, viewGeneration.current)) return;
       setPosts((prev) => prev.filter((item) => item.authorId !== post.authorId));
-      setSuccess(`${post.authorUsername}님을 차단했어.`);
+      setSuccess(t(`${post.authorUsername}님을 차단했습니다.`, `${post.authorUsername} has been blocked.`));
     } catch (err: any) {
       if (!isLatestRequest(generation, viewGeneration.current)) return;
-      setError(err.response?.data?.message || '사용자를 차단하지 못했어.');
+      setError(requestError(err, '사용자를 차단하지 못했습니다.', 'Could not block this user.'));
     }
   };
 
@@ -457,10 +461,10 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       if (!isLatestRequest(generation, viewGeneration.current)) return;
       if (hideAfterReport) setPosts((prev) => prev.filter((item) => item.id !== post.id));
       setReportOpen(false);
-      setSuccess('신고를 접수했어. 안전하게 검토할게.');
+      setSuccess(t('신고를 접수했습니다. 안전하게 검토하겠습니다.', 'Your report has been submitted for review.'));
     } catch (err: any) {
       if (!isLatestRequest(generation, viewGeneration.current)) return;
-      setError(err.response?.data?.message || '신고를 접수하지 못했어.');
+      setError(requestError(err, '신고를 접수하지 못했습니다.', 'Could not submit the report.'));
     } finally {
       if (isLatestRequest(generation, viewGeneration.current)) {
         setSafetySubmitting(false);
@@ -469,22 +473,30 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
   };
 
   return (
-    <Container component="main" maxWidth="sm" sx={{ py: 3 }}>
-      <Stack spacing={2.5}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+    <Container component="main" maxWidth="md" sx={{ py: { xs: 2.25, sm: 3.5 }, px: { xs: 1.5, sm: 3 } }}>
+      <Stack spacing={2.25} sx={{ width: '100%', maxWidth: 720, mx: 'auto' }}>
+        <Box
+          sx={{
+            display: 'flex',
+            alignItems: { xs: 'flex-start', sm: 'center' },
+            justifyContent: 'space-between',
+            gap: 2,
+            pb: 1,
+          }}
+        >
           <Box>
-            <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }}>
-              이웃 피드
+            <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.65rem', sm: '2rem' } }}>
+              {t('이웃 피드', 'Neighborhood feed')}
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {isGuest
-                ? '가입 전에도 이웃들이 공개한 순간을 둘러볼 수 있어.'
-                : '취향이 맞는 사람들의 순간을 최신순으로 보여줘.'}
+                ? t('이웃들이 공개한 최신 소식을 둘러보세요.', 'Explore the latest public posts from your neighborhood.')
+                : t('취향이 맞는 이웃들의 최신 소식을 확인하세요.', 'See the latest updates from neighbors who share your interests.')}
             </Typography>
           </Box>
           <Stack direction="row" spacing={1}>
-            <Tooltip title="새로고침">
-              <IconButton aria-label="새로고침" onClick={() => void loadFeed()}>
+            <Tooltip title={t('새로고침', 'Refresh')}>
+              <IconButton aria-label={t('피드 새로고침', 'Refresh feed')} onClick={() => void loadFeed()}>
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
@@ -495,7 +507,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                 state={{ from: { pathname: '/feed' } }}
                 variant="contained"
               >
-                로그인
+                {t('로그인', 'Sign in')}
               </Button>
             ) : (
               <Button
@@ -504,7 +516,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                 variant="contained"
                 startIcon={<AddPhotoAlternateIcon />}
               >
-                글쓰기
+                {t('글쓰기', 'Create post')}
               </Button>
             )}
           </Stack>
@@ -513,9 +525,14 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
         {isGuest && (
           <Alert
             severity="info"
+            variant="outlined"
+            icon={false}
             sx={{
               '& .MuiAlert-message': { minWidth: 0 },
               '& .MuiAlert-action': { flexShrink: 0 },
+              py: 0.5,
+              bgcolor: 'rgba(35, 133, 121, 0.04)',
+              borderColor: 'rgba(35, 133, 121, 0.24)',
             }}
             action={(
               <Button
@@ -526,11 +543,11 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                 size="small"
                 sx={{ minWidth: 'fit-content', flexShrink: 0, whiteSpace: 'nowrap' }}
               >
-                로그인하기
+                {t('로그인', 'Sign in')}
               </Button>
             )}
           >
-            지금은 둘러보기 모드야. 좋아요, 댓글 확인과 작성, 매칭, 안전 기능은 로그인 후 이용할 수 있어.
+            {t('현재 둘러보기 모드입니다. 좋아요, 댓글, 매칭 기능은 로그인 후 이용할 수 있습니다.', 'You are browsing public posts. Sign in to like, comment, and connect with neighbors.')}
           </Alert>
         )}
 
@@ -546,15 +563,25 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
         )}
 
         {loading && (
-          <Box role="status" aria-live="polite" aria-label="피드 불러오는 중" sx={{ display: 'grid', placeItems: 'center', py: 8 }}>
+          <Box role="status" aria-live="polite" aria-label={t('피드 불러오는 중', 'Loading feed')} sx={{ display: 'grid', placeItems: 'center', py: 8 }}>
             <CircularProgress />
           </Box>
         )}
 
         {emptyMessage && (
-          <Card variant="outlined">
-            <CardContent>
-              <Typography color="text.secondary">{emptyMessage}</Typography>
+          <Card variant="outlined" sx={{ borderRadius: 3, boxShadow: 'none' }}>
+            <CardContent sx={{ py: { xs: 5, sm: 7 }, textAlign: 'center' }}>
+              <Typography variant="h6">{emptyMessage}</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+                {isGuest
+                  ? t('새 이야기가 올라오면 이곳에 표시됩니다.', 'New public stories will appear here.')
+                  : t('일상의 순간이나 관심사를 이웃과 공유해 보세요.', 'Share a moment or an interest with your neighbors.')}
+              </Typography>
+              {!isGuest && (
+                <Button component={RouterLink} to="/post/new" variant="contained" startIcon={<AddPhotoAlternateIcon />} sx={{ mt: 2.5 }}>
+                  {t('첫 게시글 작성하기', 'Create your first post')}
+                </Button>
+              )}
             </CardContent>
           </Card>
         )}
@@ -568,7 +595,15 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
           const commentCount = post.commentCount ?? 0;
 
           return (
-            <Card key={post.id} variant="outlined" sx={{ borderRadius: 2, overflow: 'hidden' }}>
+            <Card
+              key={post.id}
+              variant="outlined"
+              sx={{
+                borderRadius: { xs: 2.5, sm: 3 },
+                overflow: 'hidden',
+                boxShadow: { xs: 'none', sm: '0 10px 32px rgba(60, 44, 39, 0.055)' },
+              }}
+            >
               <CardHeader
                 avatar={<Avatar src={post.authorProfileImage}>{post.authorUsername?.[0]}</Avatar>}
                 title={
@@ -580,19 +615,21 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                       <Chip
                         size="small"
                         icon={<VerifiedRoundedIcon />}
-                        label="이웃톡 공식"
+                        label={t('이웃톡 공식', 'Official')}
                         color="secondary"
                       />
                     )}
                     {!isGuest && !isOwnPost && score > 0 && (
-                      <Chip size="small" color="primary" label={`궁합 ${score}점`} />
+                      <Chip size="small" color="primary" label={t(`궁합 ${score}점`, `${score}% match`)} />
                     )}
                   </Stack>
                 }
-                subheader={formatDate(post.createdAt)}
+                subheader={displayDate(post.createdAt)}
                 action={!post.official && !isGuest ? (
                   <IconButton
-                    aria-label={isOwnPost ? '게시글 관리 메뉴' : '안전 메뉴'}
+                    aria-label={isOwnPost
+                      ? t('게시글 관리 메뉴', 'Post options')
+                      : t('안전 메뉴', 'Safety options')}
                     onClick={(event) => openSafetyMenu(event, post)}
                   >
                     <MoreVertIcon />
@@ -604,7 +641,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
               ) : (
                 <Box
                   role="img"
-                  aria-label="첨부 이미지 없음"
+                  aria-label={t('첨부 이미지 없음', 'No attached media')}
                   sx={{
                     display: 'grid',
                     placeItems: 'center',
@@ -613,19 +650,21 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                     color: 'text.secondary',
                   }}
                 >
-                  <Typography variant="body2">사진 없이 나눈 이야기</Typography>
+                  <Typography variant="body2">{t('사진 없이 나눈 이야기', 'A story shared without a photo')}</Typography>
                 </Box>
               )}
               {!isGuest && (
                 <CardActions disableSpacing sx={{ px: 1.5 }}>
                   <IconButton
-                    aria-label="좋아요"
+                    aria-label={post.likedByCurrentUser
+                      ? t('좋아요 취소', 'Unlike post')
+                      : t('좋아요', 'Like post')}
                     onClick={() => handleToggleLike(post)}
                     color={post.likedByCurrentUser ? 'error' : 'default'}
                   >
                     {post.likedByCurrentUser ? <FavoriteIcon /> : <FavoriteBorderIcon />}
                   </IconButton>
-                  <IconButton aria-label="댓글 보기" onClick={() => handleToggleComments(post.id)}>
+                  <IconButton aria-label={t('댓글 보기', 'View comments')} onClick={() => handleToggleComments(post.id)}>
                     <ChatBubbleOutlineIcon />
                   </IconButton>
                   <Box sx={{ flexGrow: 1 }} />
@@ -636,14 +675,14 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                       disabled={requestingMatch[post.id]}
                       onClick={() => handleRequestMatch(post)}
                     >
-                      매칭 요청
+                      {t('매칭 요청', 'Connect')}
                     </Button>
                   )}
                 </CardActions>
               )}
               <CardContent sx={{ pt: isGuest ? 2 : 0 }}>
                 <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
-                  좋아요 {likeCount.toLocaleString()}개
+                  {t(`좋아요 ${formatNumber(likeCount)}개`, `${formatNumber(likeCount)} likes`)}
                 </Typography>
                 <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
                   {post.caption}
@@ -655,7 +694,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                 </Stack>
                 {!isGuest && sharedInterests.length > 0 && (
                   <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-                    함께 좋아하는 관심사: {sharedInterests.join(', ')}
+                    {t('함께 좋아하는 관심사', 'Shared interests')}: {sharedInterests.join(', ')}
                   </Typography>
                 )}
                 {isGuest ? (
@@ -666,7 +705,10 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                     size="small"
                     sx={{ mt: 1, px: 0 }}
                   >
-                    댓글 {commentCount.toLocaleString()}개 · 로그인하고 참여
+                    {t(
+                      `댓글 ${formatNumber(commentCount)}개 · 로그인하고 참여하기`,
+                      `${formatNumber(commentCount)} comments · Sign in to join`,
+                    )}
                   </Button>
                 ) : (
                   <Button
@@ -674,7 +716,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                     sx={{ mt: 1, px: 0 }}
                     onClick={() => handleToggleComments(post.id)}
                   >
-                    댓글 {commentCount}개 보기
+                    {t(`댓글 ${formatNumber(commentCount)}개 보기`, `View ${formatNumber(commentCount)} comments`)}
                   </Button>
                 )}
 
@@ -702,13 +744,13 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                                     autoFocus
                                     value={commentEditContent}
                                     disabled={isMutatingComment}
-                                    inputProps={{ maxLength: 1000, 'aria-label': '수정할 댓글' }}
+                                    inputProps={{ maxLength: 1000, 'aria-label': t('수정할 댓글', 'Edit comment') }}
                                     onChange={(event) => setCommentEditContent(event.target.value)}
                                   />
                                   <Stack direction="row" spacing={0.75} justifyContent="flex-end">
-                                    <Button size="small" disabled={isMutatingComment} onClick={() => setCommentEditTarget(null)}>취소</Button>
+                                    <Button size="small" disabled={isMutatingComment} onClick={() => setCommentEditTarget(null)}>{t('취소', 'Cancel')}</Button>
                                     <Button size="small" variant="contained" disabled={isMutatingComment || !commentEditContent.trim()} onClick={submitCommentEdit}>
-                                      {isMutatingComment ? '저장 중…' : '저장'}
+                                      {isMutatingComment ? t('저장 중…', 'Saving…') : t('저장', 'Save')}
                                     </Button>
                                   </Stack>
                                 </Stack>
@@ -718,24 +760,24 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                                     <strong>{comment.authorUsername}</strong> {comment.content}
                                   </Typography>
                                   <Typography variant="caption" color="text.secondary">
-                                    {comment.updatedAt && comment.updatedAt !== comment.createdAt ? '수정됨 · ' : ''}
-                                    {formatDate(comment.createdAt)}
+                                    {comment.updatedAt && comment.updatedAt !== comment.createdAt ? `${t('수정됨', 'Edited')} · ` : ''}
+                                    {displayDate(comment.createdAt)}
                                   </Typography>
                                 </>
                               )}
                             </Box>
                             {isOwnComment && !isEditingComment && (
                               <Stack direction="row" spacing={0.25}>
-                                <Tooltip title="댓글 수정">
+                                <Tooltip title={t('댓글 수정', 'Edit comment')}>
                                   <span>
-                                    <IconButton aria-label="댓글 수정" size="small" disabled={isMutatingComment} onClick={() => startCommentEdit(post.id, comment)}>
+                                    <IconButton aria-label={t('댓글 수정', 'Edit comment')} size="small" disabled={isMutatingComment} onClick={() => startCommentEdit(post.id, comment)}>
                                       <EditOutlinedIcon fontSize="inherit" />
                                     </IconButton>
                                   </span>
                                 </Tooltip>
-                                <Tooltip title="댓글 삭제">
+                                <Tooltip title={t('댓글 삭제', 'Delete comment')}>
                                   <span>
-                                    <IconButton aria-label="댓글 삭제" size="small" disabled={isMutatingComment} onClick={() => setCommentDeleteTarget({ postId: post.id, comment })}>
+                                    <IconButton aria-label={t('댓글 삭제', 'Delete comment')} size="small" disabled={isMutatingComment} onClick={() => setCommentDeleteTarget({ postId: post.id, comment })}>
                                       <DeleteOutlineIcon fontSize="inherit" />
                                     </IconButton>
                                   </span>
@@ -749,7 +791,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                         <TextField
                           fullWidth
                           size="small"
-                          placeholder="댓글 쓰기"
+                          placeholder={t('댓글 쓰기', 'Write a comment')}
                           value={commentInputs[post.id] || ''}
                           onChange={(event) =>
                             setCommentInputs((prev) => ({
@@ -764,7 +806,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                             }
                           }}
                         />
-                        <Button onClick={() => handleAddComment(post.id)}>게시</Button>
+                        <Button onClick={() => handleAddComment(post.id)}>{t('게시', 'Post')}</Button>
                       </Stack>
                     </Stack>
                   </Box>
@@ -778,32 +820,32 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       {!isGuest && <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeSafetyMenu}>
         {selectedPost && String(selectedPost.authorId) === String(currentUser?.id) ? [
           <MenuItem key="edit" onClick={openPostEdit}>
-            <EditOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> 게시글 수정
+            <EditOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> {t('게시글 수정', 'Edit post')}
           </MenuItem>,
           <MenuItem key="delete" onClick={confirmPostDelete} sx={{ color: 'error.main' }}>
-            <DeleteOutlineIcon fontSize="small" sx={{ mr: 1.5 }} /> 게시글 삭제
+            <DeleteOutlineIcon fontSize="small" sx={{ mr: 1.5 }} /> {t('게시글 삭제', 'Delete post')}
           </MenuItem>,
         ] : [
           <MenuItem key="hide" onClick={handleHidePost}>
-            <VisibilityOffOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> 게시물 숨기기
+            <VisibilityOffOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> {t('게시물 숨기기', 'Hide post')}
           </MenuItem>,
           <MenuItem key="report" onClick={openReportDialog}>
-            <ReportOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> 게시물 신고하기
+            <ReportOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> {t('게시물 신고하기', 'Report post')}
           </MenuItem>,
           <MenuItem key="block" onClick={handleBlockUser} sx={{ color: 'error.main' }}>
-            <BlockOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> 사용자 차단하기
+            <BlockOutlinedIcon fontSize="small" sx={{ mr: 1.5 }} /> {t('사용자 차단하기', 'Block user')}
           </MenuItem>,
         ]}
       </Menu>}
 
       {!isGuest && <Dialog open={Boolean(postEditTarget)} onClose={() => !postMutationBusy && setPostEditTarget(null)} fullWidth maxWidth="sm">
-        <DialogTitle>게시글 수정</DialogTitle>
+        <DialogTitle>{t('게시글 수정', 'Edit post')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
             {error && <Alert severity="error">{error}</Alert>}
-            <Alert severity="info">첨부한 사진과 동영상은 그대로 유지돼.</Alert>
+            <Alert severity="info">{t('첨부한 사진과 동영상은 그대로 유지됩니다.', 'Your attached photos and videos will stay unchanged.')}</Alert>
             <TextField
-              label="글 내용"
+              label={t('글 내용', 'Caption')}
               multiline
               minRows={4}
               fullWidth
@@ -815,83 +857,83 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
               onChange={(event) => setPostEditCaption(event.target.value)}
             />
             <TextField
-              label="관심사 태그"
+              label={t('관심사 태그', 'Interest tags')}
               fullWidth
               value={postEditTags}
               disabled={postMutationBusy}
-              helperText="쉼표로 나눠서 최대 10개까지 입력해줘."
+              helperText={t('쉼표로 구분해 최대 10개까지 입력해 주세요.', 'Enter up to 10 tags, separated by commas.')}
               onChange={(event) => setPostEditTags(event.target.value)}
             />
             <FormControlLabel
               control={<Checkbox checked={postEditPublicPreview} disabled={postMutationBusy} onChange={(event) => setPostEditPublicPreview(event.target.checked)} />}
-              label="로그인 전 공개 미리보기 허용"
+              label={t('로그인 전 공개 미리보기 허용', 'Allow a public preview before sign-in')}
             />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button disabled={postMutationBusy} onClick={() => setPostEditTarget(null)}>취소</Button>
+          <Button disabled={postMutationBusy} onClick={() => setPostEditTarget(null)}>{t('취소', 'Cancel')}</Button>
           <Button variant="contained" disabled={postMutationBusy || !postEditCaption.trim()} onClick={submitPostEdit}>
-            {postMutationBusy ? '저장 중…' : '저장'}
+            {postMutationBusy ? t('저장 중…', 'Saving…') : t('저장', 'Save')}
           </Button>
         </DialogActions>
       </Dialog>}
 
       {!isGuest && <Dialog open={Boolean(postDeleteTarget)} onClose={() => !postMutationBusy && setPostDeleteTarget(null)}>
-        <DialogTitle>게시글을 삭제할까?</DialogTitle>
+        <DialogTitle>{t('게시글을 삭제하시겠어요?', 'Delete this post?')}</DialogTitle>
         <DialogContent>
           <Stack spacing={1.5}>
             {error && <Alert severity="error">{error}</Alert>}
-            <Typography>사진·동영상과 댓글까지 함께 삭제되고 되돌릴 수 없어.</Typography>
+            <Typography>{t('사진·동영상과 댓글이 함께 삭제되며 되돌릴 수 없습니다.', 'Photos, videos, and comments will also be deleted. This cannot be undone.')}</Typography>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button disabled={postMutationBusy} onClick={() => setPostDeleteTarget(null)}>취소</Button>
+          <Button disabled={postMutationBusy} onClick={() => setPostDeleteTarget(null)}>{t('취소', 'Cancel')}</Button>
           <Button color="error" variant="contained" disabled={postMutationBusy} onClick={submitPostDelete}>
-            {postMutationBusy ? '삭제 중…' : '삭제'}
+            {postMutationBusy ? t('삭제 중…', 'Deleting…') : t('삭제', 'Delete')}
           </Button>
         </DialogActions>
       </Dialog>}
 
       {!isGuest && <Dialog open={Boolean(commentDeleteTarget)} onClose={() => !commentMutationId && setCommentDeleteTarget(null)}>
-        <DialogTitle>댓글을 삭제할까?</DialogTitle>
+        <DialogTitle>{t('댓글을 삭제하시겠어요?', 'Delete this comment?')}</DialogTitle>
         <DialogContent>
           <Stack spacing={1.5}>
             {error && <Alert severity="error">{error}</Alert>}
-            <Typography>삭제한 댓글은 되돌릴 수 없어.</Typography>
+            <Typography>{t('삭제한 댓글은 되돌릴 수 없습니다.', 'Deleted comments cannot be restored.')}</Typography>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button disabled={Boolean(commentMutationId)} onClick={() => setCommentDeleteTarget(null)}>취소</Button>
+          <Button disabled={Boolean(commentMutationId)} onClick={() => setCommentDeleteTarget(null)}>{t('취소', 'Cancel')}</Button>
           <Button color="error" variant="contained" disabled={Boolean(commentMutationId)} onClick={submitCommentDelete}>
-            {commentMutationId ? '삭제 중…' : '삭제'}
+            {commentMutationId ? t('삭제 중…', 'Deleting…') : t('삭제', 'Delete')}
           </Button>
         </DialogActions>
       </Dialog>}
 
       {!isGuest && <Dialog open={reportOpen} onClose={() => !safetySubmitting && setReportOpen(false)} fullWidth maxWidth="xs">
-        <DialogTitle>게시물 신고하기</DialogTitle>
+        <DialogTitle>{t('게시물 신고하기', 'Report post')}</DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ pt: 1 }}>
-            <Alert severity="info">신고한 사실은 게시물 작성자에게 공개되지 않아.</Alert>
+            <Alert severity="info">{t('신고한 사실은 게시물 작성자에게 공개되지 않습니다.', 'The post author will not be told who submitted the report.')}</Alert>
             <FormControl fullWidth>
-              <InputLabel id="report-reason-label">신고 사유</InputLabel>
+              <InputLabel id="report-reason-label">{t('신고 사유', 'Reason')}</InputLabel>
               <Select
                 labelId="report-reason-label"
                 value={reportReason}
-                label="신고 사유"
+                label={t('신고 사유', 'Reason')}
                 onChange={(event) => setReportReason(event.target.value as ReportReason)}
               >
-                <MenuItem value="HARASSMENT">괴롭힘 또는 위협</MenuItem>
-                <MenuItem value="HATE_SPEECH">혐오 표현</MenuItem>
-                <MenuItem value="SPAM">스팸 또는 홍보</MenuItem>
-                <MenuItem value="INAPPROPRIATE_CONTENT">부적절한 콘텐츠</MenuItem>
-                <MenuItem value="IMPERSONATION">사칭</MenuItem>
-                <MenuItem value="PRIVACY">개인정보 노출</MenuItem>
-                <MenuItem value="OTHER">기타</MenuItem>
+                <MenuItem value="HARASSMENT">{t('괴롭힘 또는 위협', 'Harassment or threats')}</MenuItem>
+                <MenuItem value="HATE_SPEECH">{t('혐오 표현', 'Hate speech')}</MenuItem>
+                <MenuItem value="SPAM">{t('스팸 또는 홍보', 'Spam or promotion')}</MenuItem>
+                <MenuItem value="INAPPROPRIATE_CONTENT">{t('부적절한 콘텐츠', 'Inappropriate content')}</MenuItem>
+                <MenuItem value="IMPERSONATION">{t('사칭', 'Impersonation')}</MenuItem>
+                <MenuItem value="PRIVACY">{t('개인정보 노출', 'Privacy violation')}</MenuItem>
+                <MenuItem value="OTHER">{t('기타', 'Other')}</MenuItem>
               </Select>
             </FormControl>
             <TextField
-              label="상세 설명 (선택)"
+              label={t('상세 설명 (선택)', 'Additional details (optional)')}
               multiline
               minRows={3}
               inputProps={{ maxLength: 1000 }}
@@ -900,14 +942,14 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
             />
             <FormControlLabel
               control={<Checkbox checked={hideAfterReport} onChange={(event) => setHideAfterReport(event.target.checked)} />}
-              label="신고 후 이 게시물 숨기기"
+              label={t('신고 후 이 게시물 숨기기', 'Hide this post after reporting')}
             />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setReportOpen(false)} disabled={safetySubmitting}>취소</Button>
+          <Button onClick={() => setReportOpen(false)} disabled={safetySubmitting}>{t('취소', 'Cancel')}</Button>
           <Button variant="contained" color="error" onClick={submitReport} disabled={safetySubmitting}>
-            {safetySubmitting ? '접수 중…' : '신고 접수'}
+            {safetySubmitting ? t('접수 중…', 'Submitting…') : t('신고 접수', 'Submit report')}
           </Button>
         </DialogActions>
       </Dialog>}
