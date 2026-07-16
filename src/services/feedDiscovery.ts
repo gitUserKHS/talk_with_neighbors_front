@@ -16,65 +16,15 @@ export const resolveFeedMode = (
     : 'RECOMMENDED'
 );
 
-const HOUR_MS = 60 * 60 * 1000;
-const MAX_RECENCY_HOURS = 24 * 14;
-
-const createdTime = (post: FeedPost): number => {
-  const value = Date.parse(post.createdAt);
-  return Number.isFinite(value) ? value : 0;
-};
-
-const normalizedCompatibility = (post: FeedPost): number =>
-  Math.min(1, Math.max(0, (post.compatibilityScore ?? 0) / 100));
-
-const recencySignal = (post: FeedPost, now: number): number => {
-  const ageHours = Math.max(0, now - createdTime(post)) / HOUR_MS;
-  return Math.max(0, 1 - Math.min(ageHours, MAX_RECENCY_HOURS) / MAX_RECENCY_HOURS);
-};
-
-const engagementSignal = (post: FeedPost): number => {
-  const weightedInteractions = Math.max(0, post.likeCount ?? 0)
-    + Math.max(0, post.commentCount ?? 0) * 2;
-  return Math.min(1, Math.log1p(weightedInteractions) / Math.log(101));
-};
-
 /**
- * Provides a predictable client-side fallback while the server remains the source
- * of truth for privacy filtering and candidate selection.
+ * Preserves the server's authoritative ranking across page boundaries. Posts
+ * repeated by adjacent pages are refreshed in place instead of moving cards.
  */
-export const recommendationScore = (post: FeedPost, now = Date.now()): number => {
-  const sharedInterestSignal = Math.min(1, (post.sharedInterests?.length ?? 0) / 4);
-  return normalizedCompatibility(post) * 0.42
-    + sharedInterestSignal * 0.25
-    + recencySignal(post, now) * 0.21
-    + engagementSignal(post) * 0.12;
-};
-
-export const rankFeedPosts = (
-  posts: FeedPost[],
-  mode: FeedDiscoveryMode,
-  now = Date.now(),
+export const mergeServerOrderedFeedPosts = (
+  current: FeedPost[],
+  incoming: FeedPost[],
 ): FeedPost[] => {
-  const hasServerRankingMetadata = posts.some(
-    (post) => post.recommendationReasons !== undefined,
-  );
-
-  if ((mode === 'RECOMMENDED' || mode === 'NEARBY') && hasServerRankingMetadata) {
-    return [...posts];
-  }
-
-  const indexed = posts.map((post, index) => ({ post, index }));
-
-  indexed.sort((left, right) => {
-    if (mode === 'LATEST') {
-      return createdTime(right.post) - createdTime(left.post) || left.index - right.index;
-    }
-
-    // Older servers do not provide privacy-safe ranking metadata. Keep their
-    // feed useful with the same stable, non-location fallback as recommendations.
-    return recommendationScore(right.post, now) - recommendationScore(left.post, now)
-      || left.index - right.index;
-  });
-
-  return indexed.map(({ post }) => post);
+  const byId = new Map(current.map((post) => [post.id, post]));
+  incoming.forEach((post) => byId.set(post.id, post));
+  return Array.from(byId.values());
 };

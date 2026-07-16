@@ -2,8 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { FeedPost } from '../types/feed';
 import {
   availableFeedModes,
-  rankFeedPosts,
-  recommendationScore,
+  mergeServerOrderedFeedPosts,
   resolveFeedMode,
 } from './feedDiscovery';
 
@@ -25,21 +24,7 @@ const post = (id: string, values: Partial<FeedPost> = {}): FeedPost => ({
   ...values,
 });
 
-describe('feed discovery ranking', () => {
-  const now = Date.parse('2026-07-16T00:00:00.000Z');
-
-  it('prioritizes meaningful interest and compatibility signals for recommendations', () => {
-    const relevant = post('relevant', {
-      compatibilityScore: 86,
-      sharedInterests: ['walking', 'coffee'],
-    });
-    const popular = post('popular', { likeCount: 80, commentCount: 20 });
-
-    expect(recommendationScore(relevant, now)).toBeGreaterThan(recommendationScore(popular, now));
-    expect(rankFeedPosts([popular, relevant], 'RECOMMENDED', now).map(({ id }) => id))
-      .toEqual(['relevant', 'popular']);
-  });
-
+describe('feed discovery', () => {
   it('offers distance-based discovery only when a signed-in location can be applied', () => {
     expect(availableFeedModes(false)).toEqual(['RECOMMENDED', 'LATEST']);
     expect(availableFeedModes(true)).toEqual(['RECOMMENDED', 'NEARBY', 'LATEST']);
@@ -48,52 +33,39 @@ describe('feed discovery ranking', () => {
     expect(resolveFeedMode('NEARBY', true)).toBe('NEARBY');
   });
 
-  it('preserves privacy-safe server proximity order even when its reasons are empty', () => {
-    const serverFirst = post('server-first', { recommendationReasons: [] });
-    const locallyStronger = post('locally-stronger', {
-      compatibilityScore: 100,
-      recommendationReasons: [],
+  it('preserves the server order for a fresh page without local reranking', () => {
+    const serverFirst = post('server-first', {
+      createdAt: '2026-07-14T00:00:00.000Z',
     });
-
-    expect(rankFeedPosts([serverFirst, locallyStronger], 'NEARBY', now).map(({ id }) => id))
-      .toEqual(['server-first', 'locally-stronger']);
-  });
-
-  it('uses a stable recommendation fallback for legacy nearby responses', () => {
-    const olderServerFirst = post('older-server-first');
-    const relevant = post('relevant', {
-      compatibilityScore: 86,
+    const locallyStrongerAndNewer = post('locally-stronger-and-newer', {
+      compatibilityScore: 100,
       sharedInterests: ['walking', 'coffee'],
+      likeCount: 80,
+      commentCount: 20,
+      createdAt: '2026-07-15T23:00:00.000Z',
     });
 
-    expect(rankFeedPosts([olderServerFirst, relevant], 'NEARBY', now).map(({ id }) => id))
-      .toEqual(['relevant', 'older-server-first']);
+    expect(mergeServerOrderedFeedPosts([], [serverFirst, locallyStrongerAndNewer]))
+      .toEqual([serverFirst, locallyStrongerAndNewer]);
   });
 
-  it('preserves server recommendation order when explanation metadata is present', () => {
-    const serverFirst = post('server-first', { recommendationReasons: ['POPULAR'] });
-    const locallyStronger = post('locally-stronger', { compatibilityScore: 100 });
+  it('keeps page boundaries stable and refreshes overlapping posts in place', () => {
+    const first = post('first');
+    const overlap = post('overlap', { caption: 'before' });
+    const refreshedOverlap = post('overlap', { caption: 'after' });
+    const nextFirst = post('next-first');
+    const nextSecond = post('next-second');
+    const merged = mergeServerOrderedFeedPosts(
+      [first, overlap],
+      [refreshedOverlap, nextFirst, nextSecond],
+    );
 
-    expect(rankFeedPosts([serverFirst, locallyStronger], 'RECOMMENDED', now).map(({ id }) => id))
-      .toEqual(['server-first', 'locally-stronger']);
-  });
-
-  it('preserves server recommendation order when the reason list is empty', () => {
-    const serverFirst = post('server-first', { recommendationReasons: [] });
-    const locallyStronger = post('locally-stronger', {
-      compatibilityScore: 100,
-      recommendationReasons: [],
-    });
-
-    expect(rankFeedPosts([serverFirst, locallyStronger], 'RECOMMENDED', now).map(({ id }) => id))
-      .toEqual(['server-first', 'locally-stronger']);
-  });
-
-  it('orders the latest view by creation time', () => {
-    const older = post('older', { createdAt: '2026-07-14T00:00:00.000Z' });
-    const newer = post('newer', { createdAt: '2026-07-15T23:00:00.000Z' });
-
-    expect(rankFeedPosts([older, newer], 'LATEST', now).map(({ id }) => id))
-      .toEqual(['newer', 'older']);
+    expect(merged.map(({ id }) => id)).toEqual([
+      'first',
+      'overlap',
+      'next-first',
+      'next-second',
+    ]);
+    expect(merged[1].caption).toBe('after');
   });
 });

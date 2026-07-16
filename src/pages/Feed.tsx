@@ -79,7 +79,7 @@ import { useI18n } from '../i18n/I18nProvider';
 import {
   FeedDiscoveryMode,
   availableFeedModes,
-  rankFeedPosts,
+  mergeServerOrderedFeedPosts,
   resolveFeedMode,
 } from '../services/feedDiscovery';
 
@@ -164,11 +164,9 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       if (!isLatestRequest(requestId, feedRequestGeneration.current)) return;
       setPostSnapshot((snapshot) => {
         const base = append && snapshot.scope === requestScope ? snapshot.items : [];
-        const byId = new Map(base.map((post) => [post.id, post]));
-        (page.content ?? []).forEach((post) => byId.set(post.id, post));
         return {
           scope: requestScope,
-          items: rankFeedPosts(Array.from(byId.values()), requestMode),
+          items: mergeServerOrderedFeedPosts(base, page.content ?? []),
         };
       });
       setLoadedFeedMode(requestMode);
