@@ -62,12 +62,17 @@ import {
 import ChatScheduleDetailsDialog from './schedule/ChatScheduleDetailsDialog';
 import ChatScheduleFormDialog from './schedule/ChatScheduleFormDialog';
 import ChatScheduleListDialog from './schedule/ChatScheduleListDialog';
+import {
+  MAX_VIDEO_BYTES,
+  MAX_VIDEO_COUNT,
+  MAX_MEDIA_REQUEST_BYTES,
+  VIDEO_UPLOAD_GUIDANCE,
+  mediaUploadStatusText,
+} from '../../services/mediaUploadPolicy';
 
 const MAX_ATTACHMENT_COUNT = 5;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
 const MAX_FILE_BYTES = 25 * 1024 * 1024;
-const MAX_TOTAL_BYTES = 120 * 1024 * 1024;
 const ACCEPTED_MIME_TYPES = new Set([
   'image/jpeg', 'image/png', 'image/gif', 'image/webp',
   'video/mp4', 'video/webm', 'video/quicktime',
@@ -281,6 +286,7 @@ const ChatRoom: React.FC = () => {
     const accepted: PendingAttachment[] = [];
     const errors: string[] = [];
     const knownIds = new Set(pendingAttachments.map((item) => item.id));
+    const existingVideoCount = pendingAttachments.filter((item) => item.type === 'VIDEO').length;
     for (const file of files) {
       if (accepted.length >= available) {
         errors.push('최대 5개까지만 추가했어.');
@@ -294,7 +300,11 @@ const ChatRoom: React.FC = () => {
       const type = attachmentTypeOf(file);
       const limit = type === 'IMAGE' ? MAX_IMAGE_BYTES : type === 'VIDEO' ? MAX_VIDEO_BYTES : MAX_FILE_BYTES;
       if (file.size > limit) {
-        errors.push(`${file.name}: ${type === 'IMAGE' ? '10MB' : type === 'VIDEO' ? '100MB' : '25MB'}를 넘을 수 없어.`);
+        errors.push(`${file.name}: ${type === 'IMAGE' ? '10MB' : type === 'VIDEO' ? '30MB' : '25MB'}를 넘을 수 없어.`);
+        continue;
+      }
+      if (type === 'VIDEO' && existingVideoCount + accepted.filter((item) => item.type === 'VIDEO').length >= MAX_VIDEO_COUNT) {
+        errors.push(`${file.name}: 동영상은 한 번에 1개만 보낼 수 있어.`);
         continue;
       }
       const id = `${file.name}-${file.size}-${file.lastModified}`;
@@ -308,7 +318,7 @@ const ChatRoom: React.FC = () => {
 
     const total = [...pendingAttachments, ...accepted]
       .reduce((sum, item) => sum + item.file.size, 0);
-    if (total > MAX_TOTAL_BYTES) {
+    if (total > MAX_MEDIA_REQUEST_BYTES) {
       accepted.forEach((item) => URL.revokeObjectURL(item.previewUrl));
       setError('한 메시지의 첨부 파일 전체 크기는 120MB를 넘을 수 없어.');
       return;
@@ -687,10 +697,17 @@ const ChatRoom: React.FC = () => {
               ))}
             </Stack>
           )}
-          {sending && pendingAttachments.length === 0 && uploadProgress > 0 && <LinearProgress variant="determinate" value={uploadProgress} />}
+          {sending && pendingAttachments.length === 0 && (
+            <Box sx={{ px: 1.5, pt: 1 }}>
+              <LinearProgress variant={uploadProgress > 0 ? 'determinate' : 'indeterminate'} value={uploadProgress} />
+              <Typography variant="caption" color="text.secondary">
+                {mediaUploadStatusText(uploadProgress)}
+              </Typography>
+            </Box>
+          )}
           <Stack direction="row" spacing={0.75} alignItems="flex-end" sx={{ p: 1.5 }}>
             <input ref={fileInputRef} type="file" hidden multiple accept={ACCEPT_ATTRIBUTE} onChange={(event) => { addFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
-            <Tooltip title="사진·동영상·파일 첨부 (최대 5개)">
+            <Tooltip title={`사진·동영상·파일 첨부 (최대 5개). ${VIDEO_UPLOAD_GUIDANCE}`}>
               <span><IconButton aria-label="파일 첨부" disabled={sending || pendingAttachments.length >= MAX_ATTACHMENT_COUNT} onClick={() => fileInputRef.current?.click()}><AttachFileIcon /></IconButton></span>
             </Tooltip>
             <TextField
