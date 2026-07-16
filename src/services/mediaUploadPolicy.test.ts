@@ -9,7 +9,7 @@ import {
 } from './mediaUploadPolicy';
 
 describe('mediaUploadPolicy', () => {
-  it('keeps the portfolio node video envelope deliberately small', () => {
+  it('keeps the resource-constrained node video envelope deliberately small', () => {
     expect(MAX_VIDEO_BYTES).toBe(30 * 1024 * 1024);
     expect(MAX_VIDEO_COUNT).toBe(1);
     expect(MAX_VIDEO_DURATION_SECONDS).toBe(60);

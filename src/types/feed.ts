@@ -17,6 +17,10 @@ export interface FeedPost {
   likedByCurrentUser: boolean;
   compatibilityScore: number;
   sharedInterests: string[];
+  /** Optional discovery metadata returned by distance-aware feed APIs. */
+  distanceKm?: number;
+  neighborhoodName?: string;
+  recommendationReasons?: string[];
 }
 
 export type FeedMediaType = 'IMAGE' | 'VIDEO';

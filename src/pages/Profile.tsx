@@ -6,7 +6,7 @@ import {
 } from '@mui/material';
 import {
   ArticleOutlined, BlockOutlined, CommentOutlined, FavoriteBorder, GroupsOutlined,
-  DeleteOutline, LockOutlined, NotificationsOutlined, PersonOutline, PhotoCameraOutlined,
+  DeleteOutline, LockOutlined, LogoutRounded, NotificationsOutlined, PersonOutline, PhotoCameraOutlined,
   SettingsOutlined, VisibilityOffOutlined,
 } from '@mui/icons-material';
 import { useDispatch } from 'react-redux';
@@ -23,6 +23,7 @@ import { HobbyMeetup } from '../types/meetup';
 import { MyCommentActivity, MyPageOverview, UserPreferences } from '../types/mypage';
 import { BlockedUser, HiddenContent, SafetyReport } from '../types/safety';
 import { useI18n } from '../i18n/I18nProvider';
+import SignOutDialog from '../components/auth/SignOutDialog';
 
 interface ProfileForm {
   username: string;
@@ -74,6 +75,9 @@ const Profile: React.FC = () => {
   const [commentEditTarget, setCommentEditTarget] = useState<MyCommentActivity | null>(null);
   const [commentEditContent, setCommentEditContent] = useState('');
   const [newInterest, setNewInterest] = useState('');
+  const [signOutOpen, setSignOutOpen] = useState(false);
+  const [signOutBusy, setSignOutBusy] = useState(false);
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const [passwords, setPasswords] = useState({ current: '', next: '', confirm: '' });
   const [profile, setProfile] = useState<ProfileForm>({
     username: '', email: '', gender: '', age: '', interests: [], bio: '', profileImage: '', location: null,
@@ -281,6 +285,24 @@ const Profile: React.FC = () => {
     try {
       await myPageService.logoutAll(); dispatch(setUser(null)); navigate('/login');
     } catch { setError(t('모든 기기에서 로그아웃하지 못했습니다.', 'Could not sign out from all devices.')); }
+  };
+
+  const logoutCurrentDevice = async () => {
+    setSignOutBusy(true);
+    setSignOutError(null);
+    try {
+      await authService.logout();
+      dispatch(setUser(null));
+      setSignOutOpen(false);
+      navigate('/login', { replace: true });
+    } catch {
+      setSignOutError(t(
+        '로그아웃 요청을 완료하지 못했습니다. 연결을 확인하고 다시 시도해 주세요.',
+        'Could not complete sign-out. Check your connection and try again.',
+      ));
+    } finally {
+      setSignOutBusy(false);
+    }
   };
 
   if (loading) return <Box role="status" aria-label={t('마이페이지 불러오는 중', 'Loading account')} sx={{ display: 'grid', placeItems: 'center', minHeight: '60vh' }}><CircularProgress /></Box>;
@@ -501,9 +523,35 @@ const Profile: React.FC = () => {
           <Divider />
           <Box><Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 2 }}><LockOutlined /><Typography variant="h5">{t('비밀번호 변경', 'Change password')}</Typography></Stack><Stack spacing={2} maxWidth={480}><TextField type="password" autoComplete="current-password" label={t('현재 비밀번호', 'Current password')} value={passwords.current} onChange={(e) => setPasswords({ ...passwords, current: e.target.value })} /><TextField type="password" autoComplete="new-password" label={t('새 비밀번호', 'New password')} value={passwords.next} onChange={(e) => setPasswords({ ...passwords, next: e.target.value })} /><TextField type="password" autoComplete="new-password" label={t('새 비밀번호 확인', 'Confirm new password')} value={passwords.confirm} onChange={(e) => setPasswords({ ...passwords, confirm: e.target.value })} /><Button variant="contained" onClick={() => void changePassword()}>{t('비밀번호 변경', 'Change password')}</Button></Stack></Box>
           <Divider />
-          <Box><Typography variant="h5">{t('로그인 보안', 'Sign-in security')}</Typography><Typography color="text.secondary" sx={{ my: 1 }}>{t('분실한 기기나 공유 PC의 세션을 포함해 모든 기기에서 로그아웃합니다.', 'Sign out from every device, including lost devices and shared computers.')}</Typography><Button color="error" variant="outlined" onClick={() => void logoutAll()}>{t('모든 기기에서 로그아웃', 'Sign out from all devices')}</Button></Box>
+          <Box>
+            <Typography variant="h5">{t('로그인 보안', 'Sign-in security')}</Typography>
+            <Typography color="text.secondary" sx={{ mt: 1 }}>
+              {t('현재 사용 중인 기기의 로그인 상태만 종료하거나, 필요한 경우 모든 기기의 세션을 종료할 수 있습니다.', 'Sign out on this device, or end every active session when needed.')}
+            </Typography>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.25} sx={{ mt: 2, alignItems: { sm: 'center' } }}>
+              <Button
+                color="error"
+                variant="contained"
+                startIcon={<LogoutRounded />}
+                onClick={() => { setSignOutError(null); setSignOutOpen(true); }}
+                sx={{ width: { xs: '100%', sm: 'auto' } }}
+              >
+                {t('이 기기에서 로그아웃', 'Sign out on this device')}
+              </Button>
+              <Button color="error" variant="outlined" onClick={() => void logoutAll()} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+                {t('모든 기기에서 로그아웃', 'Sign out from all devices')}
+              </Button>
+            </Stack>
+          </Box>
         </Stack></Box>}
       </Paper>
+      <SignOutDialog
+        open={signOutOpen}
+        busy={signOutBusy}
+        error={signOutError}
+        onClose={() => { setSignOutError(null); setSignOutOpen(false); }}
+        onConfirm={() => void logoutCurrentDevice()}
+      />
       <Dialog open={Boolean(postEditTarget)} onClose={() => !activityMutationId && setPostEditTarget(null)} fullWidth maxWidth="sm">
         <DialogTitle>{t('게시글 수정', 'Edit post')}</DialogTitle>
         <DialogContent>

@@ -22,7 +22,10 @@ import {
   InputLabel,
   Menu,
   MenuItem,
+  Paper,
   Select,
+  Tab,
+  Tabs,
   Checkbox,
   Stack,
   TextField,
@@ -42,6 +45,10 @@ import BlockOutlinedIcon from '@mui/icons-material/BlockOutlined';
 import VerifiedRoundedIcon from '@mui/icons-material/VerifiedRounded';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import EditOutlinedIcon from '@mui/icons-material/EditOutlined';
+import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
+import NearMeRoundedIcon from '@mui/icons-material/NearMeRounded';
+import ScheduleRoundedIcon from '@mui/icons-material/ScheduleRounded';
+import ArrowDownwardRoundedIcon from '@mui/icons-material/ArrowDownwardRounded';
 import { Link as RouterLink } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import feedService from '../services/feedService';
@@ -68,21 +75,37 @@ import {
   replaceFeedPost,
 } from '../services/contentMutationState';
 import { useI18n } from '../i18n/I18nProvider';
+import {
+  FeedDiscoveryMode,
+  availableFeedModes,
+  rankFeedPosts,
+  resolveFeedMode,
+} from '../services/feedDiscovery';
+
+const FEED_PAGE_SIZE = 12;
 
 const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ currentUser }) => {
   const { locale, t, formatNumber, formatDate } = useI18n();
   const isGuest = !currentUser;
   const accessScope = accessScopeForUser(currentUser?.id);
+  const [feedMode, setFeedMode] = useState<FeedDiscoveryMode>('RECOMMENDED');
+  const effectiveFeedMode = resolveFeedMode(feedMode, !isGuest);
+  const [loadedFeedMode, setLoadedFeedMode] = useState<FeedDiscoveryMode | null>(null);
   const [postSnapshot, setPostSnapshot] = useState<AccessScopedList<FeedPost>>({
     scope: null,
     items: [],
   });
-  const posts = visibleScopedItems(postSnapshot, accessScope);
+  const posts = loadedFeedMode === effectiveFeedMode
+    ? visibleScopedItems(postSnapshot, accessScope)
+    : [];
   const [comments, setComments] = useState<Record<string, FeedComment[]>>({});
   const [commentInputs, setCommentInputs] = useState<Record<string, string>>({});
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [requestingMatch, setRequestingMatch] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [feedPage, setFeedPage] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null);
@@ -119,29 +142,60 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
     setPostSnapshot((snapshot) => updateScopedItems(snapshot, accessScope, update));
   };
 
-  const loadFeed = async (requestScope: AccessScope = accessScope) => {
+  const loadFeed = async (
+    requestScope: AccessScope = accessScope,
+    pageNumber = 0,
+    append = false,
+    requestMode: FeedDiscoveryMode = effectiveFeedMode,
+  ) => {
     const requestId = ++feedRequestGeneration.current;
-    setLoading(true);
+    if (append) setLoadingMore(true);
+    else setLoading(true);
     setError(null);
 
     try {
-      const page = await feedService.getFeed(0, 20, apiAccessForScope(requestScope));
+      const page = await feedService.getFeed(
+        pageNumber,
+        FEED_PAGE_SIZE,
+        apiAccessForScope(requestScope),
+        { mode: requestMode },
+      );
       if (!isLatestRequest(requestId, feedRequestGeneration.current)) return;
-      setPostSnapshot({ scope: requestScope, items: page.content ?? [] });
+      setPostSnapshot((snapshot) => {
+        const base = append && snapshot.scope === requestScope ? snapshot.items : [];
+        const byId = new Map(base.map((post) => [post.id, post]));
+        (page.content ?? []).forEach((post) => byId.set(post.id, post));
+        return {
+          scope: requestScope,
+          items: rankFeedPosts(Array.from(byId.values()), requestMode),
+        };
+      });
+      setLoadedFeedMode(requestMode);
+      setFeedPage(page.number ?? pageNumber);
+      setHasMore(page.last === false && pageNumber + 1 < (page.totalPages || Number.MAX_SAFE_INTEGER));
     } catch {
       if (!isLatestRequest(requestId, feedRequestGeneration.current)) return;
       setError(t('피드를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.', 'Could not load the feed. Please try again shortly.'));
     } finally {
       if (isLatestRequest(requestId, feedRequestGeneration.current)) {
         setLoading(false);
+        setLoadingMore(false);
       }
     }
   };
 
   useEffect(() => {
+    if (feedMode !== effectiveFeedMode) setFeedMode(effectiveFeedMode);
+  }, [effectiveFeedMode, feedMode]);
+
+  useEffect(() => {
     const generation = ++viewGeneration.current;
     ++feedRequestGeneration.current;
     setPostSnapshot({ scope: null, items: [] });
+    setLoadedFeedMode(null);
+    setFeedPage(0);
+    setHasMore(false);
+    setLoadingMore(false);
     setComments({});
     setCommentInputs({});
     setExpandedComments({});
@@ -161,7 +215,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
     setCommentEditTarget(null);
     setCommentDeleteTarget(null);
     setCommentMutationId(null);
-    void loadFeed(accessScope);
+    void loadFeed(accessScope, 0, false, effectiveFeedMode);
 
     return () => {
       if (viewGeneration.current === generation) {
@@ -169,15 +223,16 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       }
       ++feedRequestGeneration.current;
     };
-  }, [accessScope]);
+  }, [accessScope, effectiveFeedMode]);
 
   const emptyMessage = useMemo(() => {
     if (loading) return '';
     if (posts.length > 0) return '';
-    return isGuest
-      ? t('아직 공개된 게시글이 없습니다.', 'There are no public posts yet.')
-      : t('아직 게시글이 없습니다.', 'There are no posts yet.');
-  }, [isGuest, loading, posts.length, t]);
+    if (isGuest) return t('아직 공개된 게시글이 없습니다.', 'There are no public posts yet.');
+    if (effectiveFeedMode === 'NEARBY') return t('가까운 이웃의 이야기가 아직 없습니다.', 'There are no nearby stories yet.');
+    if (effectiveFeedMode === 'LATEST') return t('새로 올라온 이야기가 아직 없습니다.', 'There are no recent stories yet.');
+    return t('현재 추천할 이웃 이야기가 없습니다.', 'There are no recommended stories right now.');
+  }, [effectiveFeedMode, isGuest, loading, posts.length, t]);
   const handleToggleLike = async (post: FeedPost) => {
     if (isGuest) return;
     const generation = viewGeneration.current;
@@ -472,31 +527,70 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
     }
   };
 
+  const discoveryOptions = useMemo(() => {
+    const options = [{
+      value: 'RECOMMENDED' as const,
+      label: t('추천', 'For you'),
+      icon: <AutoAwesomeRoundedIcon fontSize="small" />,
+      description: isGuest
+        ? t('최신성과 이웃의 반응을 함께 살펴 공개 이야기를 보여드립니다.', 'Public stories are ordered using freshness and neighborhood activity.')
+        : t('공유 관심사, 취향 일치도, 최신성과 반응을 함께 반영합니다.', 'Shared interests, compatibility, freshness, and activity shape this view.'),
+    },
+    {
+      value: 'NEARBY' as const,
+      label: t('가까운', 'Nearby'),
+      icon: <NearMeRoundedIcon fontSize="small" />,
+      description: t('거리 정보가 있는 이야기를 가까운 순서로 먼저 보여드립니다.', 'Stories with distance data are shown from nearest to farthest.'),
+    },
+    {
+      value: 'LATEST' as const,
+      label: t('최신', 'Latest'),
+      icon: <ScheduleRoundedIcon fontSize="small" />,
+      description: t('작성 시간을 기준으로 새로운 이야기를 먼저 보여드립니다.', 'Stories are ordered by their publication time, newest first.'),
+    }];
+
+    const availableModes = availableFeedModes(!isGuest);
+    return options.filter(({ value }) => availableModes.includes(value));
+  }, [isGuest, t]);
+  const activeDiscovery = discoveryOptions.find(({ value }) => value === effectiveFeedMode) ?? discoveryOptions[0];
+
   return (
-    <Container component="main" maxWidth="md" sx={{ py: { xs: 2.25, sm: 3.5 }, px: { xs: 1.5, sm: 3 } }}>
-      <Stack spacing={2.25} sx={{ width: '100%', maxWidth: 720, mx: 'auto' }}>
+    <Container component="main" maxWidth="lg" sx={{ py: { xs: 1.75, sm: 3.5 }, px: { xs: 1.25, sm: 3 } }}>
+      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 720px) 280px' }, gap: 3.5, justifyContent: 'center', alignItems: 'start' }}>
+      <Stack spacing={2.25} sx={{ width: '100%', minWidth: 0 }}>
         <Box
           sx={{
             display: 'flex',
+            flexDirection: { xs: 'column', sm: 'row' },
             alignItems: { xs: 'flex-start', sm: 'center' },
             justifyContent: 'space-between',
-            gap: 2,
-            pb: 1,
+            gap: { xs: 1.25, sm: 2 },
+            px: { xs: 0.5, sm: 0 },
+            pb: 0.25,
           }}
         >
-          <Box>
+          <Box sx={{ minWidth: 0, width: { xs: '100%', sm: 'auto' } }}>
             <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.65rem', sm: '2rem' } }}>
               {t('이웃 피드', 'Neighborhood feed')}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {isGuest
-                ? t('이웃들이 공개한 최신 소식을 둘러보세요.', 'Explore the latest public posts from your neighborhood.')
-                : t('취향이 맞는 이웃들의 최신 소식을 확인하세요.', 'See the latest updates from neighbors who share your interests.')}
+                ? t('이웃들이 공개한 이야기를 발견해 보세요.', 'Discover public stories shared by neighbors.')
+                : t('관심사와 거리를 바탕으로 새로운 이웃 이야기를 발견해 보세요.', 'Discover neighborhood stories shaped by interests and distance.')}
             </Typography>
           </Box>
-          <Stack direction="row" spacing={1}>
+          <Stack
+            direction="row"
+            useFlexGap
+            sx={{
+              width: { xs: '100%', sm: 'auto' },
+              gap: 1,
+              flexWrap: 'wrap',
+              justifyContent: { xs: 'space-between', sm: 'flex-end' },
+            }}
+          >
             <Tooltip title={t('새로고침', 'Refresh')}>
-              <IconButton aria-label={t('피드 새로고침', 'Refresh feed')} onClick={() => void loadFeed()}>
+              <IconButton disabled={loading || loadingMore} aria-label={t('피드 새로고침', 'Refresh feed')} onClick={() => void loadFeed()}>
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
@@ -516,11 +610,45 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                 variant="contained"
                 startIcon={<AddPhotoAlternateIcon />}
               >
-                {t('글쓰기', 'Create post')}
+                {t('글쓰기', 'New post')}
               </Button>
             )}
           </Stack>
         </Box>
+
+        <Paper
+          elevation={0}
+          sx={{
+            position: 'sticky',
+            top: { xs: 62, sm: 70 },
+            zIndex: 5,
+            border: 1,
+            borderColor: 'divider',
+            borderRadius: 2.5,
+            overflow: 'hidden',
+            bgcolor: 'rgba(255,255,255,.96)',
+            backdropFilter: 'blur(18px)',
+          }}
+        >
+          <Tabs
+            value={effectiveFeedMode}
+            onChange={(_, value: FeedDiscoveryMode) => setFeedMode(value)}
+            variant="fullWidth"
+            aria-label={t('피드 발견 기준', 'Feed discovery mode')}
+            sx={{ minHeight: 52, '& .MuiTab-root': { minHeight: 52, fontWeight: 800 } }}
+          >
+            {discoveryOptions.map((option) => (
+              <Tab
+                key={option.value}
+                value={option.value}
+                icon={option.icon}
+                iconPosition="start"
+                label={option.label}
+                aria-label={t(`${option.label} 피드`, `${option.label} feed`)}
+              />
+            ))}
+          </Tabs>
+        </Paper>
 
         {isGuest && (
           <Alert
@@ -593,6 +721,20 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
           const sharedInterests = post.sharedInterests ?? [];
           const likeCount = post.likeCount ?? 0;
           const commentCount = post.commentCount ?? 0;
+          const hasMedia = Boolean(post.media?.length || post.imageUrl?.trim());
+          const distanceLabel = post.distanceKm != null
+            ? t(`${formatNumber(Number(post.distanceKm.toFixed(1)))}km`, `${formatNumber(Number(post.distanceKm.toFixed(1)))} km away`)
+            : '';
+          const postContext = [post.neighborhoodName, distanceLabel, displayDate(post.createdAt)].filter(Boolean).join(' · ');
+          const recommendationReasonLabels: Record<string, string> = {
+            SHARED_INTERESTS: t('공통 관심사', 'Shared interests'),
+            NEARBY: t('가까운 이웃', 'Nearby neighbor'),
+            RECENT: t('새로 올라옴', 'Recently posted'),
+            POPULAR: t('이웃들이 주목', 'Popular nearby'),
+          };
+          const recommendationReason = (post.recommendationReasons ?? [])
+            .map((reason) => recommendationReasonLabels[reason])
+            .find(Boolean);
 
           return (
             <Card
@@ -622,9 +764,12 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                     {!isGuest && !isOwnPost && score > 0 && (
                       <Chip size="small" color="primary" label={t(`궁합 ${score}점`, `${score}% match`)} />
                     )}
+                    {!isGuest && effectiveFeedMode === 'RECOMMENDED' && recommendationReason && (
+                      <Chip size="small" variant="outlined" label={recommendationReason} />
+                    )}
                   </Stack>
                 }
-                subheader={displayDate(post.createdAt)}
+                subheader={postContext}
                 action={!post.official && !isGuest ? (
                   <IconButton
                     aria-label={isOwnPost
@@ -636,55 +781,12 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                   </IconButton>
                 ) : undefined}
               />
-              {post.media?.length || post.imageUrl?.trim() ? (
+              {hasMedia && (
                 <PostMediaCarousel post={post} />
-              ) : (
-                <Box
-                  role="img"
-                  aria-label={t('첨부 이미지 없음', 'No attached media')}
-                  sx={{
-                    display: 'grid',
-                    placeItems: 'center',
-                    minHeight: 220,
-                    bgcolor: 'rgba(35,133,121,.08)',
-                    color: 'text.secondary',
-                  }}
-                >
-                  <Typography variant="body2">{t('사진 없이 나눈 이야기', 'A story shared without a photo')}</Typography>
-                </Box>
               )}
-              {!isGuest && (
-                <CardActions disableSpacing sx={{ px: 1.5 }}>
-                  <IconButton
-                    aria-label={post.likedByCurrentUser
-                      ? t('좋아요 취소', 'Unlike post')
-                      : t('좋아요', 'Like post')}
-                    onClick={() => handleToggleLike(post)}
-                    color={post.likedByCurrentUser ? 'error' : 'default'}
-                  >
-                    {post.likedByCurrentUser ? <FavoriteIcon /> : <FavoriteBorderIcon />}
-                  </IconButton>
-                  <IconButton aria-label={t('댓글 보기', 'View comments')} onClick={() => handleToggleComments(post.id)}>
-                    <ChatBubbleOutlineIcon />
-                  </IconButton>
-                  <Box sx={{ flexGrow: 1 }} />
-                  {!isOwnPost && !post.official && (
-                    <Button
-                      size="small"
-                      startIcon={<PersonAddAltIcon />}
-                      disabled={requestingMatch[post.id]}
-                      onClick={() => handleRequestMatch(post)}
-                    >
-                      {t('매칭 요청', 'Connect')}
-                    </Button>
-                  )}
-                </CardActions>
-              )}
-              <CardContent sx={{ pt: isGuest ? 2 : 0 }}>
-                <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
-                  {t(`좋아요 ${formatNumber(likeCount)}개`, `${formatNumber(likeCount)} likes`)}
-                </Typography>
-                <Typography variant="body1" sx={{ whiteSpace: 'pre-wrap' }}>
+              <CardContent sx={{ pt: hasMedia ? 1.5 : 0.5 }}>
+                <Typography variant={hasMedia ? 'body1' : 'h6'} sx={{ whiteSpace: 'pre-wrap', fontWeight: hasMedia ? 400 : 650, lineHeight: 1.65 }}>
+                  {!hasMedia && <Box component="span" sx={{ fontWeight: 800, mr: 0.75 }}>{post.authorUsername}</Box>}
                   {post.caption}
                 </Typography>
                 <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mt: 1.5 }}>
@@ -697,6 +799,52 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
                     {t('함께 좋아하는 관심사', 'Shared interests')}: {sharedInterests.join(', ')}
                   </Typography>
                 )}
+                <CardActions disableSpacing sx={{ px: 0, minHeight: 52, mt: 0.5 }}>
+                  {isGuest ? (
+                    <Stack direction="row" spacing={2} alignItems="center" color="text.secondary" sx={{ px: 0.75 }}>
+                      <Stack direction="row" spacing={0.6} alignItems="center" aria-label={t(`좋아요 ${formatNumber(likeCount)}개`, `${formatNumber(likeCount)} likes`)}>
+                        <FavoriteBorderIcon fontSize="small" />
+                        <Typography variant="body2" fontWeight={700}>{formatNumber(likeCount)}</Typography>
+                      </Stack>
+                      <Stack direction="row" spacing={0.6} alignItems="center" aria-label={t(`댓글 ${formatNumber(commentCount)}개`, `${formatNumber(commentCount)} comments`)}>
+                        <ChatBubbleOutlineIcon fontSize="small" />
+                        <Typography variant="body2" fontWeight={700}>{formatNumber(commentCount)}</Typography>
+                      </Stack>
+                    </Stack>
+                  ) : (
+                    <>
+                      <Button
+                        aria-label={post.likedByCurrentUser ? t('좋아요 취소', 'Unlike post') : t('좋아요', 'Like post')}
+                        onClick={() => handleToggleLike(post)}
+                        color={post.likedByCurrentUser ? 'error' : 'inherit'}
+                        startIcon={post.likedByCurrentUser ? <FavoriteIcon /> : <FavoriteBorderIcon />}
+                        sx={{ minWidth: 0, px: 1 }}
+                      >
+                        {formatNumber(likeCount)}
+                      </Button>
+                      <Button
+                        color="inherit"
+                        aria-label={t('댓글 보기', 'View comments')}
+                        onClick={() => handleToggleComments(post.id)}
+                        startIcon={<ChatBubbleOutlineIcon />}
+                        sx={{ minWidth: 0, px: 1 }}
+                      >
+                        {formatNumber(commentCount)}
+                      </Button>
+                    </>
+                  )}
+                  <Box sx={{ flexGrow: 1 }} />
+                  {!isGuest && !isOwnPost && !post.official && (
+                    <Button
+                      size="small"
+                      startIcon={<PersonAddAltIcon />}
+                      disabled={requestingMatch[post.id]}
+                      onClick={() => handleRequestMatch(post)}
+                    >
+                      {t('매칭 요청', 'Connect')}
+                    </Button>
+                  )}
+                </CardActions>
                 {isGuest ? (
                   <Button
                     component={RouterLink}
@@ -815,7 +963,68 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
             </Card>
           );
         })}
+
+        {!loading && posts.length > 0 && (
+          <Box sx={{ display: 'grid', placeItems: 'center', pt: 0.5, pb: 2 }}>
+            {hasMore ? (
+              <Button
+                variant="outlined"
+                startIcon={loadingMore ? <CircularProgress size={18} /> : <ArrowDownwardRoundedIcon />}
+                disabled={loadingMore}
+                aria-busy={loadingMore}
+                onClick={() => void loadFeed(accessScope, feedPage + 1, true, effectiveFeedMode)}
+              >
+                {loadingMore ? t('다음 이야기 불러오는 중…', 'Loading more stories…') : t('이야기 더 보기', 'Load more stories')}
+              </Button>
+            ) : (
+              <Typography variant="body2" color="text.secondary" role="status">
+                {t('지금 볼 수 있는 이야기를 모두 확인했습니다.', 'You are all caught up for now.')}
+              </Typography>
+            )}
+          </Box>
+        )}
       </Stack>
+
+      <Stack
+        component="aside"
+        spacing={2}
+        sx={{ display: { xs: 'none', lg: 'flex' }, position: 'sticky', top: 94 }}
+      >
+        <Card variant="outlined" sx={{ boxShadow: 'none', borderRadius: 3 }}>
+          <CardContent>
+            <Stack direction="row" spacing={1} alignItems="center" color="primary.main">
+              {activeDiscovery.icon}
+              <Typography variant="subtitle1" color="text.primary" fontWeight={850}>{activeDiscovery.label}</Typography>
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 1, lineHeight: 1.65 }}>
+              {activeDiscovery.description}
+            </Typography>
+            {!isGuest && currentUser?.interests && currentUser.interests.length > 0 && (
+              <Stack direction="row" spacing={0.75} useFlexGap flexWrap="wrap" sx={{ mt: 1.5 }}>
+                {currentUser.interests.slice(0, 4).map((interest) => (
+                  <Chip key={interest} size="small" variant="outlined" label={`#${interest}`} />
+                ))}
+              </Stack>
+            )}
+          </CardContent>
+        </Card>
+        <Card variant="outlined" sx={{ boxShadow: 'none', borderRadius: 3 }}>
+          <CardContent>
+            <Typography variant="subtitle1" fontWeight={850}>{t('더 발견하기', 'Discover more')}</Typography>
+            <Stack spacing={0.5} sx={{ mt: 1 }}>
+              <Button component={RouterLink} to="/meetups" color="inherit" sx={{ justifyContent: 'flex-start', px: 1 }}>
+                {t('가까운 모임 둘러보기', 'Browse nearby meetups')}
+              </Button>
+              {!isGuest && (
+                <Button component={RouterLink} to="/matching" color="inherit" sx={{ justifyContent: 'flex-start', px: 1 }}>
+                  {t('잘 맞는 이웃 만나기', 'Meet compatible neighbors')}
+                </Button>
+              )}
+            </Stack>
+          </CardContent>
+        </Card>
+      </Stack>
+      </Box>
 
       {!isGuest && <Menu anchorEl={menuAnchor} open={Boolean(menuAnchor)} onClose={closeSafetyMenu}>
         {selectedPost && String(selectedPost.authorId) === String(currentUser?.id) ? [

@@ -197,8 +197,12 @@ class AuthService {
   async logout(): Promise<void> {
     try {
       await api.post('/auth/logout');
-    } catch {
-      // Redux still completes local logout if the server session already expired.
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 401) {
+        // The cookie is already expired, so local sign-out can safely complete.
+        return;
+      }
+      throw error;
     }
   }
 

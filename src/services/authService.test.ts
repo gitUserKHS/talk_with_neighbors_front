@@ -124,8 +124,28 @@ describe('cookie-backed authentication state', () => {
   });
 
   it('completes local logout even when the server session already expired', async () => {
-    post.mockRejectedValueOnce(new Error('session already expired'));
+    post.mockRejectedValueOnce(Object.assign(new Error('session already expired'), {
+      isAxiosError: true,
+      response: { status: 401 },
+    }));
     await expect(authService.logout()).resolves.toBeUndefined();
+  });
+
+  it('keeps the local session when the server could not clear its cookie', async () => {
+    const networkFailure = new Error('network unavailable');
+    post.mockRejectedValueOnce(networkFailure);
+
+    await expect(authService.logout()).rejects.toBe(networkFailure);
+  });
+
+  it('does not treat a server failure as an expired session', async () => {
+    const serverFailure = Object.assign(new Error('server unavailable'), {
+      isAxiosError: true,
+      response: { status: 503 },
+    });
+    post.mockRejectedValueOnce(serverFailure);
+
+    await expect(authService.logout()).rejects.toBe(serverFailure);
   });
 });
 
