@@ -10,7 +10,10 @@ const pickerSource = await readFile(
 test('map search cannot submit a surrounding meetup form', () => {
   assert.doesNotMatch(pickerSource, /component="form"/);
   assert.doesNotMatch(pickerSource, /type="submit"/);
-  assert.match(pickerSource, /<Box role="search" aria-label="장소 또는 주소 검색">/);
+  assert.match(
+    pickerSource,
+    /<Box role="search" aria-label=\{t\('장소 또는 주소 검색', 'Search for a place or address'\)\}>/,
+  );
   assert.match(pickerSource, /type="button"\s+onClick=\{handleSearch\}/);
 });
 

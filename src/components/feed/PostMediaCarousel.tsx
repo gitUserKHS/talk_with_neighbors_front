@@ -4,6 +4,7 @@ import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import { FeedMedia, FeedPost } from '../../types/feed';
+import { useI18n } from '../../i18n/I18nProvider';
 import PostMediaLightbox from './PostMediaLightbox';
 
 interface PostMediaCarouselProps {
@@ -11,6 +12,7 @@ interface PostMediaCarouselProps {
 }
 
 const PostMediaCarousel: React.FC<PostMediaCarouselProps> = ({ post }) => {
+  const { t } = useI18n();
   const media = useMemo<FeedMedia[]>(() => {
     if (post.media?.length) {
       return [...post.media].sort((left, right) => left.sortOrder - right.sortOrder);
@@ -43,7 +45,9 @@ const PostMediaCarousel: React.FC<PostMediaCarouselProps> = ({ post }) => {
       <Box
         component="button"
         type="button"
-        aria-label={`${active.type === 'VIDEO' ? '동영상' : '사진'} 원본 비율로 크게 보기`}
+        aria-label={active.type === 'VIDEO'
+          ? t('동영상을 원본 비율로 크게 보기', 'View video at full size')
+          : t('사진을 원본 비율로 크게 보기', 'View photo at full size')}
         aria-haspopup="dialog"
         onClick={() => setLightboxOpen(true)}
         sx={mediaOpenerSx}
@@ -84,7 +88,7 @@ const PostMediaCarousel: React.FC<PostMediaCarouselProps> = ({ post }) => {
           <Box
             component="img"
             src={active.url}
-            alt={post.caption || '게시글 사진'}
+            alt={post.caption || t('게시글 사진', 'Post photo')}
             loading="lazy"
             draggable={false}
             sx={{ display: 'block', width: '100%', aspectRatio: '1 / 1', objectFit: 'cover' }}
@@ -95,14 +99,14 @@ const PostMediaCarousel: React.FC<PostMediaCarouselProps> = ({ post }) => {
       {hasMultiple && (
         <>
           <IconButton
-            aria-label="이전 미디어"
+            aria-label={t('이전 미디어', 'Previous media')}
             onClick={() => setActiveIndex((index) => (index - 1 + media.length) % media.length)}
             sx={navigationButtonSx('left')}
           >
             <ChevronLeftIcon />
           </IconButton>
           <IconButton
-            aria-label="다음 미디어"
+            aria-label={t('다음 미디어', 'Next media')}
             onClick={() => setActiveIndex((index) => (index + 1) % media.length)}
             sx={navigationButtonSx('right')}
           >
@@ -129,7 +133,7 @@ const PostMediaCarousel: React.FC<PostMediaCarouselProps> = ({ post }) => {
                 component="button"
                 type="button"
                 key={`${item.url}-${index}`}
-                aria-label={`${index + 1}번째 미디어 보기`}
+                aria-label={t(`${index + 1}번째 미디어 보기`, `View media ${index + 1}`)}
                 aria-current={index === activeIndex ? 'true' : undefined}
                 onClick={() => setActiveIndex(index)}
                 sx={{
@@ -168,7 +172,7 @@ const PostMediaCarousel: React.FC<PostMediaCarouselProps> = ({ post }) => {
         open={lightboxOpen}
         media={media}
         activeIndex={activeIndex}
-        alt={post.caption || '게시글 사진'}
+        alt={post.caption || t('게시글 사진', 'Post photo')}
         onClose={() => setLightboxOpen(false)}
         onIndexChange={setActiveIndex}
       />

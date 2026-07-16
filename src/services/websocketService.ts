@@ -16,6 +16,7 @@ import {
   updateRoomInfo,
   updateUnreadCount,
 } from '../store/slices/chatSlice';
+import { translate } from '../i18n/I18nProvider';
 
 interface WebSocketNotification<T = any> {
   type: string;
@@ -251,7 +252,7 @@ class WebSocketService {
         store.dispatch(
           addNotification({
             type: 'info',
-            message: notification.message || '새 매칭 요청이 도착했어.',
+            message: notification.message || translate('새 매칭 요청이 도착했습니다.', 'You received a new match request.'),
             navigateTo: '/matching',
           })
         );
@@ -261,7 +262,7 @@ class WebSocketService {
         store.dispatch(
           setMatchCompleted({
             id: String(roomId || ''),
-            name: notification.data?.roomName || notification.data?.name || '1:1 채팅',
+            name: notification.data?.roomName || notification.data?.name || translate('1:1 채팅', 'Direct chat'),
             message: notification.message,
           })
         );

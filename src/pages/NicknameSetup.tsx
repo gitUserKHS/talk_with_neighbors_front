@@ -12,12 +12,14 @@ import {
 } from '../services/profileSetup';
 import { logout, setUser } from '../store/slices/authSlice';
 import type { AppDispatch, RootState } from '../store/types';
+import { useI18n } from '../i18n/I18nProvider';
 
 const NicknameSetup: React.FC = () => {
   const user = useSelector((state: RootState) => state.auth.user);
   const dispatch = useDispatch<AppDispatch>();
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useI18n();
   const [nickname, setNickname] = useState('');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -42,11 +44,11 @@ const NicknameSetup: React.FC = () => {
     const candidateLength = Array.from(candidate).length;
     const hasForbiddenCharacters = /\s|[\u00AD\u061C\u180E\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/.test(candidate);
     if (candidateLength < 2 || candidateLength > 30 || hasForbiddenCharacters) {
-      setError('닉네임은 공백 없이 2자 이상 30자 이하로 입력해줘.');
+      setError(t('닉네임은 공백 없이 2자 이상 30자 이하로 입력해 주세요.', 'Enter a nickname between 2 and 30 characters without spaces.'));
       return;
     }
     if (candidate === user.username) {
-      setError('자동으로 만들어진 이름과 다른 닉네임을 정해줘.');
+      setError(t('자동으로 생성된 이름과 다른 닉네임을 입력해 주세요.', 'Choose a nickname different from the automatically generated name.'));
       return;
     }
 
@@ -54,7 +56,7 @@ const NicknameSetup: React.FC = () => {
     setError('');
     try {
       if (await authService.checkUsernameDuplicate(candidate)) {
-        setError('이미 사용 중인 닉네임이야. 다른 이름을 골라줘.');
+        setError(t('이미 사용 중인 닉네임입니다. 다른 이름을 선택해 주세요.', 'That nickname is already in use. Please choose another one.'));
         return;
       }
       const updated = await authService.updateNickname(candidate);
@@ -66,7 +68,7 @@ const NicknameSetup: React.FC = () => {
     } catch (requestError) {
       setError(authErrorPresentation(
         requestError,
-        '닉네임을 저장하지 못했어. 잠시 뒤 다시 시도해줘.',
+        t('닉네임을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'We could not save your nickname. Please try again shortly.'),
       ).message);
     } finally {
       setSaving(false);
@@ -88,31 +90,31 @@ const NicknameSetup: React.FC = () => {
           </Avatar>
           <Stack spacing={1}>
             <Typography variant="overline" color="primary" fontWeight={800}>
-              ONE LAST STEP
+              {t('마지막 단계', 'ONE LAST STEP')}
             </Typography>
-            <Typography variant="h4" fontWeight={900}>이웃에게 보여줄 닉네임을 정해줘</Typography>
+            <Typography variant="h4" fontWeight={900}>{t('이웃에게 보여줄 닉네임을 정해 주세요', 'Choose the name your neighbors will see')}</Typography>
             <Typography color="text.secondary">
-              소셜 로그인용 임시 이름 대신, 글과 모임에서 사용할 이름이 필요해.
+              {t('소셜 로그인용 임시 이름 대신 글과 모임에서 사용할 이름이 필요합니다.', 'Choose a name to use in posts, meetups, and conversations.')}
             </Typography>
           </Stack>
 
           <Alert severity="info">
-            현재 임시 이름은 <strong>{user.username}</strong>이야. 이 이름은 그대로 사용할 수 없어.
+            {t(`현재 임시 이름은 ${user.username}입니다. 이 이름은 그대로 사용할 수 없습니다.`, `Your temporary name is ${user.username}. You will need to choose a different one.`)}
           </Alert>
           {error && <Alert severity="error">{error}</Alert>}
           <TextField
             required
             autoFocus
             fullWidth
-            label="새 닉네임"
+            label={t('새 닉네임', 'New nickname')}
             value={nickname}
             onChange={(event) => setNickname(event.target.value)}
             inputProps={{ minLength: 2, maxLength: 60 }}
-            helperText={`${Array.from(nickname.trim()).length}/30 · 공백 없이 2자 이상 입력해줘`}
+            helperText={t(`${Array.from(nickname.trim()).length}/30 · 공백 없이 2자 이상 입력해 주세요`, `${Array.from(nickname.trim()).length}/30 · Use at least 2 characters with no spaces`)}
             autoComplete="nickname"
           />
           <Button type="submit" variant="contained" size="large" disabled={saving}>
-            {saving ? '닉네임 확인 중...' : '이 닉네임으로 시작하기'}
+            {saving ? t('닉네임 확인 중...', 'Checking nickname...') : t('이 닉네임으로 시작하기', 'Continue with this nickname')}
           </Button>
           <Button
             type="button"
@@ -121,7 +123,7 @@ const NicknameSetup: React.FC = () => {
             disabled={saving}
             onClick={signOut}
           >
-            다른 계정으로 로그인
+            {t('다른 계정으로 로그인', 'Sign in with another account')}
           </Button>
         </Stack>
       </Paper>

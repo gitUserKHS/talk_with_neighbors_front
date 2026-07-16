@@ -20,7 +20,7 @@ const theme = createTheme({
       light: '#6FB7AD',
     },
     background: {
-      default: '#FFF9F5',
+      default: '#F7F8F7',
       paper: '#FFFFFF',
     },
     text: {
@@ -33,7 +33,7 @@ const theme = createTheme({
     },
   },
   shape: {
-    borderRadius: 16,
+    borderRadius: 14,
   },
   typography: {
     fontFamily: [
@@ -56,9 +56,10 @@ const theme = createTheme({
     MuiCssBaseline: {
       styleOverrides: {
         body: {
-          backgroundImage:
-            'radial-gradient(circle at 10% 0%, rgba(232, 92, 74, 0.08), transparent 28rem), radial-gradient(circle at 100% 20%, rgba(35, 133, 121, 0.08), transparent 26rem)',
-          backgroundAttachment: 'fixed',
+          backgroundColor: '#F7F8F7',
+          '@media (max-width: 1199.95px)': {
+            paddingBottom: 'calc(58px + env(safe-area-inset-bottom))',
+          },
         },
       },
     },
@@ -74,9 +75,9 @@ const theme = createTheme({
           paddingInline: 18,
         },
         containedPrimary: {
-          boxShadow: `0 10px 24px ${alpha(coral, 0.24)}`,
+          boxShadow: `0 6px 16px ${alpha(coral, 0.18)}`,
           '&:hover': {
-            boxShadow: `0 12px 28px ${alpha(coral, 0.32)}`,
+            boxShadow: `0 8px 20px ${alpha(coral, 0.24)}`,
           },
         },
       },
@@ -85,7 +86,7 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           border: '1px solid #EEE4DE',
-          boxShadow: '0 14px 42px rgba(77, 48, 40, 0.07)',
+          boxShadow: '0 4px 18px rgba(41, 33, 31, 0.045)',
         },
       },
     },

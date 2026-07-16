@@ -6,6 +6,7 @@ import { store } from '../store';
 import axios, { AxiosError, AxiosProgressEvent } from 'axios';
 import { setUser } from '../store/slices/authSlice';
 import { normalizeChatSchedule } from './chatScheduleService';
+import { translate } from '../i18n/I18nProvider';
 
 export interface CreateChatRoomDto {
   title: string;
@@ -207,13 +208,13 @@ class ChatService {
       console.error('채팅방 목록 조회 중 오류 발생:', error);
       if (axios.isAxiosError(error)) {
         if (error.code === 'ECONNABORTED') {
-          throw new Error('서버 응답 시간이 초과되었습니다.');
+          throw new Error(translate('서버 응답 시간이 초과되었습니다.', 'The server took too long to respond.'));
         }
         if (error.response?.status === 401) {
-          throw new Error('로그인이 필요합니다.');
+          throw new Error(translate('로그인이 필요합니다.', 'Please sign in to continue.'));
         }
       }
-      throw new Error('채팅방 목록을 불러오는데 실패했습니다.');
+      throw new Error(translate('채팅방 목록을 불러오지 못했습니다.', 'We could not load your chats.'));
     }
   }
 
@@ -251,13 +252,13 @@ class ChatService {
       console.error(`메시지 목록 조회 중 오류 발생 (방 ID: ${roomId}):`, error);
       if (axios.isAxiosError(error)) {
         if (error.code === 'ECONNABORTED') {
-          throw new Error('서버 응답 시간이 초과되었습니다.');
+          throw new Error(translate('서버 응답 시간이 초과되었습니다.', 'The server took too long to respond.'));
         }
         if (error.response?.status === 401) {
-          throw new Error('로그인이 필요합니다.');
+          throw new Error(translate('로그인이 필요합니다.', 'Please sign in to continue.'));
         }
       }
-      throw new Error('메시지 목록을 불러오는데 실패했습니다.');
+      throw new Error(translate('메시지 목록을 불러오지 못했습니다.', 'We could not load the messages.'));
     }
   }
 

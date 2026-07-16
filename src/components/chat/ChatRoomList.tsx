@@ -22,19 +22,11 @@ import SearchIcon from '@mui/icons-material/Search';
 import { useNavigate } from 'react-router-dom';
 import { chatService } from '../../services/chatService';
 import { ChatRoom, ChatRoomType } from '../../types/chat';
-
-const formatTime = (value?: string) => {
-  if (!value) return '';
-  return new Intl.DateTimeFormat('ko-KR', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(value));
-};
+import { useI18n } from '../../i18n/I18nProvider';
 
 const ChatRoomList: React.FC = () => {
   const navigate = useNavigate();
+  const { t, formatDate, formatNumber } = useI18n();
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [keyword, setKeyword] = useState('');
   const [loading, setLoading] = useState(true);
@@ -50,7 +42,7 @@ const ChatRoomList: React.FC = () => {
         : await chatService.getRooms(0, 30);
       setRooms(page.content);
     } catch {
-      setError('채팅방 목록을 불러오지 못했어.');
+      setError(t('채팅방 목록을 불러오지 못했습니다.', 'We could not load your conversations.'));
     } finally {
       setLoading(false);
     }
@@ -66,16 +58,18 @@ const ChatRoomList: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box>
             <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }}>
-              채팅
+              {t('채팅', 'Conversations')}
             </Typography>
-            <Typography color="text.secondary">매칭되었거나 참여 중인 대화를 이어가.</Typography>
+            <Typography color="text.secondary">
+              {t('매칭되었거나 참여 중인 대화를 이어가 보세요.', 'Continue conversations from your matches and meetups.')}
+            </Typography>
           </Box>
           <Stack direction="row" spacing={1}>
             <Button variant="outlined" startIcon={<GroupsOutlinedIcon />} onClick={() => navigate('/meetups')}>
-              취미 모임
+              {t('취미 모임', 'Meetups')}
             </Button>
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => navigate('/chat/create')}>
-              대화 만들기
+              {t('대화 만들기', 'New conversation')}
             </Button>
           </Stack>
         </Box>
@@ -88,11 +82,11 @@ const ChatRoomList: React.FC = () => {
               loadRooms();
             }
           }}
-          placeholder="채팅방 검색"
+          placeholder={t('채팅방 검색', 'Search conversations')}
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
-                <IconButton onClick={() => loadRooms()}>
+                <IconButton aria-label={t('채팅방 검색', 'Search conversations')} onClick={() => loadRooms()}>
                   <SearchIcon />
                 </IconButton>
               </InputAdornment>
@@ -111,7 +105,9 @@ const ChatRoomList: React.FC = () => {
         {!loading && rooms.length === 0 && (
           <Card variant="outlined" sx={{ borderRadius: 2 }}>
             <CardContent>
-              <Typography color="text.secondary">아직 채팅방이 없어. 매칭을 수락하면 1:1 방이 열려.</Typography>
+              <Typography color="text.secondary">
+                {t('아직 채팅방이 없습니다. 매칭을 수락하면 1:1 채팅방이 열립니다.', 'You do not have any conversations yet. Accept a match to open a one-to-one chat.')}
+              </Typography>
             </CardContent>
           </Card>
         )}
@@ -125,26 +121,31 @@ const ChatRoomList: React.FC = () => {
           >
             <CardContent>
               <Stack direction="row" spacing={2} alignItems="center">
-                <Badge badgeContent={room.unreadCount || 0} color="error">
-                  <Avatar>{room.roomName?.[0] || '채'}</Avatar>
+                <Badge badgeContent={room.unreadCount ? formatNumber(room.unreadCount) : 0} color="error">
+                  <Avatar>{room.roomName?.[0] || t('채', 'C')}</Avatar>
                 </Badge>
                 <Box sx={{ flexGrow: 1, minWidth: 0 }}>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Typography variant="subtitle1" sx={{ fontWeight: 800 }} noWrap>
-                      {room.roomName || '이름 없는 채팅방'}
+                      {room.roomName || t('이름 없는 채팅방', 'Untitled conversation')}
                     </Typography>
                     <Chip
                       size="small"
-                      label={room.type === ChatRoomType.ONE_ON_ONE ? '1:1' : '그룹'}
+                      label={room.type === ChatRoomType.ONE_ON_ONE ? '1:1' : t('그룹', 'Group')}
                       variant="outlined"
                     />
                   </Stack>
                   <Typography variant="body2" color="text.secondary" noWrap>
-                    {room.lastMessage || '아직 메시지가 없어.'}
+                    {room.lastMessage || t('아직 메시지가 없습니다.', 'No messages yet.')}
                   </Typography>
                 </Box>
                 <Typography variant="caption" color="text.secondary">
-                  {formatTime(room.lastMessageTime)}
+                  {room.lastMessageTime ? formatDate(room.lastMessageTime, {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  }) : ''}
                 </Typography>
               </Stack>
             </CardContent>

@@ -4,6 +4,7 @@ import AutoAwesomeRoundedIcon from '@mui/icons-material/AutoAwesomeRounded';
 import FavoriteRoundedIcon from '@mui/icons-material/FavoriteRounded';
 import ForumRoundedIcon from '@mui/icons-material/ForumRounded';
 import LocationOnRoundedIcon from '@mui/icons-material/LocationOnRounded';
+import { useI18n } from '../i18n/I18nProvider';
 
 interface AuthLayoutProps {
   eyebrow: string;
@@ -12,14 +13,16 @@ interface AuthLayoutProps {
   children: React.ReactNode;
 }
 
-const highlights = [
-  { icon: <LocationOnRoundedIcon />, text: '가까운 동네 친구' },
-  { icon: <FavoriteRoundedIcon />, text: '관심사 기반 매칭' },
-  { icon: <ForumRoundedIcon />, text: '편안한 1:1 대화' },
-];
+const AuthLayout: React.FC<AuthLayoutProps> = ({ eyebrow, title, description, children }) => {
+  const { t } = useI18n();
+  const highlights = [
+    { icon: <LocationOnRoundedIcon />, text: t('가까운 동네 이웃', 'Neighbors close to you') },
+    { icon: <FavoriteRoundedIcon />, text: t('관심사 기반 연결', 'Interest-based connections') },
+    { icon: <ForumRoundedIcon />, text: t('편안하고 안전한 대화', 'Comfortable, safer conversations') },
+  ];
 
-const AuthLayout: React.FC<AuthLayoutProps> = ({ eyebrow, title, description, children }) => (
-  <Box component="main" sx={{ minHeight: { xs: 'auto', md: 'calc(100vh - 73px)' }, display: 'grid', alignItems: 'center' }}>
+  return (
+  <Box component="main" sx={{ minHeight: { xs: 'auto', md: 'calc(100vh - 71px)' }, display: 'grid', alignItems: 'center', bgcolor: '#FFF9F5' }}>
     <Container maxWidth="lg" sx={{ py: { xs: 4, md: 7 } }}>
       <Paper
         sx={{
@@ -45,15 +48,18 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ eyebrow, title, description, ch
             <Box>
               <Chip
                 icon={<AutoAwesomeRoundedIcon />}
-                label="우리 동네 취향 커뮤니티"
+                label={t('우리 동네 취향 커뮤니티', 'Your neighborhood community')}
                 sx={{ bgcolor: 'rgba(255,255,255,.16)', color: '#fff', '& .MuiChip-icon': { color: '#fff' } }}
               />
               <Typography variant="h3" sx={{ mt: 3, maxWidth: 420 }}>
-                낯선 동네도,
-                <br />마음 맞는 이웃과 함께.
+                {t('낯선 동네에서도,', 'Feel at home,')}
+                <br />{t('마음 맞는 이웃과 함께.', 'wherever you live.')}
               </Typography>
               <Typography sx={{ mt: 2, maxWidth: 420, color: 'rgba(255,255,255,.82)', lineHeight: 1.75 }}>
-                취향을 나누고, 가까운 모임을 발견하고, 오래 이어질 대화를 시작해봐.
+                {t(
+                  '취향을 나누고 가까운 모임을 발견하며, 오래 이어질 대화를 시작해 보세요.',
+                  'Share your interests, discover nearby meetups, and start conversations that last.',
+                )}
               </Typography>
             </Box>
             <Stack spacing={1.5}>
@@ -88,6 +94,7 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ eyebrow, title, description, ch
       </Paper>
     </Container>
   </Box>
-);
+  );
+};
 
 export default AuthLayout;
