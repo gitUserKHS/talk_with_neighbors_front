@@ -17,9 +17,11 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { chatService } from '../../services/chatService';
 import { ChatRoomType, CreateRoomRequest } from '../../types/chat';
+import { useI18n } from '../../i18n/I18nProvider';
 
 const CreateChatRoom: React.FC = () => {
   const navigate = useNavigate();
+  const { locale, t } = useI18n();
   const [name, setName] = useState('');
   const [type, setType] = useState<string>(ChatRoomType.GROUP);
   const [nicknameInput, setNicknameInput] = useState('');
@@ -31,7 +33,7 @@ const CreateChatRoom: React.FC = () => {
     const nickname = nicknameInput.trim();
     if (!nickname || participantNicknames.includes(nickname)) return;
     if (type === ChatRoomType.ONE_ON_ONE && participantNicknames.length >= 1) {
-      setError('1:1 채팅에는 상대 한 명만 추가할 수 있어.');
+      setError(t('1:1 채팅에는 상대방 한 명만 추가할 수 있습니다.', 'A one-to-one conversation can include only one other person.'));
       return;
     }
     setParticipantNicknames((prev) => [...prev, nickname]);
@@ -43,12 +45,12 @@ const CreateChatRoom: React.FC = () => {
     setError(null);
 
     if (type === ChatRoomType.GROUP && !name.trim()) {
-      setError('그룹 채팅방 이름을 입력해줘.');
+      setError(t('그룹 채팅방 이름을 입력해 주세요.', 'Enter a name for the group conversation.'));
       return;
     }
 
     if (type === ChatRoomType.ONE_ON_ONE && participantNicknames.length !== 1) {
-      setError('1:1 채팅은 상대 닉네임 한 명이 필요해.');
+      setError(t('1:1 채팅에는 상대방의 닉네임이 필요합니다.', 'Enter the nickname of the person you want to chat with.'));
       return;
     }
 
@@ -63,7 +65,8 @@ const CreateChatRoom: React.FC = () => {
       const room = await chatService.createRoom(request);
       navigate(`/chat/${room.id}`);
     } catch (err: any) {
-      setError(err.response?.data?.message || '채팅방 생성에 실패했어.');
+      const fallback = t('채팅방을 만들지 못했습니다.', 'We could not create the conversation.');
+      setError(locale === 'ko' ? err.response?.data?.message || fallback : fallback);
     } finally {
       setSubmitting(false);
     }
@@ -75,15 +78,17 @@ const CreateChatRoom: React.FC = () => {
         <Stack component="form" spacing={2.5} onSubmit={handleSubmit}>
           <Box>
             <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }}>
-              대화 만들기
+              {t('대화 만들기', 'New conversation')}
             </Typography>
-            <Typography color="text.secondary">닉네임으로 이웃을 초대할 수 있어.</Typography>
+            <Typography color="text.secondary">
+              {t('닉네임으로 이웃을 초대할 수 있습니다.', 'Invite neighbors by their nickname.')}
+            </Typography>
           </Box>
           {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
           <FormControl fullWidth>
-            <InputLabel>유형</InputLabel>
+            <InputLabel>{t('유형', 'Type')}</InputLabel>
             <Select
-              label="유형"
+              label={t('유형', 'Type')}
               value={type}
               onChange={(event) => {
                 setType(event.target.value);
@@ -92,16 +97,16 @@ const CreateChatRoom: React.FC = () => {
                 );
               }}
             >
-              <MenuItem value={ChatRoomType.ONE_ON_ONE}>1:1 채팅</MenuItem>
-              <MenuItem value={ChatRoomType.GROUP}>그룹 채팅</MenuItem>
+              <MenuItem value={ChatRoomType.ONE_ON_ONE}>{t('1:1 채팅', 'One-to-one')}</MenuItem>
+              <MenuItem value={ChatRoomType.GROUP}>{t('그룹 채팅', 'Group')}</MenuItem>
             </Select>
           </FormControl>
           {type === ChatRoomType.GROUP && (
-            <TextField label="채팅방 이름" value={name} onChange={(event) => setName(event.target.value)} fullWidth />
+            <TextField label={t('채팅방 이름', 'Conversation name')} value={name} onChange={(event) => setName(event.target.value)} fullWidth />
           )}
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
             <TextField
-              label="참여자 닉네임"
+              label={t('참여자 닉네임', 'Participant nickname')}
               value={nicknameInput}
               onChange={(event) => setNicknameInput(event.target.value)}
               onKeyDown={(event) => {
@@ -113,7 +118,7 @@ const CreateChatRoom: React.FC = () => {
               fullWidth
             />
             <Button variant="outlined" onClick={addParticipant}>
-              추가
+              {t('추가', 'Add')}
             </Button>
           </Stack>
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
@@ -128,9 +133,9 @@ const CreateChatRoom: React.FC = () => {
             ))}
           </Stack>
           <Stack direction="row" spacing={1} justifyContent="flex-end">
-            <Button onClick={() => navigate('/chat')}>취소</Button>
+            <Button onClick={() => navigate('/chat')}>{t('취소', 'Cancel')}</Button>
             <Button type="submit" variant="contained" disabled={submitting}>
-              만들기
+              {submitting ? t('만드는 중…', 'Creating…') : t('만들기', 'Create')}
             </Button>
           </Stack>
         </Stack>

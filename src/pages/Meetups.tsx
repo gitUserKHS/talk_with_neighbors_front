@@ -47,6 +47,7 @@ import {
   visibleScopedItems,
 } from '../services/accessScope';
 import { removeMeetup, replaceMeetup } from '../services/contentMutationState';
+import { useI18n } from '../i18n/I18nProvider';
 
 const EMPTY_FORM: CreateHobbyMeetupRequest = {
   title: '',
@@ -74,10 +75,13 @@ const MeetupCard: React.FC<{
   onEdit: (meetup: HobbyMeetup) => void;
   onDelete: (meetup: HobbyMeetup) => void;
   onParticipants: (meetup: HobbyMeetup) => void;
-}> = ({ meetup, busy, isGuest, onJoin, onOpen, onRequireLogin, onEdit, onDelete, onParticipants }) => (
-  <Card variant="outlined" sx={{ borderRadius: 2 }}>
-    <CardContent>
-      <Stack spacing={1.75}>
+}> = ({ meetup, busy, isGuest, onJoin, onOpen, onRequireLogin, onEdit, onDelete, onParticipants }) => {
+  const { t, formatNumber } = useI18n();
+
+  return (
+  <Card variant="outlined" sx={{ borderRadius: 3 }}>
+    <CardContent sx={{ p: { xs: 2, sm: 2.5 }, '&:last-child': { pb: { xs: 2, sm: 2.5 } } }}>
+      <Stack spacing={1.5}>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ sm: 'flex-start' }}>
           <Box sx={{ flexGrow: 1, minWidth: 0 }}>
             <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
@@ -89,25 +93,31 @@ const MeetupCard: React.FC<{
                   color="secondary"
                   size="small"
                   icon={<VerifiedRoundedIcon />}
-                  label="이웃톡 공식"
+                  label={t('이웃톡 공식', 'Official Neighbor Talk')}
                 />
               )}
               {meetup.sharedInterests.length > 0 && (
                 <Chip
                   color="primary"
                   size="small"
-                  label={`함께 좋아해요 ${meetup.sharedInterests.length}`}
+                  label={t(
+                    `공통 관심사 ${formatNumber(meetup.sharedInterests.length)}개`,
+                    `${formatNumber(meetup.sharedInterests.length)} shared ${meetup.sharedInterests.length === 1 ? 'interest' : 'interests'}`,
+                  )}
                 />
               )}
-              {!isGuest && meetup.joined && <Chip color="success" size="small" label="참여 중" />}
-              {!isGuest && meetup.waitlisted && <Chip color="warning" size="small" label={`대기 중 · ${meetup.waitlistCount}명`} />}
+              {!isGuest && meetup.joined && <Chip color="success" size="small" label={t('참여 중', 'Joined')} />}
+              {!isGuest && meetup.waitlisted && <Chip color="warning" size="small" label={t(
+                `대기 중 · ${formatNumber(meetup.waitlistCount)}명`,
+                `Waitlisted · ${formatNumber(meetup.waitlistCount)}`,
+              )} />}
             </Stack>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {meetup.official
-                ? '이웃톡 운영팀이 준비한 공식 모임'
+                ? t('이웃톡 운영팀이 준비한 공식 모임입니다.', 'An official meetup hosted by the Neighbor Talk team.')
                 : meetup.creatorUsername
-                  ? `${meetup.creatorUsername}님이 만들었어`
-                  : '이웃이 만든 모임'}
+                  ? t(`${meetup.creatorUsername}님이 만든 모임입니다.`, `Hosted by ${meetup.creatorUsername}.`)
+                  : t('이웃이 만든 모임입니다.', 'Hosted by a neighbor.')}
             </Typography>
           </Box>
           <Button
@@ -125,27 +135,27 @@ const MeetupCard: React.FC<{
             sx={{ flexShrink: 0 }}
           >
             {isGuest
-                ? '로그인하고 참여'
+                ? t('로그인 후 참여', 'Sign in to join')
               : meetup.joined
-                ? '채팅 열기'
+                ? t('채팅 열기', 'Open chat')
                 : meetup.waitlisted
-                  ? '대기 등록됨'
+                  ? t('대기 등록됨', 'Waitlisted')
                   : meetup.full
-                    ? '대기 등록'
-                    : '참여하기'}
+                    ? t('대기 등록', 'Join waitlist')
+                    : t('참여하기', 'Join meetup')}
           </Button>
           {!isGuest && (meetup.canManage || meetup.ownedByCurrentUser) && (
             <Stack direction="row" spacing={0.25} sx={{ flexShrink: 0 }}>
-              <Tooltip title="모임 수정">
+              <Tooltip title={t('모임 수정', 'Edit meetup')}>
                 <span>
-                  <IconButton aria-label="모임 수정" disabled={busy} onClick={() => onEdit(meetup)}>
+                  <IconButton aria-label={t('모임 수정', 'Edit meetup')} disabled={busy} onClick={() => onEdit(meetup)}>
                     <EditOutlinedIcon />
                   </IconButton>
                 </span>
               </Tooltip>
-              <Tooltip title="모임 삭제">
+              <Tooltip title={t('모임 삭제', 'Delete meetup')}>
                 <span>
-                  <IconButton aria-label="모임 삭제" color="error" disabled={busy} onClick={() => onDelete(meetup)}>
+                  <IconButton aria-label={t('모임 삭제', 'Delete meetup')} color="error" disabled={busy} onClick={() => onDelete(meetup)}>
                     <DeleteOutlineIcon />
                   </IconButton>
                 </span>
@@ -167,7 +177,10 @@ const MeetupCard: React.FC<{
           {isGuest ? (
             <Stack direction="row" spacing={0.5} alignItems="center">
               <PeopleOutlineIcon fontSize="small" />
-              <Typography variant="body2">{meetup.participantCount}/{meetup.maxParticipants ?? '-'}명</Typography>
+              <Typography variant="body2">{t(
+                `${formatNumber(meetup.participantCount)}/${meetup.maxParticipants == null ? '-' : formatNumber(meetup.maxParticipants)}명`,
+                `${formatNumber(meetup.participantCount)}/${meetup.maxParticipants == null ? '-' : formatNumber(meetup.maxParticipants)} people`,
+              )}</Typography>
             </Stack>
           ) : (
             <Button
@@ -178,7 +191,10 @@ const MeetupCard: React.FC<{
               onClick={() => onParticipants(meetup)}
               sx={{ p: 0, minWidth: 0 }}
             >
-              참여자 {meetup.participantCount}/{meetup.maxParticipants ?? '-'}명
+              {t(
+                `참여자 ${formatNumber(meetup.participantCount)}/${meetup.maxParticipants == null ? '-' : formatNumber(meetup.maxParticipants)}명`,
+                `Participants ${formatNumber(meetup.participantCount)}/${meetup.maxParticipants == null ? '-' : formatNumber(meetup.maxParticipants)}`,
+              )}
             </Button>
           )}
           {(meetup.location || meetup.areaLabel || meetup.locationAddress) && (
@@ -193,12 +209,12 @@ const MeetupCard: React.FC<{
                   <Typography
                     component="a"
                     variant="caption"
-                    href={`https://map.kakao.com/link/map/${encodeURIComponent(meetup.location || meetup.areaLabel || '모임 장소')},${meetup.latitude},${meetup.longitude}`}
+                    href={`https://map.kakao.com/link/map/${encodeURIComponent(meetup.location || meetup.areaLabel || t('모임 장소', 'Meetup location'))},${meetup.latitude},${meetup.longitude}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     color="primary"
                   >
-                    카카오맵에서 보기
+                    {t('카카오맵에서 보기', 'View on Kakao Map')}
                   </Typography>
                 )}
               </Box>
@@ -208,10 +224,12 @@ const MeetupCard: React.FC<{
       </Stack>
     </CardContent>
   </Card>
-);
+  );
+};
 
 const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ currentUser }) => {
   const navigate = useNavigate();
+  const { locale, t } = useI18n();
   const isGuest = !currentUser;
   const accessScope = accessScopeForUser(currentUser?.id);
   const [meetupSnapshot, setMeetupSnapshot] = useState<AccessScopedList<HobbyMeetup>>({
@@ -236,6 +254,10 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
   const [form, setForm] = useState<CreateHobbyMeetupRequest>(EMPTY_FORM);
   const meetupRequestGeneration = useRef(0);
   const viewGeneration = useRef(0);
+
+  const apiError = (err: any, korean: string, english: string) => (
+    locale === 'ko' ? err.response?.data?.message || korean : english
+  );
 
   const setMeetups = (update: React.SetStateAction<HobbyMeetup[]>) => {
     setMeetupSnapshot((snapshot) => updateScopedItems(snapshot, accessScope, update));
@@ -269,7 +291,11 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
       setMeetupSnapshot({ scope: requestScope, items: page.content });
     } catch (err: any) {
       if (!isLatestRequest(requestId, meetupRequestGeneration.current)) return;
-      setError(err.response?.data?.message || '취미 모임을 불러오지 못했어.');
+      setError(apiError(
+        err,
+        '취미 모임을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.',
+        'Meetups could not be loaded. Please try again shortly.',
+      ));
     } finally {
       if (isLatestRequest(requestId, meetupRequestGeneration.current)) {
         setLoading(false);
@@ -330,7 +356,10 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
 
     const interestTags = toTags(tagInput);
     if (!form.title.trim() || interestTags.length === 0) {
-      setError('모임 이름과 관심사 태그를 입력해줘.');
+      setError(t(
+        '모임 이름과 관심사 태그를 입력해 주세요.',
+        'Enter a meetup name and at least one interest tag.',
+      ));
       return;
     }
 
@@ -354,13 +383,17 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
       if (editingMeetup) {
         setMeetups((items) => replaceMeetup(items, meetup));
         setEditingMeetup(null);
-        setSuccess('모임 정보를 수정했어.');
+        setSuccess(t('모임 정보를 수정했습니다.', 'Meetup details have been updated.'));
       } else {
         navigate(`/chat/${meetup.roomId}`);
       }
     } catch (err: any) {
       if (!isLatestRequest(generation, viewGeneration.current)) return;
-      setError(err.response?.data?.message || (editingMeetup ? '모임을 수정하지 못했어.' : '모임을 만들지 못했어.'));
+      setError(apiError(
+        err,
+        editingMeetup ? '모임을 수정하지 못했습니다.' : '모임을 만들지 못했습니다.',
+        editingMeetup ? 'The meetup could not be updated.' : 'The meetup could not be created.',
+      ));
     } finally {
       if (isLatestRequest(generation, viewGeneration.current)) {
         setCreating(false);
@@ -375,7 +408,10 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
     try {
       const detail = await meetupService.getMeetup(meetup.roomId);
       if (!(detail.canManage || detail.ownedByCurrentUser)) {
-        setError('모임장만 이 모임을 수정할 수 있어.');
+        setError(t(
+          '모임장만 이 모임을 수정할 수 있습니다.',
+          'Only the host can edit this meetup.',
+        ));
         return;
       }
       setEditingMeetup(detail);
@@ -393,7 +429,11 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
       });
       setCreateOpen(true);
     } catch (err: any) {
-      setError(err.response?.data?.message || '수정할 모임 정보를 불러오지 못했어.');
+      setError(apiError(
+        err,
+        '수정할 모임 정보를 불러오지 못했습니다.',
+        'The meetup details could not be loaded for editing.',
+      ));
     } finally {
       setActionRoomId(null);
     }
@@ -408,9 +448,9 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
       await meetupService.deleteMeetup(roomId);
       setMeetups((items) => removeMeetup(items, roomId));
       setDeleteTarget(null);
-      setSuccess('모임과 채팅방을 삭제했어.');
+      setSuccess(t('모임과 채팅방을 삭제했습니다.', 'The meetup and its chat room have been deleted.'));
     } catch (err: any) {
-      setError(err.response?.data?.message || '모임을 삭제하지 못했어.');
+      setError(apiError(err, '모임을 삭제하지 못했습니다.', 'The meetup could not be deleted.'));
     } finally {
       setDeleting(false);
     }
@@ -426,7 +466,11 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
       setParticipantMeetup(detail);
     } catch (err: any) {
       setParticipantMeetup(null);
-      setError(err.response?.data?.message || '참여자 목록을 불러오지 못했어.');
+      setError(apiError(
+        err,
+        '참여자 목록을 불러오지 못했습니다.',
+        'The participant list could not be loaded.',
+      ));
     } finally {
       setParticipantsLoading(false);
     }
@@ -450,7 +494,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
       }
     } catch (err: any) {
       if (!isLatestRequest(generation, viewGeneration.current)) return;
-      setError(err.response?.data?.message || '모임에 참여하지 못했어.');
+      setError(apiError(err, '모임에 참여하지 못했습니다.', 'You could not join this meetup.'));
     } finally {
       if (isLatestRequest(generation, viewGeneration.current)) {
         setActionRoomId(null);
@@ -459,17 +503,22 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
   };
 
   return (
-    <Container component="main" maxWidth="md" sx={{ py: 4 }}>
+    <Container component="main" maxWidth="md" sx={{ py: { xs: 3, md: 5 } }}>
       <Stack spacing={3}>
         <Box sx={{ display: 'flex', gap: 2, alignItems: { sm: 'center' }, justifyContent: 'space-between', flexDirection: { xs: 'column', sm: 'row' } }}>
           <Box>
-            <Typography variant="h5" component="h1" sx={{ fontWeight: 800 }}>
-              취미 모임
+            <Typography variant="h4" component="h1" sx={{ fontWeight: 900 }}>
+              {t('모임', 'Meetups')}
             </Typography>
-            <Typography color="text.secondary">같은 관심사 이웃과 가볍게 이야기를 시작해.</Typography>
+            <Typography color="text.secondary" sx={{ mt: 0.5 }}>
+              {t(
+                '관심사가 비슷한 이웃을 만나 함께할 활동을 찾아보세요.',
+                'Meet neighbors with similar interests and discover things to do together.',
+              )}
+            </Typography>
           </Box>
           <Button variant={isGuest ? 'outlined' : 'contained'} startIcon={<AddIcon />} onClick={openCreate}>
-            {isGuest ? '로그인하고 모임 만들기' : '모임 만들기'}
+            {isGuest ? t('로그인 후 모임 만들기', 'Sign in to create') : t('모임 만들기', 'Create meetup')}
           </Button>
         </Box>
 
@@ -482,11 +531,14 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
                 size="small"
                 onClick={() => navigate('/login', { state: { from: { pathname: '/meetups' } } })}
               >
-                로그인하기
+                {t('로그인', 'Sign in')}
               </Button>
             )}
           >
-            공개 모임은 검색하고 둘러볼 수 있어. 생성, 참여, 채팅은 로그인 후 이용해줘.
+            {t(
+              '공개 모임은 로그인 없이 둘러볼 수 있습니다. 모임 생성, 참여, 채팅은 로그인 후 이용해 주세요.',
+              'You can browse public meetups without signing in. Sign in to create, join, or chat.',
+            )}
           </Alert>
         )}
 
@@ -499,12 +551,12 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
               loadMeetups();
             }
           }}
-          placeholder="모임 이름, 소개, 관심사 검색"
+          placeholder={t('모임 이름, 소개 또는 관심사 검색', 'Search by name, description, or interest')}
           InputProps={{
             endAdornment: (
               <InputAdornment position="end">
-                <Tooltip title="검색">
-                  <IconButton aria-label="모임 검색" onClick={() => loadMeetups()}>
+                <Tooltip title={t('검색', 'Search')}>
+                  <IconButton aria-label={t('모임 검색', 'Search meetups')} onClick={() => loadMeetups()}>
                     <SearchIcon />
                   </IconButton>
                 </Tooltip>
@@ -516,7 +568,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
         {interests.length > 0 && (
           <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
             <Chip
-              label="전체"
+              label={t('전체', 'All')}
               color={selectedInterest ? 'default' : 'primary'}
               variant={selectedInterest ? 'outlined' : 'filled'}
               onClick={() => handleInterest('')}
@@ -536,20 +588,28 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
         {error && <Alert severity="error" onClose={() => setError(null)}>{error}</Alert>}
         {success && <Alert severity="success" onClose={() => setSuccess(null)}>{success}</Alert>}
         {loading && (
-          <Box role="status" aria-live="polite" aria-label="모임 불러오는 중" sx={{ display: 'grid', placeItems: 'center', py: 8 }}>
+          <Box role="status" aria-live="polite" aria-label={t('모임 불러오는 중', 'Loading meetups')} sx={{ display: 'grid', placeItems: 'center', py: 8 }}>
             <CircularProgress />
           </Box>
         )}
 
         {!loading && meetups.length === 0 && (
-          <Box sx={{ py: 6, textAlign: 'center', color: 'text.secondary' }}>
-            <GroupsOutlinedIcon sx={{ fontSize: 36, mb: 1 }} />
-            <Typography>
+          <Card variant="outlined" sx={{ borderRadius: 3 }}>
+            <CardContent sx={{ py: 6, textAlign: 'center' }}>
+            <GroupsOutlinedIcon sx={{ fontSize: 42, mb: 1.25, color: 'text.secondary' }} />
+            <Typography variant="h6" fontWeight={800}>
               {isGuest
-                ? '아직 조건에 맞는 공개 모임이 없어.'
-                : '아직 조건에 맞는 모임이 없어. 첫 모임을 열어볼까?'}
+                ? t('조건에 맞는 공개 모임이 없습니다.', 'No public meetups match these filters.')
+                : t('조건에 맞는 모임이 없습니다.', 'No meetups match these filters.')}
             </Typography>
-          </Box>
+            <Typography color="text.secondary" sx={{ mt: 0.75 }}>
+              {t(
+                '검색 조건을 바꾸거나 새로운 모임을 만들어 보세요.',
+                'Try different filters or create a new meetup.',
+              )}
+            </Typography>
+            </CardContent>
+          </Card>
         )}
 
         <Stack spacing={2}>
@@ -582,12 +642,12 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
         maxWidth="sm"
       >
         <Box component="form" onSubmit={handleCreate}>
-          <DialogTitle>{editingMeetup ? '모임 수정' : '취미 모임 만들기'}</DialogTitle>
+           <DialogTitle>{editingMeetup ? t('모임 수정', 'Edit meetup') : t('새 모임 만들기', 'Create a meetup')}</DialogTitle>
           <DialogContent>
             <Stack spacing={2.25} sx={{ pt: 1 }}>
               {error && <Alert severity="error">{error}</Alert>}
               <TextField
-                label="모임 이름"
+                 label={t('모임 이름', 'Meetup name')}
                 value={form.title}
                 onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
                 inputProps={{ maxLength: 80 }}
@@ -596,7 +656,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
                 fullWidth
               />
               <TextField
-                label="모임 소개"
+                 label={t('모임 소개', 'Description')}
                 value={form.description}
                 onChange={(event) => setForm((current) => ({ ...current, description: event.target.value }))}
                 inputProps={{ maxLength: 500 }}
@@ -605,19 +665,22 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
                 fullWidth
               />
               <TextField
-                label="관심사 태그"
+                 label={t('관심사 태그', 'Interest tags')}
                 value={tagInput}
                 onChange={(event) => setTagInput(event.target.value)}
-                helperText="쉼표로 나눠서 최대 5개까지 입력해줘."
+                 helperText={t('쉼표로 구분해 최대 5개까지 입력해 주세요.', 'Enter up to 5 tags, separated by commas.')}
                 required
                 fullWidth
               />
               <Box>
                 <Typography variant="subtitle2" fontWeight={800} sx={{ mb: 0.75 }}>
-                  활동 지역 또는 대표 장소
+                   {t('활동 지역 또는 대표 장소', 'Area or representative place')}
                 </Typography>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                  실제 만날 날짜·시간·장소는 모임을 만든 뒤 채팅방의 모임 달력에서 일정별로 정할 수 있어.
+                   {t(
+                     '모임을 만든 후 채팅방의 모임 달력에서 일정별 날짜, 시간, 장소를 정할 수 있습니다.',
+                     'After creating the meetup, set each event’s date, time, and location in the chat calendar.',
+                   )}
                 </Typography>
                 <MapLocationPicker
                   value={form.location || form.locationAddress ? {
@@ -640,7 +703,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
               </Box>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
                 <TextField
-                  label="모집 인원"
+                   label={t('모집 인원', 'Capacity')}
                   type="number"
                   value={form.maxParticipants}
                   onChange={(event) => setForm((current) => ({ ...current, maxParticipants: Number(event.target.value) }))}
@@ -650,59 +713,71 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
                 />
               </Stack>
               <Alert severity="info">
-                일정은 채팅방의 <strong>모임 달력</strong> 한곳에서 만들고 수정해. 일정별 참석자도 함께 확인할 수 있어.
+                 {t(
+                   '일정은 채팅방의 모임 달력에서 만들고 수정할 수 있으며, 일정별 참석자도 확인할 수 있습니다.',
+                   'Create and edit events in the chat calendar, where you can also see attendees for each event.',
+                 )}
               </Alert>
             </Stack>
           </DialogContent>
           <DialogActions>
-            <Button onClick={() => { setCreateOpen(false); setEditingMeetup(null); }} disabled={creating}>취소</Button>
+             <Button onClick={() => { setCreateOpen(false); setEditingMeetup(null); }} disabled={creating}>{t('취소', 'Cancel')}</Button>
             <Button type="submit" variant="contained" disabled={creating}>
-              {creating ? '저장 중…' : editingMeetup ? '변경사항 저장' : '모임 만들기'}
+               {creating ? t('저장 중…', 'Saving…') : editingMeetup ? t('변경사항 저장', 'Save changes') : t('모임 만들기', 'Create meetup')}
             </Button>
           </DialogActions>
         </Box>
       </Dialog>}
 
       {!isGuest && <Dialog open={Boolean(deleteTarget)} onClose={() => !deleting && setDeleteTarget(null)} fullWidth maxWidth="xs">
-        <DialogTitle>모임을 삭제할까?</DialogTitle>
+         <DialogTitle>{t('모임을 삭제하시겠어요?', 'Delete meetup?')}</DialogTitle>
         <DialogContent>
           <Stack spacing={1.5} sx={{ pt: 0.5 }}>
             {error && <Alert severity="error">{error}</Alert>}
-            <Typography><strong>{deleteTarget?.title}</strong> 모임을 정말 삭제할까?</Typography>
-            <Alert severity="warning">채팅 메시지, 첨부 파일, 약속과 참여 기록이 함께 삭제되고 되돌릴 수 없어.</Alert>
+             <Typography>{t(
+               `${deleteTarget?.title ?? ''} 모임을 정말 삭제하시겠어요?`,
+               `Are you sure you want to delete ${deleteTarget?.title ?? 'this meetup'}?`,
+             )}</Typography>
+             <Alert severity="warning">{t(
+               '채팅 메시지, 첨부 파일, 일정과 참여 기록이 함께 삭제되며 복구할 수 없습니다.',
+               'Chat messages, attachments, events, and participation records will be permanently deleted.',
+             )}</Alert>
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button disabled={deleting} onClick={() => setDeleteTarget(null)}>취소</Button>
+           <Button disabled={deleting} onClick={() => setDeleteTarget(null)}>{t('취소', 'Cancel')}</Button>
           <Button color="error" variant="contained" disabled={deleting} onClick={submitDelete}>
-            {deleting ? '삭제 중…' : '모임 삭제'}
+             {deleting ? t('삭제 중…', 'Deleting…') : t('모임 삭제', 'Delete meetup')}
           </Button>
         </DialogActions>
       </Dialog>}
 
       {!isGuest && <Dialog open={Boolean(participantMeetup)} onClose={() => !participantsLoading && setParticipantMeetup(null)} fullWidth maxWidth="xs">
-        <DialogTitle>{participantMeetup?.title} 참여자</DialogTitle>
+         <DialogTitle>{t(
+           `${participantMeetup?.title ?? ''} 참여자`,
+           `Participants · ${participantMeetup?.title ?? ''}`,
+         )}</DialogTitle>
         <DialogContent>
           {participantsLoading ? (
-            <Box role="status" aria-label="참여자 불러오는 중" sx={{ display: 'grid', placeItems: 'center', py: 4 }}>
+             <Box role="status" aria-label={t('참여자 불러오는 중', 'Loading participants')} sx={{ display: 'grid', placeItems: 'center', py: 4 }}>
               <CircularProgress size={28} />
             </Box>
           ) : (participantMeetup?.participants?.length ?? 0) === 0 ? (
-            <Typography color="text.secondary" sx={{ py: 2 }}>표시할 참여자가 없어.</Typography>
+             <Typography color="text.secondary" sx={{ py: 2 }}>{t('표시할 참여자가 없습니다.', 'There are no participants to display.')}</Typography>
           ) : (
             <Stack spacing={1.25} sx={{ pt: 1 }}>
               {participantMeetup?.participants?.map((participant) => (
                 <Stack key={participant.userId} direction="row" spacing={1.25} alignItems="center">
                   <Avatar src={participant.profileImageUrl}>{participant.nickname?.[0]}</Avatar>
                   <Typography sx={{ flexGrow: 1, fontWeight: 700 }}>{participant.nickname}</Typography>
-                  {participant.host && <Chip size="small" color="primary" label="모임장" />}
+                   {participant.host && <Chip size="small" color="primary" label={t('모임장', 'Host')} />}
                 </Stack>
               ))}
             </Stack>
           )}
         </DialogContent>
         <DialogActions>
-          <Button disabled={participantsLoading} onClick={() => setParticipantMeetup(null)}>닫기</Button>
+           <Button disabled={participantsLoading} onClick={() => setParticipantMeetup(null)}>{t('닫기', 'Close')}</Button>
         </DialogActions>
       </Dialog>}
     </Container>

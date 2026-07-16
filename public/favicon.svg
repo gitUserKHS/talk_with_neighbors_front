@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Neighbor Talk">
+  <defs>
+    <linearGradient id="brand" x1="10" y1="8" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#E85C4A"/>
+      <stop offset="1" stop-color="#C84335"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="18" fill="url(#brand)"/>
+  <path d="M17 27.5 32 15l15 12.5V45a4 4 0 0 1-4 4H21a4 4 0 0 1-4-4V27.5Z" fill="#fff"/>
+  <path d="M24 31.5c0-3 2.5-5.5 5.5-5.5h5c3 0 5.5 2.5 5.5 5.5S37.5 37 34.5 37H33l-4.5 4v-4.2A5.5 5.5 0 0 1 24 31.5Z" fill="#238579"/>
+  <circle cx="29" cy="31.5" r="1.2" fill="#fff"/>
+  <circle cx="35" cy="31.5" r="1.2" fill="#fff"/>
+</svg>

@@ -21,8 +21,8 @@ import LocationOnOutlinedIcon from '@mui/icons-material/LocationOnOutlined';
 import OpenInNewOutlinedIcon from '@mui/icons-material/OpenInNewOutlined';
 import { useTheme } from '@mui/material/styles';
 import { ChatSchedule, ChatScheduleRsvpStatus } from '../../../types/chatSchedule';
-import { formatChatScheduleDateTime } from '../../../services/chatScheduleDateTime';
 import { currentUserScheduleStatus } from '../../../services/chatScheduleState';
+import { useI18n } from '../../../i18n/I18nProvider';
 import ChatScheduleParticipants from './ChatScheduleParticipants';
 
 interface ChatScheduleDetailsDialogProps {
@@ -45,6 +45,7 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
   onRsvp,
 }) => {
   const theme = useTheme();
+  const { locale, t, formatDate, formatNumber } = useI18n();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const [cancelOpen, setCancelOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -62,7 +63,7 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
   const canRespond = !cancelled && !ended;
   const myStatus = currentUserScheduleStatus(schedule, currentUserId);
   const kakaoMapUrl = schedule.latitude !== undefined && schedule.longitude !== undefined
-    ? `https://map.kakao.com/link/map/${encodeURIComponent(schedule.location || schedule.locationAddress || '일정 장소')},${schedule.latitude},${schedule.longitude}`
+    ? `https://map.kakao.com/link/map/${encodeURIComponent(schedule.location || schedule.locationAddress || t('일정 장소', 'Schedule location'))},${schedule.latitude},${schedule.longitude}`
     : null;
 
   const confirmCancel = async () => {
@@ -71,7 +72,8 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
       await onCancel(schedule);
       setCancelOpen(false);
     } catch (err: any) {
-      setError(err.response?.data?.message || err.message || '일정을 취소하지 못했어.');
+      const fallback = t('일정을 취소하지 못했습니다.', 'We could not cancel the schedule.');
+      setError(locale === 'ko' ? err.response?.data?.message || err.message || fallback : fallback);
       setCancelOpen(false);
     }
   };
@@ -88,9 +90,9 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
         aria-labelledby="chat-schedule-details-title"
       >
         <DialogTitle id="chat-schedule-details-title" sx={{ pr: 7 }}>
-          일정 상세
+          {t('일정 상세', 'Schedule details')}
           <IconButton
-            aria-label="닫기"
+            aria-label={t('닫기', 'Close')}
             onClick={onClose}
             disabled={busy}
             sx={{ position: 'absolute', top: 12, right: 12 }}
@@ -106,9 +108,13 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
                 <Chip
                   size="small"
                   color={cancelled ? 'default' : ended ? 'default' : 'primary'}
-                  label={cancelled ? '취소된 일정' : ended ? '지난 일정' : '다가오는 일정'}
+                  label={cancelled
+                    ? t('취소된 일정', 'Cancelled')
+                    : ended
+                      ? t('지난 일정', 'Past')
+                      : t('다가오는 일정', 'Upcoming')}
                 />
-                {isCreator && <Chip size="small" variant="outlined" label="내가 만든 일정" />}
+                {isCreator && <Chip size="small" variant="outlined" label={t('내가 만든 일정', 'Created by you')} />}
               </Stack>
               <Typography variant="h5" component="h2" sx={{ fontWeight: 900 }}>
                 {schedule.title}
@@ -124,11 +130,18 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
                 <CalendarMonthOutlinedIcon color="primary" />
                 <Box>
                   <Typography fontWeight={800}>
-                    {formatChatScheduleDateTime(schedule.startsAt, schedule.timeZone)}
+                    {formatDate(schedule.startsAt, {
+                      dateStyle: 'full',
+                      timeStyle: 'short',
+                      timeZone: schedule.timeZone,
+                    })}
                   </Typography>
                   {schedule.durationMinutes && (
                     <Typography variant="body2" color="text.secondary">
-                      예상 {schedule.durationMinutes}분
+                      {t(
+                        `예상 ${formatNumber(schedule.durationMinutes)}분`,
+                        `About ${formatNumber(schedule.durationMinutes)} min`,
+                      )}
                     </Typography>
                   )}
                 </Box>
@@ -153,7 +166,7 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
                         endIcon={<OpenInNewOutlinedIcon />}
                         sx={{ mt: 0.5, px: 0 }}
                       >
-                        카카오맵에서 보기
+                        {t('카카오맵에서 보기', 'View in Kakao Map')}
                       </Button>
                     )}
                   </Box>
@@ -170,7 +183,7 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
                   disabled={busy}
                   onClick={() => void onRsvp(schedule, 'ATTENDING')}
                 >
-                  참석할게
+                  {t('참석', 'Attending')}
                 </Button>
                 <Button
                   fullWidth
@@ -179,14 +192,14 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
                   disabled={busy || isCreator}
                   onClick={() => void onRsvp(schedule, 'NOT_ATTENDING')}
                 >
-                  참석이 어려워
+                  {t('불참', 'Not attending')}
                 </Button>
               </Stack>
             )}
 
             <Divider />
             <Box>
-              <Typography variant="h6" sx={{ mb: 1, fontWeight: 900 }}>참여 현황</Typography>
+              <Typography variant="h6" sx={{ mb: 1, fontWeight: 900 }}>{t('참여 현황', 'Responses')}</Typography>
               <ChatScheduleParticipants schedule={schedule} variant="full" />
             </Box>
           </Stack>
@@ -195,29 +208,32 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
           {isCreator && !cancelled && !ended && (
             <>
               <Button color="error" onClick={() => setCancelOpen(true)} disabled={busy}>
-                일정 취소
+                {t('일정 취소', 'Cancel schedule')}
               </Button>
               <Button startIcon={<EditOutlinedIcon />} onClick={() => onEdit(schedule)} disabled={busy}>
-                수정
+                {t('수정', 'Edit')}
               </Button>
             </>
           )}
           <Box sx={{ flexGrow: 1 }} />
-          <Button variant="contained" onClick={onClose} disabled={busy}>확인</Button>
+          <Button variant="contained" onClick={onClose} disabled={busy}>{t('확인', 'Done')}</Button>
         </DialogActions>
       </Dialog>
 
       <Dialog open={cancelOpen} onClose={() => !busy && setCancelOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>이 일정을 취소할까?</DialogTitle>
+        <DialogTitle>{t('이 일정을 취소하시겠어요?', 'Cancel this schedule?')}</DialogTitle>
         <DialogContent>
           <Typography>
-            취소해도 일정과 참여 기록은 남고, 이웃들에게 취소된 일정으로 보여.
+            {t(
+              '취소해도 일정과 참여 기록은 남으며, 이웃들에게 취소된 일정으로 표시됩니다.',
+              'The schedule and responses will remain visible and be marked as cancelled.',
+            )}
           </Typography>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCancelOpen(false)} disabled={busy}>돌아가기</Button>
+          <Button onClick={() => setCancelOpen(false)} disabled={busy}>{t('돌아가기', 'Go back')}</Button>
           <Button color="error" variant="contained" onClick={() => void confirmCancel()} disabled={busy}>
-            {busy ? '취소하는 중…' : '일정 취소'}
+            {busy ? t('취소하는 중…', 'Cancelling…') : t('일정 취소', 'Cancel schedule')}
           </Button>
         </DialogActions>
       </Dialog>

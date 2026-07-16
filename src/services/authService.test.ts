@@ -143,7 +143,7 @@ describe('authentication response helpers', () => {
       response: { data: { code: 'INVALID_VERIFICATION_CODE', message: 'raw' } },
     }, 'fallback')).toEqual({
       code: 'INVALID_VERIFICATION_CODE',
-      message: '인증번호가 맞지 않아. 다시 확인해줘.',
+      message: '인증번호가 올바르지 않습니다. 다시 확인해 주세요.',
       retryAfterSeconds: undefined,
     });
   });

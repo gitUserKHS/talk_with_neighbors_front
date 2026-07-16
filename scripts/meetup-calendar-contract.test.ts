@@ -34,12 +34,12 @@ test('schedule cards are rendered only inside the meetup calendar list', () => {
     chatRoomSource,
     /if \(incoming\.type === 'SCHEDULE'\)[\s\S]*?return;[\s\S]*?setMessages\(/,
   );
-  assert.match(chatRoomSource, /aria-label="모임 달력 보기"/);
-  assert.doesNotMatch(chatRoomSource, /aria-label="약속 만들기"|채팅방 약속 만들기/);
+  assert.match(chatRoomSource, /aria-label=\{t\('모임 달력 보기', 'Open meetup calendar'\)\}/);
+  assert.doesNotMatch(chatRoomSource, /aria-label=\{t\('약속 만들기'|채팅방 약속 만들기/);
 });
 
 test('calendar owns creation and returns to its list after schedule flows', () => {
-  assert.match(calendarListSource, />\s*모임 달력\s*</);
+  assert.match(calendarListSource, /\{t\('모임 달력', 'Meetup calendar'\)\}/);
   assert.match(calendarListSource, /다가오는 일정/);
   assert.match(calendarListSource, /지난 일정과 취소된 일정/);
   assert.match(calendarListSource, /upcoming\.length > 0/);

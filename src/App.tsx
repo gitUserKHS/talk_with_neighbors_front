@@ -19,6 +19,7 @@ import {
 import Navbar from './components/Navbar';
 import NotificationHandler from './components/notifications/NotificationHandler';
 import { getRouterBasename } from './routerBase';
+import { I18nProvider } from './i18n/I18nProvider';
 
 const Home = React.lazy(() => import('./pages/Home'));
 const Feed = React.lazy(() => import('./pages/Feed'));
@@ -245,7 +246,9 @@ const AppContent: React.FC = () => (
 
 const App: React.FC = () => (
   <Provider store={store}>
-    <AppContent />
+    <I18nProvider>
+      <AppContent />
+    </I18nProvider>
   </Provider>
 );
 

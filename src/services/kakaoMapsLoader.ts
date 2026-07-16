@@ -112,14 +112,14 @@ const resolveLoadedNamespace = (
 ) => {
   const maps = window.kakao?.maps;
   if (!maps?.load) {
-    reject(new Error('카카오 지도 SDK를 초기화하지 못했어.'));
+    reject(new Error(translate('카카오 지도 SDK를 초기화하지 못했습니다.', 'We could not initialize the Kakao Maps SDK.')));
     return;
   }
 
   maps.load(() => {
     const loadedMaps = window.kakao?.maps;
     if (!loadedMaps?.Map || !loadedMaps.services) {
-      reject(new Error('카카오 지도 services 라이브러리를 불러오지 못했어.'));
+      reject(new Error(translate('카카오 지도 검색 서비스를 불러오지 못했습니다.', 'We could not load the Kakao Maps search service.')));
       return;
     }
     resolve(loadedMaps);
@@ -128,10 +128,10 @@ const resolveLoadedNamespace = (
 
 export const loadKakaoMaps = (appKey = kakaoMapsJavaScriptKey()): Promise<KakaoMapsNamespace> => {
   if (!appKey) {
-    return Promise.reject(new Error('카카오 지도 JavaScript 키가 설정되지 않았어.'));
+    return Promise.reject(new Error(translate('카카오 지도 JavaScript 키가 설정되지 않았습니다.', 'The Kakao Maps JavaScript key is not configured.')));
   }
   if (typeof window === 'undefined' || typeof document === 'undefined') {
-    return Promise.reject(new Error('카카오 지도는 브라우저에서만 사용할 수 있어.'));
+    return Promise.reject(new Error(translate('카카오 지도는 브라우저에서만 이용할 수 있습니다.', 'Kakao Maps is available only in a browser.')));
   }
   if (window.kakao?.maps?.Map && window.kakao.maps.services) {
     return Promise.resolve(window.kakao.maps);
@@ -149,7 +149,7 @@ export const loadKakaoMaps = (appKey = kakaoMapsJavaScriptKey()): Promise<KakaoM
     const handleLoad = () => resolveLoadedNamespace(resolve, fail);
     const handleError = () => {
       if (!existing) script.remove();
-      fail(new Error('카카오 지도 SDK를 불러오지 못했어. 네트워크와 등록 도메인을 확인해줘.'));
+      fail(new Error(translate('카카오 지도 SDK를 불러오지 못했습니다. 네트워크와 등록 도메인을 확인해 주세요.', 'We could not load the Kakao Maps SDK. Check the network and registered domain.')));
     };
 
     script.addEventListener('load', handleLoad, { once: true });
@@ -167,3 +167,4 @@ export const loadKakaoMaps = (appKey = kakaoMapsJavaScriptKey()): Promise<KakaoM
 
   return sdkPromise;
 };
+import { translate } from '../i18n/I18nProvider';

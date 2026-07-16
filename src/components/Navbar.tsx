@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   AppBar,
   Avatar,
@@ -15,13 +15,13 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material';
-import AddBoxIcon from '@mui/icons-material/AddBox';
+import AddBoxOutlinedIcon from '@mui/icons-material/AddBoxOutlined';
 import ChatBubbleOutlineIcon from '@mui/icons-material/ChatBubbleOutline';
 import FavoriteBorderIcon from '@mui/icons-material/FavoriteBorder';
 import GroupsOutlinedIcon from '@mui/icons-material/GroupsOutlined';
-import HomeIcon from '@mui/icons-material/Home';
+import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
-import NotificationsIcon from '@mui/icons-material/Notifications';
+import NotificationsNoneRoundedIcon from '@mui/icons-material/NotificationsNoneRounded';
 import TravelExploreRoundedIcon from '@mui/icons-material/TravelExploreRounded';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -30,25 +30,37 @@ import { setUser } from '../store/slices/authSlice';
 import { RootState } from '../store/types';
 import notificationService, { InboxNotification } from '../services/notificationService';
 import { resolveMediaUrl } from '../services/mediaUrl';
+import LanguageSwitcher from './LanguageSwitcher';
+import { useI18n } from '../i18n/I18nProvider';
 
-const navItems = [
-  { label: '피드', path: '/feed', icon: <HomeIcon /> },
-  { label: '새 글', path: '/post/new', icon: <AddBoxIcon /> },
-  { label: '매칭', path: '/matching', icon: <FavoriteBorderIcon /> },
-  { label: '모임', path: '/meetups', icon: <GroupsOutlinedIcon /> },
-  { label: '채팅', path: '/chat', icon: <ChatBubbleOutlineIcon /> },
-];
-
-const browseItems = navItems.filter((item) => item.path === '/feed' || item.path === '/meetups');
+interface NavigationItem {
+  label: string;
+  path: string;
+  icon: React.ReactNode;
+}
 
 const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const dispatch = useDispatch();
   const user = useSelector((state: RootState) => state.auth.user);
+  const { t } = useI18n();
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [inboxNotifications, setInboxNotifications] = useState<InboxNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  const navItems = useMemo<NavigationItem[]>(() => [
+    { label: t('피드', 'Feed'), path: '/feed', icon: <HomeOutlinedIcon /> },
+    { label: t('새 글', 'New post'), path: '/post/new', icon: <AddBoxOutlinedIcon /> },
+    { label: t('매칭', 'Matches'), path: '/matching', icon: <FavoriteBorderIcon /> },
+    { label: t('모임', 'Meetups'), path: '/meetups', icon: <GroupsOutlinedIcon /> },
+    { label: t('채팅', 'Chat'), path: '/chat', icon: <ChatBubbleOutlineIcon /> },
+  ], [t]);
+
+  const browseItems = useMemo(
+    () => navItems.filter((item) => item.path === '/feed' || item.path === '/meetups'),
+    [navItems],
+  );
 
   const loadNotifications = useCallback(async () => {
     if (!user) return;
@@ -60,7 +72,7 @@ const Navbar: React.FC = () => {
       setInboxNotifications(page.content);
       setUnreadCount(count);
     } catch {
-      // 알림 조회 실패가 전체 내비게이션을 막지 않도록 유지한다.
+      // Notification availability must not block primary navigation.
     }
   }, [user]);
 
@@ -77,13 +89,9 @@ const Navbar: React.FC = () => {
   };
 
   const handleNotificationClick = async (notification: InboxNotification) => {
-    if (!notification.readAt) {
-      await notificationService.markRead(notification.id);
-    }
+    if (!notification.readAt) await notificationService.markRead(notification.id);
     setAnchorEl(null);
-    if (notification.actionUrl) {
-      navigate(notification.actionUrl);
-    }
+    if (notification.actionUrl) navigate(notification.actionUrl);
   };
 
   const markAllNotificationsRead = async () => {
@@ -94,86 +102,62 @@ const Navbar: React.FC = () => {
   const isActive = (path: string) =>
     location.pathname === path || (path !== '/feed' && location.pathname.startsWith(`${path}/`));
 
-  return (
-    <AppBar
-      position="sticky"
-      elevation={0}
-      color="inherit"
-      sx={{
-        borderBottom: 1,
-        borderColor: 'divider',
-        bgcolor: 'rgba(255, 252, 250, 0.88)',
-        backdropFilter: 'blur(18px)',
-      }}
-    >
-      <Toolbar sx={{ gap: 1.25, width: '100%', maxWidth: 1240, mx: 'auto', minHeight: { xs: 64, sm: 72 } }}>
-        <Stack
-          component={RouterLink}
-          to="/"
-          direction="row"
-          spacing={1.25}
-          alignItems="center"
-          sx={{ color: 'text.primary', flexGrow: 1, textDecoration: 'none', minWidth: 0 }}
-        >
-          <Box sx={{ display: 'grid', placeItems: 'center', width: 38, height: 38, borderRadius: 2.5, color: '#fff', bgcolor: 'primary.main', boxShadow: '0 8px 20px rgba(232, 92, 74, .25)' }}>
-            <TravelExploreRoundedIcon fontSize="small" />
-          </Box>
-          <Box sx={{ minWidth: 0 }}>
-            <Typography variant="h6" sx={{ lineHeight: 1.05 }}>이웃톡</Typography>
-            <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', md: 'block' }, whiteSpace: 'nowrap' }}>
-              우리 동네 취향 커뮤니티
-            </Typography>
-          </Box>
-        </Stack>
+  const mobileItems = user ? navItems : browseItems;
 
-        {user ? (
-          <>
-            <Box component="nav" aria-label="주요 메뉴" sx={{ display: { xs: 'none', sm: 'flex' }, gap: 0.5 }}>
+  return (
+    <>
+      <AppBar
+        position="sticky"
+        elevation={0}
+        color="inherit"
+        sx={{
+          borderBottom: 1,
+          borderColor: 'divider',
+          bgcolor: 'rgba(255,255,255,.92)',
+          backdropFilter: 'blur(18px)',
+        }}
+      >
+        <Toolbar sx={{ gap: { xs: 0.75, sm: 1.25 }, width: '100%', maxWidth: 1280, mx: 'auto', minHeight: { xs: 62, sm: 70 } }}>
+          <Stack
+            component={RouterLink}
+            to="/"
+            direction="row"
+            spacing={1.1}
+            alignItems="center"
+            aria-label={t('이웃톡 홈', 'Neighbor Talk home')}
+            sx={{ color: 'text.primary', flexGrow: { xs: 1, lg: 0 }, mr: { lg: 2.5 }, textDecoration: 'none', minWidth: 0 }}
+          >
+            <Box sx={{ display: 'grid', placeItems: 'center', width: 38, height: 38, flexShrink: 0, borderRadius: 2.5, color: '#fff', bgcolor: 'primary.main' }}>
+              <TravelExploreRoundedIcon fontSize="small" />
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="h6" sx={{ lineHeight: 1.05 }}>{t('이웃톡', 'Neighbor Talk')}</Typography>
+              <Typography variant="caption" color="text.secondary" sx={{ display: { xs: 'none', xl: 'block' }, whiteSpace: 'nowrap' }}>
+                {t('우리 동네 취향 커뮤니티', 'Your neighborhood community')}
+              </Typography>
+            </Box>
+          </Stack>
+
+          {user ? (
+            <Box component="nav" aria-label={t('주요 메뉴', 'Primary navigation')} sx={{ display: { xs: 'none', lg: 'flex' }, gap: 0.5, flexGrow: 1 }}>
               {navItems.map((item) => (
-                <Tooltip key={item.path} title={item.label}>
-                  <IconButton
-                    component={RouterLink}
-                    to={item.path}
-                    aria-label={item.label}
-                    aria-current={isActive(item.path) ? 'page' : undefined}
-                    sx={{
-                      color: isActive(item.path) ? 'primary.main' : 'text.secondary',
-                      bgcolor: isActive(item.path) ? 'rgba(232, 92, 74, .10)' : 'transparent',
-                      '&:hover': { bgcolor: 'rgba(232, 92, 74, .10)', color: 'primary.main' },
-                    }}
-                  >
-                    {item.icon}
-                  </IconButton>
-                </Tooltip>
+                <Button
+                  key={item.path}
+                  component={RouterLink}
+                  to={item.path}
+                  startIcon={item.icon}
+                  aria-current={isActive(item.path) ? 'page' : undefined}
+                  sx={{
+                    color: isActive(item.path) ? 'primary.main' : 'text.secondary',
+                    bgcolor: isActive(item.path) ? 'rgba(200,67,53,.08)' : 'transparent',
+                  }}
+                >
+                  {item.label}
+                </Button>
               ))}
             </Box>
-            <Divider orientation="vertical" flexItem sx={{ mx: 0.25, display: { xs: 'none', sm: 'block' } }} />
-            <Tooltip title="알림">
-              <IconButton aria-label="알림" onClick={(event) => { setAnchorEl(event.currentTarget); loadNotifications(); }}>
-                <Badge badgeContent={unreadCount} color="error">
-                  <NotificationsIcon />
-                </Badge>
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="프로필">
-              <IconButton component={RouterLink} to="/mypage" aria-label="마이페이지" sx={{ p: 0.5 }}>
-                <Avatar src={resolveMediaUrl(user.profileImage)} sx={{ width: 34, height: 34, bgcolor: 'secondary.main', fontSize: 15 }}>
-                  {user.username?.[0]}
-                </Avatar>
-              </IconButton>
-            </Tooltip>
-            <Button
-              color="inherit"
-              startIcon={<LogoutRoundedIcon />}
-              onClick={handleLogout}
-              sx={{ display: { xs: 'none', lg: 'inline-flex' }, color: 'text.secondary' }}
-            >
-              로그아웃
-            </Button>
-          </>
-        ) : (
-          <>
-            <Box component="nav" aria-label="둘러보기 메뉴" sx={{ display: { xs: 'none', md: 'flex' }, gap: 0.5 }}>
+          ) : (
+            <Box component="nav" aria-label={t('둘러보기 메뉴', 'Browse navigation')} sx={{ display: { xs: 'none', lg: 'flex' }, gap: 0.5, flexGrow: 1 }}>
               {browseItems.map((item) => (
                 <Button
                   key={item.path}
@@ -184,132 +168,139 @@ const Navbar: React.FC = () => {
                   aria-current={isActive(item.path) ? 'page' : undefined}
                   sx={{ color: isActive(item.path) ? 'primary.main' : 'text.secondary' }}
                 >
-                  {item.label} 둘러보기
+                  {item.label}
                 </Button>
               ))}
             </Box>
-            <Stack direction="row" spacing={1}>
-              <Button component={RouterLink} to="/login" color="inherit" sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
-                로그인
+          )}
+
+          <LanguageSwitcher compact />
+
+          {user ? (
+            <>
+              <Divider orientation="vertical" flexItem sx={{ mx: 0.25, display: { xs: 'none', sm: 'block' } }} />
+              <Tooltip title={t('알림', 'Notifications')}>
+                <IconButton
+                  aria-label={t('알림', 'Notifications')}
+                  onClick={(event) => { setAnchorEl(event.currentTarget); loadNotifications(); }}
+                >
+                  <Badge badgeContent={unreadCount} color="error" max={99}>
+                    <NotificationsNoneRoundedIcon />
+                  </Badge>
+                </IconButton>
+              </Tooltip>
+              <Tooltip title={t('내 프로필', 'My profile')}>
+                <IconButton component={RouterLink} to="/mypage" aria-label={t('마이페이지', 'My page')} sx={{ p: 0.5 }}>
+                  <Avatar src={resolveMediaUrl(user.profileImage)} sx={{ width: 34, height: 34, bgcolor: 'secondary.main', fontSize: 15 }}>
+                    {user.username?.[0]}
+                  </Avatar>
+                </IconButton>
+              </Tooltip>
+              <Button
+                color="inherit"
+                startIcon={<LogoutRoundedIcon />}
+                onClick={handleLogout}
+                sx={{ display: { xs: 'none', xl: 'inline-flex' }, color: 'text.secondary' }}
+              >
+                {t('로그아웃', 'Sign out')}
               </Button>
-              <Button component={RouterLink} to="/register" variant="contained">
-                시작하기
+            </>
+          ) : (
+            <Stack direction="row" spacing={0.75}>
+              <Button component={RouterLink} to="/login" color="inherit" sx={{ display: { xs: 'none', sm: 'inline-flex' } }}>
+                {t('로그인', 'Sign in')}
+              </Button>
+              <Button component={RouterLink} to="/register" variant="contained" sx={{ px: { xs: 1.25, sm: 2 } }}>
+                {t('시작하기', 'Join')}
               </Button>
             </Stack>
-          </>
-        )}
-      </Toolbar>
+          )}
+        </Toolbar>
+      </AppBar>
 
-      {user && (
-        <Box
-          component="nav"
-          aria-label="모바일 주요 메뉴"
-          sx={{
-            display: { xs: 'grid', sm: 'none' },
-            gridTemplateColumns: 'repeat(5, 1fr)',
-            borderTop: 1,
-            borderColor: 'divider',
-            px: 0.5,
-            pb: 'max(4px, env(safe-area-inset-bottom))',
-          }}
-        >
-          {navItems.map((item) => (
-            <Button
-              key={item.path}
-              component={RouterLink}
-              to={item.path}
-              aria-current={isActive(item.path) ? 'page' : undefined}
-              sx={{
-                minWidth: 0,
-                minHeight: 52,
-                px: 0.25,
-                color: isActive(item.path) ? 'primary.main' : 'text.secondary',
-                flexDirection: 'column',
-                gap: 0.15,
-                borderRadius: 2,
-                '& .MuiButton-startIcon': { m: 0 },
-                fontSize: '0.68rem',
-              }}
-              startIcon={item.icon}
-            >
-              {item.label}
-            </Button>
-          ))}
-        </Box>
-      )}
-
-      {!user && (
-        <Box
-          component="nav"
-          aria-label="모바일 둘러보기 메뉴"
-          sx={{
-            display: { xs: 'grid', md: 'none' },
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            borderTop: 1,
-            borderColor: 'divider',
-            px: 0.5,
-          }}
-        >
-          {browseItems.map((item) => (
-            <Button
-              key={item.path}
-              component={RouterLink}
-              to={item.path}
-              startIcon={item.icon}
-              aria-current={isActive(item.path) ? 'page' : undefined}
-              sx={{
-                minHeight: 44,
-                color: isActive(item.path) ? 'primary.main' : 'text.secondary',
-              }}
-            >
-              {item.label} 둘러보기
-            </Button>
-          ))}
-        </Box>
-      )}
+      <Box
+        component="nav"
+        aria-label={user ? t('모바일 주요 메뉴', 'Mobile navigation') : t('모바일 둘러보기 메뉴', 'Mobile browse navigation')}
+        sx={{
+          position: 'fixed',
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: (muiTheme) => muiTheme.zIndex.appBar,
+          display: { xs: 'grid', lg: 'none' },
+          gridTemplateColumns: `repeat(${mobileItems.length}, 1fr)`,
+          borderTop: 1,
+          borderColor: 'divider',
+          bgcolor: 'rgba(255,255,255,.96)',
+          backdropFilter: 'blur(18px)',
+          px: 0.5,
+          pb: 'env(safe-area-inset-bottom)',
+          boxShadow: '0 -8px 24px rgba(41,33,31,.06)',
+        }}
+      >
+        {mobileItems.map((item) => (
+          <Button
+            key={item.path}
+            component={RouterLink}
+            to={item.path}
+            aria-current={isActive(item.path) ? 'page' : undefined}
+            sx={{
+              minWidth: 0,
+              minHeight: 58,
+              px: 0.25,
+              color: isActive(item.path) ? 'primary.main' : 'text.secondary',
+              flexDirection: 'column',
+              gap: 0.1,
+              borderRadius: 0,
+              '& .MuiButton-startIcon': { m: 0 },
+              fontSize: '0.68rem',
+            }}
+            startIcon={item.icon}
+          >
+            {item.label}
+          </Button>
+        ))}
+      </Box>
 
       <Menu
         anchorEl={anchorEl}
         open={Boolean(anchorEl)}
         onClose={() => setAnchorEl(null)}
-        PaperProps={{ sx: { width: 360, maxWidth: 'calc(100vw - 24px)', mt: 1, borderRadius: 3, border: 1, borderColor: 'divider' } }}
+        PaperProps={{ sx: { width: 380, maxWidth: 'calc(100vw - 24px)', mt: 1, borderRadius: 3, border: 1, borderColor: 'divider' } }}
       >
-        <Box sx={{ px: 2, py: 1.25, display: 'flex', justifyContent: 'space-between' }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-            알림
-          </Typography>
+        <Box sx={{ px: 2, py: 1.25, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>{t('알림', 'Notifications')}</Typography>
           {inboxNotifications.length > 0 && (
-            <Button size="small" onClick={markAllNotificationsRead}>
-              모두 읽음
-            </Button>
+            <Button size="small" onClick={markAllNotificationsRead}>{t('모두 읽음', 'Mark all read')}</Button>
           )}
         </Box>
         <Divider />
         {inboxNotifications.length === 0 ? (
           <MenuItem disabled>
-            <ListItemText primary="새 알림이 없어." />
+            <ListItemText
+              primary={t('새 알림이 없습니다.', 'You have no new notifications.')}
+              primaryTypographyProps={{ textAlign: 'center', py: 1 }}
+            />
           </MenuItem>
-        ) : (
-          inboxNotifications.map((notification) => (
-            <MenuItem
-              key={notification.id}
-              onClick={() => handleNotificationClick(notification)}
-              sx={{ alignItems: 'flex-start', bgcolor: notification.readAt ? 'transparent' : 'action.hover' }}
-            >
-              <ListItemText
-                primary={notification.type.replaceAll('_', ' ')}
-                secondary={notification.message}
-                primaryTypographyProps={{ fontWeight: notification.readAt ? 500 : 800 }}
-              />
-            </MenuItem>
-          ))
-        )}
+        ) : inboxNotifications.map((notification) => (
+          <MenuItem
+            key={notification.id}
+            onClick={() => handleNotificationClick(notification)}
+            sx={{ alignItems: 'flex-start', whiteSpace: 'normal', bgcolor: notification.readAt ? 'transparent' : 'action.hover' }}
+          >
+            <ListItemText
+              primary={notification.type.replaceAll('_', ' ')}
+              secondary={notification.message}
+              primaryTypographyProps={{ fontWeight: notification.readAt ? 500 : 800 }}
+            />
+          </MenuItem>
+        ))}
         <Divider />
         <MenuItem component={RouterLink} to="/notifications" onClick={() => setAnchorEl(null)}>
-          <ListItemText primary="전체 알림 보기" primaryTypographyProps={{ textAlign: 'center', fontWeight: 700 }} />
+          <ListItemText primary={t('전체 알림 보기', 'View all notifications')} primaryTypographyProps={{ textAlign: 'center', fontWeight: 700 }} />
         </MenuItem>
       </Menu>
-    </AppBar>
+    </>
   );
 };
 

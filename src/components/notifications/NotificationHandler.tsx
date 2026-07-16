@@ -5,8 +5,10 @@ import CloseIcon from '@mui/icons-material/Close';
 import { useNavigate } from 'react-router-dom';
 import { RootState, AppDispatch, NotificationMessage } from '../../store/types';
 import { removeNotification } from '../../store/slices/notificationSlice';
+import { useI18n } from '../../i18n/I18nProvider';
 
 const NotificationHandler: React.FC = () => {
+  const { t } = useI18n();
   const dispatch: AppDispatch = useDispatch();
   const navigate = useNavigate();
   
@@ -70,7 +72,7 @@ const NotificationHandler: React.FC = () => {
         action={currentNotification.navigateTo ? null : (
             <IconButton
                 size="small"
-                aria-label="close"
+                aria-label={t('알림 닫기', 'Close notification')}
                 color="inherit"
                 onClick={(e) => { e.stopPropagation(); handleClose();}}
             >
@@ -84,4 +86,4 @@ const NotificationHandler: React.FC = () => {
   );
 };
 
-export default NotificationHandler; 
+export default NotificationHandler;

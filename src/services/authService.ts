@@ -2,6 +2,7 @@ import api from './api';
 import { User } from '../types/user';
 import type { AuthApiError, AuthCapabilities, AuthProviderConfig, AuthProviderId, EmailVerificationChallenge } from '../types/auth';
 import { isAxiosError, type AxiosProgressEvent } from 'axios';
+import { getRuntimeLocale, translate } from '../i18n/I18nProvider';
 
 interface LoginResponse {
   user?: User;
@@ -75,7 +76,7 @@ const normalizeEmailChallenge = (
   fallbackChallengeId?: string,
 ): EmailVerificationChallenge => {
   const challengeId = payload?.challengeId?.trim() || payload?.id?.trim() || fallbackChallengeId;
-  if (!challengeId) throw new Error('이메일 인증 요청 응답이 올바르지 않아.');
+  if (!challengeId) throw new Error(translate('이메일 인증 요청 응답이 올바르지 않습니다.', 'The email verification response is invalid.'));
 
   return {
     challengeId,
@@ -85,26 +86,26 @@ const normalizeEmailChallenge = (
   };
 };
 
-const AUTH_ERROR_MESSAGES: Record<string, string> = {
-  NICKNAME_CHANGE_REQUIRED: '자동으로 만들어진 닉네임과 다른 이름을 정해줘.',
-  NICKNAME_INVALID: '닉네임은 공백 없이 2자 이상 30자 이하로 입력해줘.',
-  INVALID_VERIFICATION_CODE: '인증번호가 맞지 않아. 다시 확인해줘.',
-  EMAIL_VERIFICATION_CODE_INVALID_OR_EXPIRED: '인증번호가 맞지 않거나 만료됐어. 새 번호를 받아줘.',
-  EMAIL_VERIFICATION_ATTEMPTS_EXHAUSTED: '인증번호를 너무 많이 틀렸어. 새 번호를 받아줘.',
-  EMAIL_VERIFICATION_RESEND_COOLDOWN: '인증번호를 다시 받기 전 잠시 기다려줘.',
-  EMAIL_VERIFICATION_RATE_LIMITED: '인증 요청이 너무 많아. 잠시 뒤 다시 시도해줘.',
-  EMAIL_VERIFICATION_PROOF_INVALID: '이메일 인증이 만료됐어. 처음부터 다시 확인해줘.',
-  EMAIL_VERIFICATION_UNAVAILABLE: '이메일 인증을 잠시 사용할 수 없어. 조금 뒤 다시 시도해줘.',
-  EMAIL_DELIVERY_FAILED: '인증 메일을 보내지 못했어. 조금 뒤 다시 시도해줘.',
-  EMAIL_VERIFICATION_EXPIRED: '인증번호가 만료됐어. 새 인증번호를 받아줘.',
-  VERIFICATION_CHALLENGE_EXPIRED: '인증번호가 만료됐어. 새 인증번호를 받아줘.',
-  EMAIL_ALREADY_IN_USE: '이미 가입된 이메일이야. 로그인해줘.',
-  USERNAME_ALREADY_IN_USE: '이미 사용 중인 닉네임이야.',
-  TOO_MANY_REQUESTS: '요청이 너무 많아. 잠시 뒤 다시 시도해줘.',
-  ACCOUNT_LINK_REQUIRED: '같은 이메일의 계정이 있어. 기존 이메일과 비밀번호로 로그인해줘.',
-  PROVIDER_EMAIL_REQUIRED: '소셜 계정의 이메일 제공 동의가 필요해.',
-  OAUTH_FAILED: '간편 로그인에 실패했어. 다시 시도해줘.',
-  BAD_CREDENTIALS: '이메일과 비밀번호를 확인해줘.',
+const AUTH_ERROR_MESSAGES: Record<string, readonly [string, string]> = {
+  NICKNAME_CHANGE_REQUIRED: ['자동으로 생성된 닉네임과 다른 이름을 입력해 주세요.', 'Choose a nickname different from the automatically generated one.'],
+  NICKNAME_INVALID: ['닉네임은 공백 없이 2자 이상 30자 이하로 입력해 주세요.', 'Enter a nickname between 2 and 30 characters without spaces.'],
+  INVALID_VERIFICATION_CODE: ['인증번호가 올바르지 않습니다. 다시 확인해 주세요.', 'That verification code is incorrect. Please check it again.'],
+  EMAIL_VERIFICATION_CODE_INVALID_OR_EXPIRED: ['인증번호가 올바르지 않거나 만료되었습니다. 새 번호를 받아 주세요.', 'That verification code is invalid or expired. Please request a new one.'],
+  EMAIL_VERIFICATION_ATTEMPTS_EXHAUSTED: ['인증번호 입력 횟수를 초과했습니다. 새 번호를 받아 주세요.', 'Too many incorrect attempts. Please request a new code.'],
+  EMAIL_VERIFICATION_RESEND_COOLDOWN: ['인증번호를 다시 받기 전 잠시 기다려 주세요.', 'Please wait before requesting another code.'],
+  EMAIL_VERIFICATION_RATE_LIMITED: ['인증 요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', 'Too many verification requests. Please try again shortly.'],
+  EMAIL_VERIFICATION_PROOF_INVALID: ['이메일 인증이 만료되었습니다. 처음부터 다시 진행해 주세요.', 'Your email verification has expired. Please start again.'],
+  EMAIL_VERIFICATION_UNAVAILABLE: ['이메일 인증을 잠시 이용할 수 없습니다. 잠시 후 다시 시도해 주세요.', 'Email verification is temporarily unavailable. Please try again shortly.'],
+  EMAIL_DELIVERY_FAILED: ['인증 메일을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.', 'We could not send the verification email. Please try again shortly.'],
+  EMAIL_VERIFICATION_EXPIRED: ['인증번호가 만료되었습니다. 새 인증번호를 받아 주세요.', 'Your verification code has expired. Please request a new one.'],
+  VERIFICATION_CHALLENGE_EXPIRED: ['인증번호가 만료되었습니다. 새 인증번호를 받아 주세요.', 'Your verification code has expired. Please request a new one.'],
+  EMAIL_ALREADY_IN_USE: ['이미 가입된 이메일입니다. 로그인해 주세요.', 'An account already uses this email. Please sign in.'],
+  USERNAME_ALREADY_IN_USE: ['이미 사용 중인 닉네임입니다.', 'That nickname is already in use.'],
+  TOO_MANY_REQUESTS: ['요청이 너무 많습니다. 잠시 후 다시 시도해 주세요.', 'Too many requests. Please try again shortly.'],
+  ACCOUNT_LINK_REQUIRED: ['같은 이메일로 가입한 계정이 있습니다. 기존 이메일과 비밀번호로 로그인해 주세요.', 'An account already uses this email. Please sign in with your existing email and password.'],
+  PROVIDER_EMAIL_REQUIRED: ['소셜 계정의 이메일 제공에 동의해 주세요.', 'Please allow access to your social account email.'],
+  OAUTH_FAILED: ['간편 로그인하지 못했습니다. 다시 시도해 주세요.', 'We could not complete social sign-in. Please try again.'],
+  BAD_CREDENTIALS: ['이메일과 비밀번호를 확인해 주세요.', 'Please check your email and password.'],
 };
 
 export interface AuthErrorPresentation {
@@ -123,7 +124,11 @@ export const authErrorPresentation = (
   const code = payload?.code?.trim().toUpperCase();
   return {
     code,
-    message: (code && AUTH_ERROR_MESSAGES[code]) || payload?.message?.trim() || fallbackMessage,
+    message: (code && AUTH_ERROR_MESSAGES[code]
+      ? translate(...AUTH_ERROR_MESSAGES[code])
+      : undefined)
+      || (getRuntimeLocale() === 'ko' ? payload?.message?.trim() : undefined)
+      || fallbackMessage,
     retryAfterSeconds: payload?.retryAfterSeconds,
   };
 };

@@ -21,14 +21,14 @@ test('feed and chat share the guarded video upload policy', () => {
     assert.doesNotMatch(source, /100MB/);
   }
 
-  assert.match(newPost, /동영상은 한 번에 1개만 올릴 수 있어/);
-  assert.match(newPost, /첨부 파일 전체 크기는 120MB/);
+  assert.match(newPost, /동영상은 한 번에 1개만 업로드할 수 있습니다/);
+  assert.match(newPost, /첨부 파일의 전체 크기는 120MB/);
   assert.doesNotMatch(newPost, /200MB/);
-  assert.match(chatRoom, /동영상은 한 번에 1개만 보낼 수 있어/);
+  assert.match(chatRoom, /동영상은 한 번에 1개만 보낼 수 있습니다/);
 });
 
 test('completed browser transfer is presented as server-side processing', () => {
   const policy = readSource('src/services/mediaUploadPolicy.ts');
   assert.match(policy, /progress >= 100/);
-  assert.match(policy, /서버에서 안전하게 최적화하고 있어/);
+  assert.match(policy, /서버에서 안전하게 최적화하고 있습니다/);
 });

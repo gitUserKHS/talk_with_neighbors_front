@@ -1,3 +1,5 @@
+import { getIntlLocale, translate } from '../i18n/I18nProvider';
+
 const ISO_OFFSET_SUFFIX = /(Z|[+-]\d{2}:\d{2})$/i;
 
 /**
@@ -24,9 +26,9 @@ export const parseMeetupDateTime = (value?: string | null): Date | null => {
 
 export const formatMeetupDateTime = (value?: string | null): string => {
   const instant = parseMeetupDateTime(value);
-  if (!instant) return '일정 확인 필요';
+  if (!instant) return translate('일정 확인 필요', 'Schedule unavailable');
 
-  return new Intl.DateTimeFormat('ko-KR', {
+  return new Intl.DateTimeFormat(getIntlLocale(), {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(instant);

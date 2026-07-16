@@ -5,6 +5,7 @@ import ChatBubbleRoundedIcon from '@mui/icons-material/ChatBubbleRounded';
 import { authService } from '../../services/authService';
 import { startOAuthLogin } from '../../services/authNavigation';
 import type { AuthProviderConfig, AuthProviderId } from '../../types/auth';
+import { useI18n } from '../../i18n/I18nProvider';
 
 interface SocialLoginButtonsProps {
   returnTo: string;
@@ -17,8 +18,9 @@ const providerIcon = (provider: AuthProviderId) => (
 
 const SocialLoginButtons: React.FC<SocialLoginButtonsProps> = ({
   returnTo,
-  label = '또는 간편하게 계속하기',
+  label,
 }) => {
+  const { t } = useI18n();
   const [providers, setProviders] = useState<AuthProviderConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -44,21 +46,21 @@ const SocialLoginButtons: React.FC<SocialLoginButtonsProps> = ({
 
   if (loading) {
     return (
-      <Stack alignItems="center" aria-label="간편 로그인 확인 중">
+      <Stack alignItems="center" aria-label={t('간편 로그인 확인 중', 'Checking social sign-in options')}>
         <CircularProgress size={22} />
       </Stack>
     );
   }
 
   if (error) {
-    return <Alert severity="info">간편 로그인은 잠시 사용할 수 없어. 이메일로 계속해줘.</Alert>;
+    return <Alert severity="info">{t('간편 로그인을 잠시 이용할 수 없습니다. 이메일로 계속해 주세요.', 'Social sign-in is temporarily unavailable. Please continue with email.')}</Alert>;
   }
 
   if (providers.length === 0) return null;
 
   return (
     <Stack spacing={1.25}>
-      <Divider>{label}</Divider>
+      <Divider>{label ?? t('또는 간편하게 계속하기', 'Or continue with')}</Divider>
       {providers.map((provider) => (
         <Button
           key={provider.id}
@@ -76,7 +78,10 @@ const SocialLoginButtons: React.FC<SocialLoginButtonsProps> = ({
             '&:hover': { bgcolor: '#F5DC00', borderColor: '#F5DC00' },
           } : { minHeight: 48 }}
         >
-          {provider.displayName}로 계속하기
+          {t(
+            `${provider.id === 'kakao' ? '카카오' : 'Google'}로 계속하기`,
+            `Continue with ${provider.id === 'kakao' ? 'Kakao' : 'Google'}`,
+          )}
         </Button>
       ))}
     </Stack>

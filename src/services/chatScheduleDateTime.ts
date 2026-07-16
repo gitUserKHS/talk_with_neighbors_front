@@ -1,4 +1,5 @@
 import { ChatSchedule } from '../types/chatSchedule';
+import { getIntlLocale, translate } from '../i18n/I18nProvider';
 
 export const browserTimeZone = (): string =>
   Intl.DateTimeFormat().resolvedOptions().timeZone || 'Asia/Seoul';
@@ -6,7 +7,7 @@ export const browserTimeZone = (): string =>
 export const localDateTimeToUtcIso = (value: string): string => {
   const parsed = new Date(value);
   if (!value || Number.isNaN(parsed.getTime())) {
-    throw new Error('일정 날짜와 시간을 확인해줘.');
+    throw new Error(translate('일정 날짜와 시간을 확인해 주세요.', 'Please check the schedule date and time.'));
   }
   return parsed.toISOString();
 };
@@ -31,16 +32,16 @@ export const formatChatScheduleDateTime = (
   timeZone?: string,
 ): string => {
   const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return '일정 확인 필요';
+  if (Number.isNaN(parsed.getTime())) return translate('일정 확인 필요', 'Schedule unavailable');
 
   try {
-    return new Intl.DateTimeFormat('ko-KR', {
+    return new Intl.DateTimeFormat(getIntlLocale(), {
       dateStyle: 'medium',
       timeStyle: 'short',
       timeZone: timeZone || browserTimeZone(),
     }).format(parsed);
   } catch {
-    return new Intl.DateTimeFormat('ko-KR', {
+    return new Intl.DateTimeFormat(getIntlLocale(), {
       dateStyle: 'medium',
       timeStyle: 'short',
     }).format(parsed);
