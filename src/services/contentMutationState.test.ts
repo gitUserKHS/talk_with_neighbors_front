@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   decrementPostCommentCount,
+  mergeFeedPostDiscoveryMetadata,
   removeFeedComment,
   removeFeedPost,
   removeMeetup,
@@ -26,6 +27,43 @@ describe('author mutation UI state', () => {
     const updated = { ...basePost, caption: '후' };
     expect(replaceFeedPost([basePost, other], updated)).toEqual([updated, other]);
     expect(removeFeedPost([basePost, other], 'post-1')).toEqual([other]);
+  });
+
+  it('preserves query discovery metadata when a mutation response omits it', () => {
+    const current = {
+      ...basePost,
+      neighborhoodName: '성수동',
+      recommendationReasons: ['NEARBY', 'SHARED_INTERESTS'],
+    };
+    const updated = { ...basePost, caption: '수정됨' };
+
+    expect(mergeFeedPostDiscoveryMetadata(current, updated)).toMatchObject({
+      caption: '수정됨',
+      neighborhoodName: '성수동',
+      recommendationReasons: ['NEARBY', 'SHARED_INTERESTS'],
+    });
+    expect(replaceFeedPost([current], updated)[0]).toMatchObject({
+      neighborhoodName: '성수동',
+      recommendationReasons: ['NEARBY', 'SHARED_INTERESTS'],
+    });
+  });
+
+  it('accepts discovery metadata explicitly returned by a mutation', () => {
+    const current = {
+      ...basePost,
+      neighborhoodName: '성수동',
+      recommendationReasons: ['NEARBY'],
+    };
+    const updated = {
+      ...basePost,
+      neighborhoodName: '연남동',
+      recommendationReasons: [] as string[],
+    };
+
+    expect(mergeFeedPostDiscoveryMetadata(current, updated)).toMatchObject({
+      neighborhoodName: '연남동',
+      recommendationReasons: [],
+    });
   });
 
   it('updates and removes only the target comment and keeps counts non-negative', () => {

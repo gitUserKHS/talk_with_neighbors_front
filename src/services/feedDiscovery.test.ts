@@ -48,18 +48,42 @@ describe('feed discovery ranking', () => {
     expect(resolveFeedMode('NEARBY', true)).toBe('NEARBY');
   });
 
-  it('uses known distance first and keeps unknown-distance posts available', () => {
-    const unknown = post('unknown', { compatibilityScore: 100 });
-    const far = post('far', { distanceKm: 4.2 });
-    const close = post('close', { distanceKm: 0.7 });
+  it('preserves privacy-safe server proximity order even when its reasons are empty', () => {
+    const serverFirst = post('server-first', { recommendationReasons: [] });
+    const locallyStronger = post('locally-stronger', {
+      compatibilityScore: 100,
+      recommendationReasons: [],
+    });
 
-    expect(rankFeedPosts([unknown, far, close], 'NEARBY', now).map(({ id }) => id))
-      .toEqual(['close', 'far', 'unknown']);
+    expect(rankFeedPosts([serverFirst, locallyStronger], 'NEARBY', now).map(({ id }) => id))
+      .toEqual(['server-first', 'locally-stronger']);
+  });
+
+  it('uses a stable recommendation fallback for legacy nearby responses', () => {
+    const olderServerFirst = post('older-server-first');
+    const relevant = post('relevant', {
+      compatibilityScore: 86,
+      sharedInterests: ['walking', 'coffee'],
+    });
+
+    expect(rankFeedPosts([olderServerFirst, relevant], 'NEARBY', now).map(({ id }) => id))
+      .toEqual(['relevant', 'older-server-first']);
   });
 
   it('preserves server recommendation order when explanation metadata is present', () => {
     const serverFirst = post('server-first', { recommendationReasons: ['POPULAR'] });
     const locallyStronger = post('locally-stronger', { compatibilityScore: 100 });
+
+    expect(rankFeedPosts([serverFirst, locallyStronger], 'RECOMMENDED', now).map(({ id }) => id))
+      .toEqual(['server-first', 'locally-stronger']);
+  });
+
+  it('preserves server recommendation order when the reason list is empty', () => {
+    const serverFirst = post('server-first', { recommendationReasons: [] });
+    const locallyStronger = post('locally-stronger', {
+      compatibilityScore: 100,
+      recommendationReasons: [],
+    });
 
     expect(rankFeedPosts([serverFirst, locallyStronger], 'RECOMMENDED', now).map(({ id }) => id))
       .toEqual(['server-first', 'locally-stronger']);

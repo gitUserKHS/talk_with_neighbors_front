@@ -69,6 +69,7 @@ import {
 } from '../services/accessScope';
 import {
   decrementPostCommentCount,
+  mergeFeedPostDiscoveryMetadata,
   removeFeedComment,
   removeFeedPost,
   replaceFeedComment,
@@ -371,7 +372,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
         publicPreview: postEditPublicPreview,
       });
       setPosts((items) => replaceFeedPost(items, updated));
-      setSelectedPost(updated);
+      setSelectedPost(mergeFeedPostDiscoveryMetadata(postEditTarget, updated));
       setPostEditTarget(null);
       setSuccess(t('게시글을 수정했습니다.', 'Post updated.'));
     } catch (err: any) {
@@ -540,7 +541,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       value: 'NEARBY' as const,
       label: t('가까운', 'Nearby'),
       icon: <NearMeRoundedIcon fontSize="small" />,
-      description: t('거리 정보가 있는 이야기를 가까운 순서로 먼저 보여드립니다.', 'Stories with distance data are shown from nearest to farthest.'),
+      description: t('정확한 거리는 공개하지 않고 가까운 동네의 이야기를 보여드립니다.', 'Nearby stories are ranked without revealing exact distances.'),
     },
     {
       value: 'LATEST' as const,
@@ -576,7 +577,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               {isGuest
                 ? t('이웃들이 공개한 이야기를 발견해 보세요.', 'Discover public stories shared by neighbors.')
-                : t('관심사와 거리를 바탕으로 새로운 이웃 이야기를 발견해 보세요.', 'Discover neighborhood stories shaped by interests and distance.')}
+                : t('관심사와 동네를 바탕으로 새로운 이웃 이야기를 발견해 보세요.', 'Discover neighborhood stories shaped by interests and community.')}
             </Typography>
           </Box>
           <Stack
@@ -722,10 +723,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
           const likeCount = post.likeCount ?? 0;
           const commentCount = post.commentCount ?? 0;
           const hasMedia = Boolean(post.media?.length || post.imageUrl?.trim());
-          const distanceLabel = post.distanceKm != null
-            ? t(`${formatNumber(Number(post.distanceKm.toFixed(1)))}km`, `${formatNumber(Number(post.distanceKm.toFixed(1)))} km away`)
-            : '';
-          const postContext = [post.neighborhoodName, distanceLabel, displayDate(post.createdAt)].filter(Boolean).join(' · ');
+          const postContext = [post.neighborhoodName, displayDate(post.createdAt)].filter(Boolean).join(' · ');
           const recommendationReasonLabels: Record<string, string> = {
             SHARED_INTERESTS: t('공통 관심사', 'Shared interests'),
             NEARBY: t('가까운 이웃', 'Nearby neighbor'),

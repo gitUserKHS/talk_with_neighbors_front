@@ -17,8 +17,7 @@ export interface FeedPost {
   likedByCurrentUser: boolean;
   compatibilityScore: number;
   sharedInterests: string[];
-  /** Optional discovery metadata returned by distance-aware feed APIs. */
-  distanceKm?: number;
+  /** Optional privacy-safe discovery metadata returned by feed queries. */
   neighborhoodName?: string;
   recommendationReasons?: string[];
 }

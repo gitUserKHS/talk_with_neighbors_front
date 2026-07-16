@@ -1,8 +1,23 @@
 import { FeedComment, FeedPost } from '../types/feed';
 import { HobbyMeetup } from '../types/meetup';
 
+export const mergeFeedPostDiscoveryMetadata = (
+  current: FeedPost,
+  updated: FeedPost,
+): FeedPost => ({
+  ...updated,
+  neighborhoodName: updated.neighborhoodName === undefined
+    ? current.neighborhoodName
+    : updated.neighborhoodName,
+  recommendationReasons: updated.recommendationReasons === undefined
+    ? current.recommendationReasons
+    : updated.recommendationReasons,
+});
+
 export const replaceFeedPost = (posts: FeedPost[], updated: FeedPost): FeedPost[] =>
-  posts.map((post) => (post.id === updated.id ? updated : post));
+  posts.map((post) => (post.id === updated.id
+    ? mergeFeedPostDiscoveryMetadata(post, updated)
+    : post));
 
 export const removeFeedPost = (posts: FeedPost[], postId: string): FeedPost[] =>
   posts.filter((post) => post.id !== postId);

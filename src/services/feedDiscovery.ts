@@ -55,7 +55,11 @@ export const rankFeedPosts = (
   mode: FeedDiscoveryMode,
   now = Date.now(),
 ): FeedPost[] => {
-  if (mode === 'RECOMMENDED' && posts.some((post) => (post.recommendationReasons?.length ?? 0) > 0)) {
+  const hasServerRankingMetadata = posts.some(
+    (post) => post.recommendationReasons !== undefined,
+  );
+
+  if ((mode === 'RECOMMENDED' || mode === 'NEARBY') && hasServerRankingMetadata) {
     return [...posts];
   }
 
@@ -66,16 +70,8 @@ export const rankFeedPosts = (
       return createdTime(right.post) - createdTime(left.post) || left.index - right.index;
     }
 
-    if (mode === 'NEARBY') {
-      const leftDistance = left.post.distanceKm;
-      const rightDistance = right.post.distanceKm;
-      if (leftDistance != null && rightDistance != null && leftDistance !== rightDistance) {
-        return leftDistance - rightDistance;
-      }
-      if (leftDistance != null && rightDistance == null) return -1;
-      if (leftDistance == null && rightDistance != null) return 1;
-    }
-
+    // Older servers do not provide privacy-safe ranking metadata. Keep their
+    // feed useful with the same stable, non-location fallback as recommendations.
     return recommendationScore(right.post, now) - recommendationScore(left.post, now)
       || left.index - right.index;
   });

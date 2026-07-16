@@ -24,6 +24,7 @@ import { MyCommentActivity, MyPageOverview, UserPreferences } from '../types/myp
 import { BlockedUser, HiddenContent, SafetyReport } from '../types/safety';
 import { useI18n } from '../i18n/I18nProvider';
 import SignOutDialog from '../components/auth/SignOutDialog';
+import { replaceFeedPost } from '../services/contentMutationState';
 
 interface ProfileForm {
   username: string;
@@ -185,7 +186,7 @@ const Profile: React.FC = () => {
         interestTags,
         publicPreview: postEditPublicPreview,
       });
-      setPosts((items) => items.map((item) => item.id === updated.id ? updated : item));
+      setPosts((items) => replaceFeedPost(items, updated));
       setPostEditTarget(null);
       setMessage(t('게시글을 수정했습니다.', 'Post updated.'));
     });
