@@ -22,11 +22,16 @@ import CloseIcon from '@mui/icons-material/Close';
 import MovieOutlinedIcon from '@mui/icons-material/MovieOutlined';
 import { useNavigate } from 'react-router-dom';
 import feedService from '../services/feedService';
+import {
+  MAX_VIDEO_BYTES,
+  MAX_VIDEO_COUNT,
+  MAX_MEDIA_REQUEST_BYTES,
+  VIDEO_UPLOAD_GUIDANCE,
+  mediaUploadStatusText,
+} from '../services/mediaUploadPolicy';
 
 const MAX_MEDIA_COUNT = 10;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
-const MAX_VIDEO_BYTES = 100 * 1024 * 1024;
-const MAX_TOTAL_BYTES = 200 * 1024 * 1024;
 const ACCEPTED_TYPES = new Set([
   'image/jpeg',
   'image/png',
@@ -86,6 +91,7 @@ const NewPost: React.FC = () => {
     }
 
     const existingIds = new Set(media.map((item) => item.id));
+    const existingVideoCount = media.filter((item) => item.type === 'VIDEO').length;
     const accepted: SelectedMedia[] = [];
     const errors: string[] = [];
 
@@ -101,7 +107,11 @@ const NewPost: React.FC = () => {
       const isVideo = file.type.startsWith('video/');
       const maxBytes = isVideo ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
       if (file.size > maxBytes) {
-        errors.push(`${file.name}: ${isVideo ? '100MB' : '10MB'}를 넘을 수 없어.`);
+        errors.push(`${file.name}: ${isVideo ? '30MB' : '10MB'}를 넘을 수 없어.`);
+        continue;
+      }
+      if (isVideo && existingVideoCount + accepted.filter((item) => item.type === 'VIDEO').length >= MAX_VIDEO_COUNT) {
+        errors.push(`${file.name}: 동영상은 한 번에 1개만 올릴 수 있어.`);
         continue;
       }
 
@@ -121,9 +131,9 @@ const NewPost: React.FC = () => {
     }
 
     const nextTotal = [...media, ...accepted].reduce((sum, item) => sum + item.file.size, 0);
-    if (nextTotal > MAX_TOTAL_BYTES) {
+    if (nextTotal > MAX_MEDIA_REQUEST_BYTES) {
       accepted.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-      setError('첨부 파일 전체 크기는 200MB를 넘을 수 없어.');
+      setError('첨부 파일 전체 크기는 120MB를 넘을 수 없어.');
       return;
     }
 
@@ -251,7 +261,7 @@ const NewPost: React.FC = () => {
                 </Stack>
                 <Typography sx={{ fontWeight: 700 }}>클릭하거나 파일을 끌어다 놓아 줘</Typography>
                 <Typography variant="caption" color="text.secondary">
-                  JPG·PNG·GIF·WebP는 각 10MB, MP4·WebM·MOV는 각 100MB 이하
+                  JPG·PNG·GIF·WebP는 각 10MB. {VIDEO_UPLOAD_GUIDANCE}
                 </Typography>
               </Box>
 
@@ -386,7 +396,7 @@ const NewPost: React.FC = () => {
                 <Box>
                   <LinearProgress variant={uploadProgress > 0 ? 'determinate' : 'indeterminate'} value={uploadProgress} />
                   <Typography variant="caption" color="text.secondary">
-                    {uploadProgress > 0 ? `업로드 중 ${uploadProgress}%` : '업로드를 준비하고 있어…'}
+                    {mediaUploadStatusText(uploadProgress)}
                   </Typography>
                 </Box>
               )}
