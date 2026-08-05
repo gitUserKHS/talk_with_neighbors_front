@@ -1,10 +1,8 @@
 import api from './api';
 import { buildChatMessageFormData } from './multipart';
-import { ChatRoom, Message, ChatMessageDto, MessageDto, MessageType, WebSocketResponse, CreateRoomRequest, ChatRoomType, WebSocketMessage, Page } from '../types/chat';
+import { ChatRoom, Message, ChatMessageDto, MessageDto, WebSocketResponse, CreateRoomRequest, Page } from '../types/chat';
 import { websocketService } from './websocketService';
-import { store } from '../store';
-import axios, { AxiosError, AxiosProgressEvent } from 'axios';
-import { setUser } from '../store/slices/authSlice';
+import axios, { AxiosProgressEvent } from 'axios';
 import { normalizeChatSchedule } from './chatScheduleService';
 import { translate } from '../i18n/I18nProvider';
 
@@ -23,13 +21,6 @@ export interface UpdateChatRoomDto {
   status?: 'ACTIVE' | 'CLOSED';
 }
 
-interface ChatRoomSearchDto {
-  keyword?: string;
-  category?: string;
-  page: number;
-  size: number;
-  sort?: string;
-}
 
 // Message를 ChatMessageDto로 변환하는 함수
 const convertToChatMessageDto = (message: Message | WebSocketResponse): ChatMessageDto => {

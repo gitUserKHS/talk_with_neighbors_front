@@ -11,6 +11,28 @@ export default defineConfig({
   plugins: [react()],
   build: {
     reportCompressedSize: false,
+    rollupOptions: {
+      output: {
+        // 거의 바뀌지 않는 의존성을 앱 코드와 분리해, 배포할 때마다 프레임워크까지
+        // 다시 내려받지 않도록 한다.
+        manualChunks: (id) => {
+          if (!id.includes('node_modules')) return undefined;
+          if (/[\\/]node_modules[\\/](react|react-dom|react-router|react-router-dom|scheduler)[\\/]/.test(id)) {
+            return 'vendor-react';
+          }
+          if (/[\\/]node_modules[\\/](@mui|@emotion)[\\/]/.test(id)) {
+            return 'vendor-mui';
+          }
+          if (/[\\/]node_modules[\\/](@reduxjs|react-redux|redux|redux-thunk|reselect)[\\/]/.test(id)) {
+            return 'vendor-redux';
+          }
+          if (/[\\/]node_modules[\\/](@stomp|sockjs-client|axios)[\\/]/.test(id)) {
+            return 'vendor-network';
+          }
+          return undefined;
+        },
+      },
+    },
   },
   server: {
     port: 3000,

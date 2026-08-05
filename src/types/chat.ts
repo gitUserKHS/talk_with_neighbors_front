@@ -1,4 +1,3 @@
-import { User } from './user';
 import type { ChatSchedule } from './chatSchedule';
 
 export type MessageType = 'ENTER' | 'LEAVE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'SYSTEM' | 'SCHEDULE';

@@ -21,7 +21,7 @@ test('Enter runs only the map search and does not bubble to a surrounding form',
   assert.match(pickerSource, /onKeyDown=\{handleSearchKeyDown\}/);
 
   const handler = pickerSource.match(
-    /const handleSearchKeyDown = \(event: React\.KeyboardEvent\) => \{([\s\S]*?)\n  \};/,
+    /const handleSearchKeyDown = \(event: React\.KeyboardEvent\) => \{([\s\S]*?)\n {2}\};/,
   )?.[1];
 
   assert.ok(handler, 'expected a dedicated map-search keyboard handler');

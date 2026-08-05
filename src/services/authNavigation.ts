@@ -16,6 +16,8 @@ export const sanitizeReturnTo = (value: unknown, fallback = DEFAULT_RETURN_TO): 
     !candidate.startsWith('/')
     || candidate.startsWith('//')
     || candidate.includes('\\')
+    // 오픈 리다이렉트를 막으려면 제어 문자를 걸러내는 것이 목적 그 자체다.
+    // eslint-disable-next-line no-control-regex
     || /[\u0000-\u001f\u007f]/.test(candidate)
   ) {
     return fallback;

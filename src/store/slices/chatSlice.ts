@@ -98,7 +98,7 @@ export const fetchSearchedChatRooms = createAsyncThunk<
   { rejectValue: string }
 >(
   'chat/fetchSearchedChatRooms',
-  async ({ keyword, type, page, size }, { rejectWithValue, dispatch }) => {
+  async ({ keyword, type, page, size }, { rejectWithValue }) => {
     try {
       // 검색 시작 시 이전 검색 결과 초기화 (옵션)
       // dispatch(clearSearchedRooms()); // 필요하다면 clear 액션 호출
@@ -204,7 +204,6 @@ const chatSlice = createSlice({
     },
     setCurrentRoom: (state, action: PayloadAction<ChatRoom | null>) => {
       console.log('[chatSlice] setCurrentRoom called with:', action.payload);
-      const oldRoomId = state.currentRoom?.id;
       state.currentRoom = action.payload;
 
       if (action.payload) {

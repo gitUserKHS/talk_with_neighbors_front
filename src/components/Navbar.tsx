@@ -249,7 +249,7 @@ const Navbar: React.FC = () => {
                 <IconButton
                   aria-label={t('계정 메뉴 열기', 'Open account menu')}
                   aria-haspopup="menu"
-                  aria-expanded={Boolean(accountAnchor) ? 'true' : undefined}
+                  aria-expanded={accountAnchor ? 'true' : undefined}
                   aria-controls={accountAnchor ? 'account-menu' : undefined}
                   onClick={(event) => setAccountAnchor(event.currentTarget)}
                   sx={{ p: 0.5 }}

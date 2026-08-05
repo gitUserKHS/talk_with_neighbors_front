@@ -215,7 +215,7 @@ const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         setSdkError('');
         window.requestAnimationFrame(() => map?.relayout());
       })
-      .catch((error: unknown) => {
+      .catch((_error: unknown) => {
         if (cancelled) return;
         setSdkState('error');
         setSdkError(translateRef.current(
