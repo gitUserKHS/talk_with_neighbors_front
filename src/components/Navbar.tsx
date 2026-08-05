@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { alpha } from '@mui/material/styles';
 import {
   AppBar,
   Avatar,
@@ -36,6 +37,7 @@ import { resolveMediaUrl } from '../services/mediaUrl';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useI18n } from '../i18n/I18nProvider';
 import SignOutDialog from './auth/SignOutDialog';
+import ThemeModeMenuItem from './theme/ThemeModeMenuItem';
 
 interface NavigationItem {
   label: string;
@@ -145,7 +147,7 @@ const Navbar: React.FC = () => {
         sx={{
           borderBottom: 1,
           borderColor: 'divider',
-          bgcolor: 'rgba(255,255,255,.92)',
+          bgcolor: (t) => alpha(t.palette.background.paper, 0.92),
           backdropFilter: 'blur(18px)',
         }}
       >
@@ -300,6 +302,9 @@ const Navbar: React.FC = () => {
             <ListItemIcon><PersonRoundedIcon fontSize="small" /></ListItemIcon>
             <ListItemText primary={t('마이페이지', 'My account')} />
           </MenuItem>
+          <Divider />
+          <ThemeModeMenuItem />
+          <Divider />
           <MenuItem
             onClick={() => { setAccountAnchor(null); openLogoutDialog(); }}
             sx={{ color: 'error.main' }}
@@ -323,7 +328,7 @@ const Navbar: React.FC = () => {
           gridTemplateColumns: `repeat(${mobileItems.length}, 1fr)`,
           borderTop: 1,
           borderColor: 'divider',
-          bgcolor: 'rgba(255,255,255,.96)',
+          bgcolor: (t) => alpha(t.palette.background.paper, 0.96),
           backdropFilter: 'blur(18px)',
           px: 0.5,
           pb: 'env(safe-area-inset-bottom)',

@@ -1,11 +1,9 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import { BrowserRouter as Router, Navigate, Route, Routes, useLocation } from 'react-router-dom';
-import { ThemeProvider } from '@mui/material/styles';
-import CssBaseline from '@mui/material/CssBaseline';
 import { Provider, useDispatch, useSelector } from 'react-redux';
 import { Box, CircularProgress } from '@mui/material';
 import { store } from './store';
-import { theme } from './theme';
+import { ThemeModeProvider } from './components/theme/ThemeModeProvider';
 import { RootState } from './store/types';
 import { setUser } from './store/slices/authSlice';
 import { authService } from './services/authService';
@@ -152,8 +150,7 @@ const RouteBoundary: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 };
 
 const AppContent: React.FC = () => (
-  <ThemeProvider theme={theme}>
-    <CssBaseline />
+  <ThemeModeProvider>
     <ErrorBoundary>
       <Router basename={getRouterBasename(import.meta.env.BASE_URL)}>
       <AuthInitializer>
@@ -257,7 +254,7 @@ const AppContent: React.FC = () => (
       </AuthInitializer>
       </Router>
     </ErrorBoundary>
-  </ThemeProvider>
+  </ThemeModeProvider>
 );
 
 const App: React.FC = () => (

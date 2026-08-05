@@ -1,16 +1,36 @@
 {
   "short_name": "이웃톡",
   "name": "이웃톡 | Neighbor Talk",
+  "description": "가까운 이웃과 일상을 나누고 취향이 맞는 모임을 발견해 보세요.",
   "icons": [
     {
-      "src": "favicon.svg",
+      "src": "/favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/logo192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
-  "start_url": ".",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
   "theme_color": "#C84335",
-  "background_color": "#FFF9F5"
+  "background_color": "#F7F8F7"
 }
