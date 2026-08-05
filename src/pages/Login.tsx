@@ -8,6 +8,7 @@ import { destinationAfterAuthentication } from '../services/profileSetup';
 import { setUser } from '../store/slices/authSlice';
 import { AppDispatch, RootState } from '../store/types';
 import AuthLayout from '../components/AuthLayout';
+import PasswordResetLink from '../components/auth/PasswordResetLink';
 import SocialLoginButtons from '../components/auth/SocialLoginButtons';
 import { useI18n } from '../i18n/I18nProvider';
 
@@ -89,6 +90,8 @@ const Login: React.FC = () => {
             {isLoading ? t('로그인 중...', 'Signing in...') : t('로그인', 'Sign in')}
           </Button>
         </Stack>
+
+        <PasswordResetLink />
 
         <SocialLoginButtons returnTo={returnTo} />
 
