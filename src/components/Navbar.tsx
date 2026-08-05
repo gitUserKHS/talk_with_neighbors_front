@@ -26,6 +26,7 @@ import LogoutRoundedIcon from '@mui/icons-material/LogoutRounded';
 import LocationOnRoundedIcon from '@mui/icons-material/LocationOnRounded';
 import NotificationsNoneRoundedIcon from '@mui/icons-material/NotificationsNoneRounded';
 import PersonRoundedIcon from '@mui/icons-material/PersonRounded';
+import ShieldOutlinedIcon from '@mui/icons-material/ShieldOutlined';
 import TravelExploreRoundedIcon from '@mui/icons-material/TravelExploreRounded';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
@@ -33,6 +34,7 @@ import { authService } from '../services/authService';
 import { setUser } from '../store/slices/authSlice';
 import { RootState } from '../store/types';
 import notificationService, { InboxNotification } from '../services/notificationService';
+import adminService from '../services/adminService';
 import { resolveMediaUrl } from '../services/mediaUrl';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useI18n } from '../i18n/I18nProvider';
@@ -58,6 +60,8 @@ const Navbar: React.FC = () => {
   const [logoutError, setLogoutError] = useState<string | null>(null);
   const [inboxNotifications, setInboxNotifications] = useState<InboxNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  // 메뉴 노출용 힌트일 뿐이며, 실제 접근 판정은 서버가 매 요청마다 한다.
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const navItems = useMemo<NavigationItem[]>(() => [
     { label: t('피드', 'Feed'), path: '/feed', icon: <HomeOutlinedIcon /> },
@@ -91,6 +95,21 @@ const Navbar: React.FC = () => {
     window.addEventListener('notifications:changed', loadNotifications);
     return () => window.removeEventListener('notifications:changed', loadNotifications);
   }, [loadNotifications]);
+
+  useEffect(() => {
+    if (!user) {
+      setIsAdmin(false);
+      return;
+    }
+
+    let active = true;
+    adminService.hasAdminAccess().then((granted) => {
+      if (active) setIsAdmin(granted);
+    });
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   const handleLogout = async () => {
     setLogoutBusy(true);
@@ -302,6 +321,12 @@ const Navbar: React.FC = () => {
             <ListItemIcon><PersonRoundedIcon fontSize="small" /></ListItemIcon>
             <ListItemText primary={t('마이페이지', 'My account')} />
           </MenuItem>
+          {isAdmin && (
+            <MenuItem component={RouterLink} to="/admin/reports" onClick={() => setAccountAnchor(null)}>
+              <ListItemIcon><ShieldOutlinedIcon fontSize="small" /></ListItemIcon>
+              <ListItemText primary={t('신고 검토', 'Report review')} />
+            </MenuItem>
+          )}
           <Divider />
           <ThemeModeMenuItem />
           <Divider />
