@@ -22,7 +22,7 @@ const AuthLayout: React.FC<AuthLayoutProps> = ({ eyebrow, title, description, ch
   ];
 
   return (
-  <Box component="main" sx={{ minHeight: { xs: 'auto', md: 'calc(100vh - 71px)' }, display: 'grid', alignItems: 'center', bgcolor: '#FFF9F5' }}>
+  <Box component="main" sx={{ minHeight: { xs: 'auto', md: 'calc(100vh - 71px)' }, display: 'grid', alignItems: 'center', bgcolor: 'background.default' }}>
     <Container maxWidth="lg" sx={{ py: { xs: 4, md: 7 } }}>
       <Paper
         sx={{

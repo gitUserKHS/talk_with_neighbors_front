@@ -1,6 +1,7 @@
 import React from 'react';
 import TranslateRoundedIcon from '@mui/icons-material/TranslateRounded';
 import { Stack, ToggleButton, ToggleButtonGroup, Tooltip } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import { Locale, useI18n } from '../i18n/I18nProvider';
 
 interface LanguageSwitcherProps {
@@ -43,8 +44,11 @@ const LanguageSwitcher: React.FC<LanguageSwitcherProps> = ({ compact = false, in
               fontSize: '0.72rem',
               fontWeight: 800,
               '&.Mui-selected': {
-                color: inverted ? '#213D3A' : 'primary.dark',
-                bgcolor: inverted ? '#fff' : 'rgba(200,67,53,.10)',
+                // 선택 상태는 배경 틴트로 드러난다. 글자까지 같은 색을 쓰면 대비가 사라진다.
+                color: inverted ? '#213D3A' : 'text.primary',
+                bgcolor: inverted
+                  ? '#fff'
+                  : (theme) => alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.22 : 0.10),
               },
             },
           }}

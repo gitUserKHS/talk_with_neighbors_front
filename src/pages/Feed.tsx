@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { alpha } from '@mui/material/styles';
 import {
   Alert,
   Avatar,
@@ -624,7 +625,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
             borderColor: 'divider',
             borderRadius: 2.5,
             overflow: 'hidden',
-            bgcolor: 'rgba(255,255,255,.96)',
+            bgcolor: (t) => alpha(t.palette.background.paper, 0.96),
             backdropFilter: 'blur(18px)',
           }}
         >
