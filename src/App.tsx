@@ -36,6 +36,7 @@ const Notifications = React.lazy(() => import('./pages/Notifications'));
 const Onboarding = React.lazy(() => import('./pages/Onboarding'));
 const NicknameSetup = React.lazy(() => import('./pages/NicknameSetup'));
 const NotFound = React.lazy(() => import('./pages/NotFound'));
+const PasswordReset = React.lazy(() => import('./pages/PasswordReset'));
 
 const FullPageLoader = () => (
   <Box sx={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}>
@@ -163,6 +164,7 @@ const AppContent: React.FC = () => (
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
+          <Route path="/password-reset" element={<PasswordReset />} />
           <Route
             path="/feed"
             element={
