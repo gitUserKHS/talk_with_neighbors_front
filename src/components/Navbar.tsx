@@ -37,9 +37,9 @@ import notificationService, { InboxNotification } from '../services/notification
 import adminService from '../services/adminService';
 import { resolveMediaUrl } from '../services/mediaUrl';
 import LanguageSwitcher from './LanguageSwitcher';
+import ThemeModeToggle from './theme/ThemeModeToggle';
 import { useI18n } from '../i18n/I18nProvider';
 import SignOutDialog from './auth/SignOutDialog';
-import ThemeModeMenuItem from './theme/ThemeModeMenuItem';
 
 interface NavigationItem {
   label: string;
@@ -252,6 +252,7 @@ const Navbar: React.FC = () => {
           )}
 
           <LanguageSwitcher compact />
+          <ThemeModeToggle />
 
           {user ? (
             <>
@@ -327,8 +328,6 @@ const Navbar: React.FC = () => {
               <ListItemText primary={t('신고 검토', 'Report review')} />
             </MenuItem>
           )}
-          <Divider />
-          <ThemeModeMenuItem />
           <Divider />
           <MenuItem
             onClick={() => { setAccountAnchor(null); openLogoutDialog(); }}

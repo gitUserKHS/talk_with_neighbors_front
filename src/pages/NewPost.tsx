@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { alpha } from '@mui/material/styles';
 import {
   Alert,
   Box,
@@ -331,7 +332,7 @@ const NewPost: React.FC = () => {
                           <Chip
                             size="small"
                             label={`${index + 1} · ${item.type === 'VIDEO' ? t('동영상', 'Video') : t('사진', 'Photo')}`}
-                            sx={{ position: 'absolute', top: 8, left: 8, bgcolor: 'rgba(255,255,255,0.9)' }}
+                            sx={{ position: 'absolute', top: 8, left: 8, bgcolor: (t) => alpha(t.palette.background.paper, 0.9) }}
                           />
                           <IconButton
                             size="small"
@@ -340,7 +341,7 @@ const NewPost: React.FC = () => {
                               event.stopPropagation();
                               removeMedia(item.id);
                             }}
-                            sx={{ position: 'absolute', top: 8, right: 8, bgcolor: 'rgba(255,255,255,0.9)' }}
+                            sx={{ position: 'absolute', top: 8, right: 8, bgcolor: (t) => alpha(t.palette.background.paper, 0.9) }}
                           >
                             <CloseIcon fontSize="small" />
                           </IconButton>

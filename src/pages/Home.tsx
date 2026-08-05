@@ -66,7 +66,7 @@ const PublicContentHighlights: React.FC<PublicContentHighlightsProps> = ({ posts
   const { t, formatDate, formatNumber } = useI18n();
 
   return (
-    <Box component="section" aria-labelledby="neighborhood-now-title" sx={{ py: { xs: 7, md: 10 }, bgcolor: '#F6F8F7' }}>
+    <Box component="section" aria-labelledby="neighborhood-now-title" sx={{ py: { xs: 7, md: 10 }, bgcolor: 'background.default' }}>
       <Container maxWidth="lg">
         <Stack
           direction={{ xs: 'column', md: 'row' }}
@@ -102,7 +102,7 @@ const PublicContentHighlights: React.FC<PublicContentHighlightsProps> = ({ posts
         {loading ? (
           <ContentSkeletons />
         ) : posts.length === 0 && meetups.length === 0 ? (
-          <Card variant="outlined" sx={{ p: { xs: 4, md: 6 }, textAlign: 'center', bgcolor: '#fff' }}>
+          <Card variant="outlined" sx={{ p: { xs: 4, md: 6 }, textAlign: 'center' }}>
             <GroupsRoundedIcon color="disabled" sx={{ fontSize: 44 }} />
             <Typography variant="h6" sx={{ mt: 1.5 }}>
               {t('새로운 동네 소식을 준비하고 있습니다', 'New neighborhood updates are on the way')}
@@ -128,7 +128,7 @@ const PublicContentHighlights: React.FC<PublicContentHighlightsProps> = ({ posts
                   || (firstMedia?.type === 'IMAGE' ? firstMedia.url : '');
 
                 return (
-                  <Card key={post.id} variant="outlined" sx={{ overflow: 'hidden', bgcolor: '#fff' }}>
+                  <Card key={post.id} variant="outlined" sx={{ overflow: 'hidden' }}>
                     <CardActionArea
                       component={RouterLink}
                       to="/feed"
@@ -190,7 +190,7 @@ const PublicContentHighlights: React.FC<PublicContentHighlightsProps> = ({ posts
                   </Typography>
                 </Card>
               ) : meetups.map((meetup) => (
-                <Card key={meetup.roomId} variant="outlined" sx={{ bgcolor: '#fff' }}>
+                <Card key={meetup.roomId} variant="outlined" >
                   <CardActionArea component={RouterLink} to="/meetups">
                     <CardContent>
                       <Stack direction="row" spacing={1} alignItems="flex-start">
@@ -367,7 +367,7 @@ const Home: React.FC = () => {
 
             <Box sx={{ position: 'relative', minHeight: { xs: 390, sm: 440 } }} aria-label={t('이웃톡 피드 미리보기', 'Neighbor Talk feed preview')}>
               <Box sx={{ position: 'absolute', inset: { xs: '12px 12px 52px', sm: '0 30px 42px' }, borderRadius: 5, bgcolor: 'rgba(35,133,121,.10)', transform: 'rotate(4deg)' }} />
-              <Card sx={{ position: 'absolute', inset: { xs: '0 26px 34px 0', sm: '12px 48px 30px 0' }, borderRadius: 4, overflow: 'hidden', bgcolor: '#fff' }}>
+              <Card sx={{ position: 'absolute', inset: { xs: '0 26px 34px 0', sm: '12px 48px 30px 0' }, borderRadius: 4, overflow: 'hidden' }}>
                 <CardContent sx={{ p: 2.5 }}>
                   <Stack direction="row" spacing={1.25} alignItems="center">
                     <Avatar src={resolveMediaUrl(heroPost?.authorProfileImage)} sx={{ bgcolor: 'secondary.main' }}>
@@ -429,7 +429,7 @@ const Home: React.FC = () => {
         </Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(3, 1fr)' }, gap: 2.5 }}>
           {features.map((feature) => (
-            <Card key={feature.title} variant="outlined" sx={{ p: 3.5, height: '100%', bgcolor: '#fff' }}>
+            <Card key={feature.title} variant="outlined" sx={{ p: 3.5, height: '100%' }}>
               <Box sx={{ display: 'grid', placeItems: 'center', width: 52, height: 52, borderRadius: 3, color: 'primary.main', bgcolor: 'rgba(200,67,53,.09)' }}>
                 {feature.icon}
               </Box>

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { alpha } from '@mui/material/styles';
 import {
   Alert,
   Avatar,
@@ -704,7 +705,7 @@ const ChatRoom: React.FC = () => {
                   {item.type === 'IMAGE' && <Box component="img" src={item.previewUrl} alt={item.file.name} sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
                   {item.type === 'VIDEO' && <MovieOutlinedIcon color="action" />}
                   {item.type === 'FILE' && <DescriptionOutlinedIcon color="action" />}
-                  <IconButton aria-label={t(`${item.file.name} 제거`, `Remove ${item.file.name}`)} size="small" onClick={() => removePendingAttachment(item.id)} sx={{ position: 'absolute', top: 2, right: 2, bgcolor: 'rgba(255,255,255,.9)', '&:hover': { bgcolor: 'white' } }}><CloseIcon fontSize="small" /></IconButton>
+                  <IconButton aria-label={t(`${item.file.name} 제거`, `Remove ${item.file.name}`)} size="small" onClick={() => removePendingAttachment(item.id)} sx={{ position: 'absolute', top: 2, right: 2, bgcolor: (t) => alpha(t.palette.background.paper, 0.9), '&:hover': { bgcolor: 'background.paper' } }}><CloseIcon fontSize="small" /></IconButton>
                   {item.type !== 'IMAGE' && <Typography variant="caption" noWrap sx={{ position: 'absolute', bottom: 2, left: 4, right: 4, textAlign: 'center' }}>{item.file.name}</Typography>}
                 </Paper>
               ))}
