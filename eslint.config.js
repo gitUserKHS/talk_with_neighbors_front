@@ -51,5 +51,12 @@ export default tseslint.config(
       // 비 ASCII 경로를 판별하는 정규식이 제어 문자 범위를 정당하게 사용한다.
       'no-control-regex': 'off',
     },
+  },
+  {
+    // 서비스 워커는 문서가 아니라 워커 스코프에서 돈다. self와 caches가 그곳의 전역이다.
+    files: ['public/sw.js'],
+    languageOptions: {
+      globals: globals.serviceworker,
+    },
   }
 );

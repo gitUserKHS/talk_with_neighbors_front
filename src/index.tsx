@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom/client';
 import './polyfills';
 import './index.css';
 import App from './App';
+import { registerServiceWorker } from './services/serviceWorker';
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
@@ -14,3 +15,5 @@ root.render(
     <App />
   //</React.StrictMode>
 );
+
+registerServiceWorker();
