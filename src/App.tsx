@@ -37,6 +37,7 @@ const Onboarding = React.lazy(() => import('./pages/Onboarding'));
 const NicknameSetup = React.lazy(() => import('./pages/NicknameSetup'));
 const NotFound = React.lazy(() => import('./pages/NotFound'));
 const PasswordReset = React.lazy(() => import('./pages/PasswordReset'));
+const AdminReports = React.lazy(() => import('./pages/AdminReports'));
 
 const FullPageLoader = () => (
   <Box sx={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}>
@@ -248,6 +249,11 @@ const AppContent: React.FC = () => (
                 <Profile />
               </ProtectedRoute>
             }
+          />
+          {/* 접근 권한은 서버가 판정한다. 운영자가 아니면 API가 404를 돌려준다. */}
+          <Route
+            path="/admin/reports"
+            element={<ProtectedRoute><AdminReports /></ProtectedRoute>}
           />
           <Route path="*" element={<NotFound />} />
           </Routes>
