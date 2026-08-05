@@ -48,6 +48,7 @@ import {
 } from '../services/accessScope';
 import { removeMeetup, replaceMeetup } from '../services/contentMutationState';
 import { useI18n } from '../i18n/I18nProvider';
+import { serverErrorMessage } from '../services/apiError';
 
 const EMPTY_FORM: CreateHobbyMeetupRequest = {
   title: '',
@@ -255,8 +256,8 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
   const meetupRequestGeneration = useRef(0);
   const viewGeneration = useRef(0);
 
-  const apiError = (err: any, korean: string, english: string) => (
-    locale === 'ko' ? err.response?.data?.message || korean : english
+  const apiError = (err: unknown, korean: string, english: string) => (
+    (locale === 'ko' ? serverErrorMessage(err) : undefined) ?? t(korean, english)
   );
 
   const setMeetups = (update: React.SetStateAction<HobbyMeetup[]>) => {
@@ -289,7 +290,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
       );
       if (!isLatestRequest(requestId, meetupRequestGeneration.current)) return;
       setMeetupSnapshot({ scope: requestScope, items: page.content });
-    } catch (err: any) {
+    } catch (err) {
       if (!isLatestRequest(requestId, meetupRequestGeneration.current)) return;
       setError(apiError(
         err,
@@ -387,7 +388,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
       } else {
         navigate(`/chat/${meetup.roomId}`);
       }
-    } catch (err: any) {
+    } catch (err) {
       if (!isLatestRequest(generation, viewGeneration.current)) return;
       setError(apiError(
         err,
@@ -428,7 +429,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
         maxParticipants: detail.maxParticipants ?? Math.max(2, detail.participantCount),
       });
       setCreateOpen(true);
-    } catch (err: any) {
+    } catch (err) {
       setError(apiError(
         err,
         '수정할 모임 정보를 불러오지 못했습니다.',
@@ -449,7 +450,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
       setMeetups((items) => removeMeetup(items, roomId));
       setDeleteTarget(null);
       setSuccess(t('모임과 채팅방을 삭제했습니다.', 'The meetup and its chat room have been deleted.'));
-    } catch (err: any) {
+    } catch (err) {
       setError(apiError(err, '모임을 삭제하지 못했습니다.', 'The meetup could not be deleted.'));
     } finally {
       setDeleting(false);
@@ -464,7 +465,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
     try {
       const detail = await meetupService.getMeetup(meetup.roomId);
       setParticipantMeetup(detail);
-    } catch (err: any) {
+    } catch (err) {
       setParticipantMeetup(null);
       setError(apiError(
         err,
@@ -492,7 +493,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
       if (joinedMeetup.joined) {
         navigate(`/chat/${joinedMeetup.roomId}`);
       }
-    } catch (err: any) {
+    } catch (err) {
       if (!isLatestRequest(generation, viewGeneration.current)) return;
       setError(apiError(err, '모임에 참여하지 못했습니다.', 'You could not join this meetup.'));
     } finally {

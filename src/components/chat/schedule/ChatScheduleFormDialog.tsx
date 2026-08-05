@@ -20,6 +20,7 @@ import {
   toLocalDateTimeInput,
 } from '../../../services/chatScheduleDateTime';
 import { useI18n } from '../../../i18n/I18nProvider';
+import { errorMessage } from '../../../services/apiError';
 
 interface ChatScheduleFormDialogProps {
   open: boolean;
@@ -91,9 +92,9 @@ const ChatScheduleFormDialog: React.FC<ChatScheduleFormDialogProps> = ({
         location: values.location.trim(),
         locationAddress: values.locationAddress?.trim() || undefined,
       });
-    } catch (err: any) {
+    } catch (err) {
       const fallback = t('일정을 저장하지 못했습니다.', 'We could not save the schedule.');
-      setError(locale === 'ko' ? err.response?.data?.message || err.message || fallback : fallback);
+      setError((locale === 'ko' ? errorMessage(err) : undefined) ?? fallback);
     }
   };
 

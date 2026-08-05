@@ -76,6 +76,7 @@ import {
   replaceFeedPost,
 } from '../services/contentMutationState';
 import { useI18n } from '../i18n/I18nProvider';
+import { serverErrorMessage } from '../services/apiError';
 import {
   FeedDiscoveryMode,
   availableFeedModes,
@@ -129,10 +130,8 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
   const feedRequestGeneration = useRef(0);
   const viewGeneration = useRef(0);
 
-  const requestError = (request: any, korean: string, english: string) => (
-    locale === 'ko' && typeof request?.response?.data?.message === 'string'
-      ? request.response.data.message
-      : t(korean, english)
+  const requestError = (request: unknown, korean: string, english: string) => (
+    (locale === 'ko' ? serverErrorMessage(request) : undefined) ?? t(korean, english)
   );
 
   const displayDate = (value?: string | null) => value
@@ -319,7 +318,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       await matchingService.requestMatch(post.authorId);
       if (!isLatestRequest(generation, viewGeneration.current)) return;
       setSuccess(t(`${post.authorUsername}님에게 매칭 요청을 보냈습니다.`, `Match request sent to ${post.authorUsername}.`));
-    } catch (err: any) {
+    } catch (err) {
       if (!isLatestRequest(generation, viewGeneration.current)) return;
       setError(requestError(err, '매칭 요청을 보내지 못했습니다.', 'Could not send the match request.'));
     } finally {
@@ -373,7 +372,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       setSelectedPost(mergeFeedPostDiscoveryMetadata(postEditTarget, updated));
       setPostEditTarget(null);
       setSuccess(t('게시글을 수정했습니다.', 'Post updated.'));
-    } catch (err: any) {
+    } catch (err) {
       setError(requestError(err, '게시글을 수정하지 못했습니다.', 'Could not update the post.'));
     } finally {
       setPostMutationBusy(false);
@@ -402,7 +401,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       setPostDeleteTarget(null);
       setSelectedPost(null);
       setSuccess(t('게시글을 삭제했습니다.', 'Post deleted.'));
-    } catch (err: any) {
+    } catch (err) {
       setError(requestError(err, '게시글을 삭제하지 못했습니다.', 'Could not delete the post.'));
     } finally {
       setPostMutationBusy(false);
@@ -429,7 +428,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       setComments((current) => replaceFeedComment(current, postId, updated));
       setCommentEditTarget(null);
       setSuccess(t('댓글을 수정했습니다.', 'Comment updated.'));
-    } catch (err: any) {
+    } catch (err) {
       setError(requestError(err, '댓글을 수정하지 못했습니다.', 'Could not update the comment.'));
     } finally {
       setCommentMutationId(null);
@@ -448,7 +447,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       setCommentDeleteTarget(null);
       if (commentEditTarget?.comment.id === comment.id) setCommentEditTarget(null);
       setSuccess(t('댓글을 삭제했습니다.', 'Comment deleted.'));
-    } catch (err: any) {
+    } catch (err) {
       setError(requestError(err, '댓글을 삭제하지 못했습니다.', 'Could not delete the comment.'));
     } finally {
       setCommentMutationId(null);
@@ -485,7 +484,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       if (!isLatestRequest(generation, viewGeneration.current)) return;
       setPosts((prev) => prev.filter((item) => item.authorId !== post.authorId));
       setSuccess(t(`${post.authorUsername}님을 차단했습니다.`, `${post.authorUsername} has been blocked.`));
-    } catch (err: any) {
+    } catch (err) {
       if (!isLatestRequest(generation, viewGeneration.current)) return;
       setError(requestError(err, '사용자를 차단하지 못했습니다.', 'Could not block this user.'));
     }
@@ -516,7 +515,7 @@ const FeedContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ cur
       if (hideAfterReport) setPosts((prev) => prev.filter((item) => item.id !== post.id));
       setReportOpen(false);
       setSuccess(t('신고를 접수했습니다. 안전하게 검토하겠습니다.', 'Your report has been submitted for review.'));
-    } catch (err: any) {
+    } catch (err) {
       if (!isLatestRequest(generation, viewGeneration.current)) return;
       setError(requestError(err, '신고를 접수하지 못했습니다.', 'Could not submit the report.'));
     } finally {

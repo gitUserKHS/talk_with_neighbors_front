@@ -69,6 +69,7 @@ import {
   mediaUploadStatusText,
 } from '../../services/mediaUploadPolicy';
 import { useI18n } from '../../i18n/I18nProvider';
+import { serverErrorMessage } from '../../services/apiError';
 
 const MAX_ATTACHMENT_COUNT = 5;
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
@@ -224,9 +225,9 @@ const ChatRoom: React.FC = () => {
               .map((message) => message.schedule)
               .filter((schedule): schedule is ChatSchedule => Boolean(schedule));
             setSchedules(schedulesFromMessages.reduce(upsertChatSchedule, loadedSchedules));
-          } catch (scheduleError: any) {
+          } catch (scheduleError) {
             const fallback = t('모임 일정을 불러오지 못했습니다.', 'We could not load the meetup schedules.');
-            setError(locale === 'ko' ? scheduleError.response?.data?.message || fallback : fallback);
+            setError((locale === 'ko' ? serverErrorMessage(scheduleError) : undefined) ?? fallback);
           }
         }
         chatService.markMessagesAsRead(roomId).catch(() => undefined);
@@ -383,9 +384,9 @@ const ChatRoom: React.FC = () => {
       setMessages((current) => current.map((message) =>
         message.id === optimisticMessage.id ? savedMessage : message));
       selected.forEach((item) => URL.revokeObjectURL(item.previewUrl));
-    } catch (err: any) {
+    } catch (err) {
       const fallback = t('메시지와 첨부 파일을 보내지 못했습니다. 다시 시도해 주세요.', 'We could not send the message and attachments. Please try again.');
-      setError(locale === 'ko' ? err.response?.data?.message || fallback : fallback);
+      setError((locale === 'ko' ? serverErrorMessage(err) : undefined) ?? fallback);
       setMessages((current) => current.filter((item) => item.id !== optimisticMessage.id));
       setNewMessage(content);
       setPendingAttachments(selected);
@@ -401,9 +402,9 @@ const ChatRoom: React.FC = () => {
     try {
       await meetupService.leaveMeetup(roomId);
       navigate('/meetups');
-    } catch (err: any) {
+    } catch (err) {
       const fallback = t('모임에서 나가지 못했습니다.', 'We could not leave the meetup.');
-      setError(locale === 'ko' ? err.response?.data?.message || fallback : fallback);
+      setError((locale === 'ko' ? serverErrorMessage(err) : undefined) ?? fallback);
     } finally {
       setLeaving(false);
       setLeaveDialogOpen(false);
@@ -439,9 +440,9 @@ const ChatRoom: React.FC = () => {
       const updated = await chatService.updateMessage(roomId, message.id, normalized);
       setMessages((current) => mergeChatMessage(current, updated));
       cancelEditingMessage();
-    } catch (err: any) {
+    } catch (err) {
       const fallback = t('메시지를 수정하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'We could not edit the message. Please try again shortly.');
-      setError(locale === 'ko' ? err.response?.data?.message || fallback : fallback);
+      setError((locale === 'ko' ? serverErrorMessage(err) : undefined) ?? fallback);
     } finally {
       setMutatingMessageId(null);
     }
@@ -457,9 +458,9 @@ const ChatRoom: React.FC = () => {
       setMessages((current) => mergeChatMessage(current, deleted));
       setDeleteTarget(null);
       if (editingMessageId === target.id) cancelEditingMessage();
-    } catch (err: any) {
+    } catch (err) {
       const fallback = t('메시지를 삭제하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'We could not delete the message. Please try again shortly.');
-      setError(locale === 'ko' ? err.response?.data?.message || fallback : fallback);
+      setError((locale === 'ko' ? serverErrorMessage(err) : undefined) ?? fallback);
     } finally {
       setMutatingMessageId(null);
     }
@@ -491,9 +492,9 @@ const ChatRoom: React.FC = () => {
     setBusyScheduleId(schedule.id);
     void chatScheduleService.getSchedule(roomId, schedule.id)
       .then((latest) => setSchedules((current) => upsertChatSchedule(current, latest)))
-      .catch((err: any) => {
+      .catch((err: unknown) => {
         const fallback = t('일정 상세를 불러오지 못했습니다.', 'We could not load the schedule details.');
-        setError(locale === 'ko' ? err.response?.data?.message || fallback : fallback);
+        setError((locale === 'ko' ? serverErrorMessage(err) : undefined) ?? fallback);
       })
       .finally(() => setBusyScheduleId(null));
   };
@@ -550,9 +551,9 @@ const ChatRoom: React.FC = () => {
     try {
       const updated = await chatScheduleService.updateRsvp(roomId, schedule.id, status);
       setSchedules((current) => upsertChatSchedule(current, updated));
-    } catch (err: any) {
+    } catch (err) {
       const fallback = t('참석 여부를 변경하지 못했습니다.', 'We could not update your response.');
-      setError(locale === 'ko' ? err.response?.data?.message || fallback : fallback);
+      setError((locale === 'ko' ? serverErrorMessage(err) : undefined) ?? fallback);
     } finally {
       setBusyScheduleId(null);
     }

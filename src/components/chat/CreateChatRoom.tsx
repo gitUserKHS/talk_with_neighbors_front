@@ -18,6 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { chatService } from '../../services/chatService';
 import { ChatRoomType, CreateRoomRequest } from '../../types/chat';
 import { useI18n } from '../../i18n/I18nProvider';
+import { serverErrorMessage } from '../../services/apiError';
 
 const CreateChatRoom: React.FC = () => {
   const navigate = useNavigate();
@@ -64,9 +65,9 @@ const CreateChatRoom: React.FC = () => {
     try {
       const room = await chatService.createRoom(request);
       navigate(`/chat/${room.id}`);
-    } catch (err: any) {
+    } catch (err) {
       const fallback = t('채팅방을 만들지 못했습니다.', 'We could not create the conversation.');
-      setError(locale === 'ko' ? err.response?.data?.message || fallback : fallback);
+      setError((locale === 'ko' ? serverErrorMessage(err) : undefined) ?? fallback);
     } finally {
       setSubmitting(false);
     }

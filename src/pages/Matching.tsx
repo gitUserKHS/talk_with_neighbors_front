@@ -38,6 +38,7 @@ import {
   setMatchStatusMessage,
 } from '../store/slices/notificationSlice';
 import { useI18n } from '../i18n/I18nProvider';
+import { serverErrorMessage } from '../services/apiError';
 
 const Matching: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -61,8 +62,8 @@ const Matching: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const apiError = (err: any, korean: string, english: string) => (
-    locale === 'ko' ? err.response?.data?.message || korean : english
+  const apiError = (err: unknown, korean: string, english: string) => (
+    (locale === 'ko' ? serverErrorMessage(err) : undefined) ?? t(korean, english)
   );
 
   const genderLabel = (gender?: string) => {
@@ -152,7 +153,7 @@ const Matching: React.FC = () => {
       await matchingService.saveMatchingPreferences(buildPreferences());
       await loadRecommendations();
       setSuccess(t('매칭 조건을 저장하고 추천을 새로고침했습니다.', 'Your matching preferences were saved and recommendations refreshed.'));
-    } catch (err: any) {
+    } catch (err) {
       setError(apiError(err, '매칭 조건을 저장하지 못했습니다.', 'Matching preferences could not be saved.'));
     } finally {
       setLoading(false);
@@ -169,7 +170,7 @@ const Matching: React.FC = () => {
         `${profile.username}님에게 매칭 요청을 보냈습니다.`,
         `A match request was sent to ${profile.username}.`,
       ));
-    } catch (err: any) {
+    } catch (err) {
       setError(apiError(err, '매칭 요청을 보내지 못했습니다.', 'The match request could not be sent.'));
     } finally {
       setRequesting((prev) => ({ ...prev, [profile.id]: false }));
@@ -204,7 +205,7 @@ const Matching: React.FC = () => {
         '매칭 요청을 수락했습니다. 상대방의 응답을 기다리고 있습니다.',
         'Match request accepted. Waiting for the other person to respond.',
       )));
-    } catch (err: any) {
+    } catch (err) {
       setError(apiError(err, '매칭 요청을 수락하지 못했습니다.', 'The match request could not be accepted.'));
     }
   };
@@ -216,7 +217,7 @@ const Matching: React.FC = () => {
       await matchingService.rejectMatch(pendingMatchOffer.matchId);
       dispatch(clearPendingMatchOffer());
       dispatch(setMatchStatusMessage(null));
-    } catch (err: any) {
+    } catch (err) {
       setError(apiError(err, '매칭 요청을 거절하지 못했습니다.', 'The match request could not be declined.'));
     }
   };
@@ -238,7 +239,7 @@ const Matching: React.FC = () => {
           'Match request accepted. Waiting for the other person to respond.',
         ));
       }
-    } catch (err: any) {
+    } catch (err) {
       setError(apiError(err, '매칭 요청을 수락하지 못했습니다.', 'The match request could not be accepted.'));
     } finally {
       setRequesting((prev) => ({ ...prev, [requestKey]: false }));
@@ -254,7 +255,7 @@ const Matching: React.FC = () => {
     try {
       await matchingService.rejectMatch(request.matchId);
       setIncomingRequests((prev) => prev.filter((item) => item.matchId !== request.matchId));
-    } catch (err: any) {
+    } catch (err) {
       setError(apiError(err, '매칭 요청을 거절하지 못했습니다.', 'The match request could not be declined.'));
     } finally {
       setRequesting((prev) => ({ ...prev, [requestKey]: false }));

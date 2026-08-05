@@ -23,6 +23,7 @@ import { HobbyMeetup } from '../types/meetup';
 import { MyCommentActivity, MyPageOverview, UserPreferences } from '../types/mypage';
 import { BlockedUser, HiddenContent, SafetyReport } from '../types/safety';
 import { useI18n } from '../i18n/I18nProvider';
+import { serverErrorMessage } from '../services/apiError';
 import SignOutDialog from '../components/auth/SignOutDialog';
 import { replaceFeedPost } from '../services/contentMutationState';
 
@@ -89,8 +90,8 @@ const Profile: React.FC = () => {
     ? formatDate(value, { dateStyle: 'medium', timeStyle: 'short' })
     : t('일정 없음', 'No date');
 
-  const apiError = (err: any, korean: string, english: string) => (
-    locale === 'ko' ? err.response?.data?.message || korean : english
+  const apiError = (err: unknown, korean: string, english: string) => (
+    (locale === 'ko' ? serverErrorMessage(err) : undefined) ?? t(korean, english)
   );
 
   const reportReasonLabel = (reason: SafetyReport['reason']) => ({
@@ -157,7 +158,7 @@ const Profile: React.FC = () => {
     setError(null);
     try {
       await action();
-    } catch (err: any) {
+    } catch (err) {
       setError(apiError(err, '요청을 처리하지 못했습니다.', 'The request could not be completed.'));
     } finally {
       setActivityMutationId(null);
@@ -237,7 +238,7 @@ const Profile: React.FC = () => {
       dispatch(setUser(updated));
       setProfile((current) => ({ ...current, profileImage: updated.profileImage || '' }));
       setMessage(t('프로필 사진을 최적화해 저장했습니다.', 'Profile photo optimized and saved.'));
-    } catch (err: any) {
+    } catch (err) {
       setError(apiError(err, '프로필 사진을 올리지 못했습니다.', 'Profile photo could not be uploaded.'));
     } finally {
       setProfileUploading(false);
@@ -253,7 +254,7 @@ const Profile: React.FC = () => {
       dispatch(setUser(updated));
       setProfile((current) => ({ ...current, profileImage: '' }));
       setMessage(t('프로필 사진을 삭제했습니다.', 'Profile photo deleted.'));
-    } catch (err: any) {
+    } catch (err) {
       setError(apiError(err, '프로필 사진을 삭제하지 못했습니다.', 'Profile photo could not be deleted.'));
     } finally {
       setProfileUploading(false);
