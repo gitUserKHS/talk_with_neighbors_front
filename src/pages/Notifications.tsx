@@ -9,6 +9,7 @@ import NotificationsNoneIcon from '@mui/icons-material/NotificationsNone';
 import { useNavigate } from 'react-router-dom';
 import notificationService, { InboxNotification } from '../services/notificationService';
 import { useI18n } from '../i18n/I18nProvider';
+import PushToggle from '../components/notifications/PushToggle';
 
 const Notifications: React.FC = () => {
   const navigate = useNavigate();
@@ -66,6 +67,7 @@ const Notifications: React.FC = () => {
             <Button startIcon={<DoneAllIcon />} onClick={markAll}>{t('모두 읽음', 'Mark all read')}</Button>
           )}
         </Box>
+        <PushToggle />
         {error && <Alert severity="error">{error}</Alert>}
         {loading ? <Box sx={{ display: 'grid', placeItems: 'center', py: 8 }}><CircularProgress /></Box>
           : items.length === 0 ? (
