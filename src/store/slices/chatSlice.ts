@@ -501,7 +501,7 @@ const chatSlice = createSlice({
           state.messages[roomId].initialLoading = false;
           state.messages[roomId].error = message;
         }
-        console.error(`Failed to fetch messages for room ${roomId}:`, message);
+        console.error('Failed to fetch messages for room', { roomId, message });
       })
       .addCase(fetchAllUnreadCounts.fulfilled, (state, action) => {
         const unreadCounts = action.payload;

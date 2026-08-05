@@ -135,7 +135,7 @@ class ChatService {
     } catch (error) {
       console.error('채팅방 입장 중 오류 발생:', error);
       if (axios.isAxiosError(error) && error.response?.status === 409) {
-        console.warn(`User may already be in room ${roomId} (received 409). Proceeding with WebSocket connection.`);
+        console.warn('User may already be in the room (received 409). Proceeding with WebSocket connection.', { roomId });
         websocketService.joinRoom(roomId);
       } else {
         throw error;
@@ -222,7 +222,7 @@ class ChatService {
         };
         return messagesDtoPage;
       } else {
-        console.warn(`서버에서 예상치 못한 형태의 메시지 목록 응답 (방 ID: ${roomId}):`, response.data);
+        console.warn('서버에서 예상치 못한 형태의 메시지 목록 응답', { roomId, data: response.data });
         return {
           content: [],
           pageable: { pageNumber: page, pageSize: size, sort: { empty: true, sorted: false, unsorted: true }, offset: page * size, paged: true, unpaged: false },
@@ -238,7 +238,7 @@ class ChatService {
         };
       }
     } catch (error) {
-      console.error(`메시지 목록 조회 중 오류 발생 (방 ID: ${roomId}):`, error);
+      console.error('메시지 목록 조회 중 오류 발생', { roomId, error });
       if (axios.isAxiosError(error)) {
         if (error.code === 'ECONNABORTED') {
           throw new Error(translate('서버 응답 시간이 초과되었습니다.', 'The server took too long to respond.'), { cause: error });
