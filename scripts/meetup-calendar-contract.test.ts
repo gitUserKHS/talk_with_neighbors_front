@@ -20,7 +20,7 @@ test('meetup profile mutations do not own calendar date fields', () => {
   assert.doesNotMatch(meetupsSource, /form\.scheduledAt|form\.registrationDeadline|form\.durationMinutes/);
 
   const updateBody = meetupServiceSource.match(
-    /async updateMeetup[\s\S]*?api\.patch<HobbyMeetup>\([\s\S]*?\{([\s\S]*?)\n    \}\);/,
+    /async updateMeetup[\s\S]*?api\.patch<HobbyMeetup>\([\s\S]*?\{([\s\S]*?)\n {4}\}\);/,
   )?.[1];
   assert.ok(updateBody, 'expected to find the meetup profile update body');
   assert.doesNotMatch(updateBody, /scheduledAt|registrationDeadline|durationMinutes/);

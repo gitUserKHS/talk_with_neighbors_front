@@ -257,7 +257,7 @@ class WebSocketService {
           })
         );
         break;
-      case 'MATCH_COMPLETED_AND_CHAT_CREATED':
+      case 'MATCH_COMPLETED_AND_CHAT_CREATED': {
         const roomId = notification.data?.chatRoomId || notification.data?.id;
         store.dispatch(
           setMatchCompleted({
@@ -267,6 +267,7 @@ class WebSocketService {
           })
         );
         break;
+      }
       case 'MATCH_ACCEPTED_BY_OTHER':
         store.dispatch(
           setMatchAccepted({

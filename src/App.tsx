@@ -17,6 +17,7 @@ import {
   requiredProfileSetupPath,
 } from './services/profileSetup';
 import Navbar from './components/Navbar';
+import ErrorBoundary from './components/ErrorBoundary';
 import NotificationHandler from './components/notifications/NotificationHandler';
 import { getRouterBasename } from './routerBase';
 import { I18nProvider } from './i18n/I18nProvider';
@@ -36,6 +37,7 @@ const Profile = React.lazy(() => import('./pages/Profile'));
 const Notifications = React.lazy(() => import('./pages/Notifications'));
 const Onboarding = React.lazy(() => import('./pages/Onboarding'));
 const NicknameSetup = React.lazy(() => import('./pages/NicknameSetup'));
+const NotFound = React.lazy(() => import('./pages/NotFound'));
 
 const FullPageLoader = () => (
   <Box sx={{ display: 'grid', placeItems: 'center', minHeight: '100vh' }}>
@@ -140,13 +142,24 @@ const AuthInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) 
   return <>{children}</>;
 };
 
+/**
+ * 라우트 화면에서 난 예외가 내비게이션까지 함께 날려버리지 않도록 감싼다.
+ * location.pathname을 key로 주어 다른 화면으로 이동하면 경계가 스스로 초기화된다.
+ */
+const RouteBoundary: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const location = useLocation();
+  return <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>;
+};
+
 const AppContent: React.FC = () => (
   <ThemeProvider theme={theme}>
     <CssBaseline />
-    <Router basename={getRouterBasename(import.meta.env.BASE_URL)}>
+    <ErrorBoundary>
+      <Router basename={getRouterBasename(import.meta.env.BASE_URL)}>
       <AuthInitializer>
         <Navbar />
         <NotificationHandler />
+        <RouteBoundary>
         <Suspense fallback={<FullPageLoader />}>
           <Routes>
           <Route path="/" element={<Home />} />
@@ -237,10 +250,13 @@ const AppContent: React.FC = () => (
               </ProtectedRoute>
             }
           />
+          <Route path="*" element={<NotFound />} />
           </Routes>
         </Suspense>
+        </RouteBoundary>
       </AuthInitializer>
-    </Router>
+      </Router>
+    </ErrorBoundary>
   </ThemeProvider>
 );
 

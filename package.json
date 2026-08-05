@@ -25,6 +25,7 @@
     "build": "node scripts/vite-build.mjs",
     "preview": "vite preview --host 0.0.0.0",
     "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
     "test": "npm run test:unit && npm run test:contracts",
     "test:unit": "vitest run src",
     "test:contracts": "node --experimental-strip-types --test scripts/*.test.ts",
@@ -45,9 +46,15 @@
     ]
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/sockjs-client": "^1.5.4",
     "@vitejs/plugin-react": "^6.0.3",
+    "eslint": "^10.8.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.9.0",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.66.0",
     "vite": "^8.1.3",
     "vitest": "^4.1.10"
   }
