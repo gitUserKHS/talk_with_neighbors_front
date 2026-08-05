@@ -23,6 +23,7 @@ import { useTheme } from '@mui/material/styles';
 import { ChatSchedule, ChatScheduleRsvpStatus } from '../../../types/chatSchedule';
 import { currentUserScheduleStatus } from '../../../services/chatScheduleState';
 import { useI18n } from '../../../i18n/I18nProvider';
+import { errorMessage } from '../../../services/apiError';
 import ChatScheduleParticipants from './ChatScheduleParticipants';
 
 interface ChatScheduleDetailsDialogProps {
@@ -71,9 +72,9 @@ const ChatScheduleDetailsDialog: React.FC<ChatScheduleDetailsDialogProps> = ({
       setError(null);
       await onCancel(schedule);
       setCancelOpen(false);
-    } catch (err: any) {
+    } catch (err) {
       const fallback = t('일정을 취소하지 못했습니다.', 'We could not cancel the schedule.');
-      setError(locale === 'ko' ? err.response?.data?.message || err.message || fallback : fallback);
+      setError((locale === 'ko' ? errorMessage(err) : undefined) ?? fallback);
       setCancelOpen(false);
     }
   };

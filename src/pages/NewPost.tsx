@@ -23,6 +23,7 @@ import MovieOutlinedIcon from '@mui/icons-material/MovieOutlined';
 import { useNavigate } from 'react-router-dom';
 import feedService from '../services/feedService';
 import { useI18n } from '../i18n/I18nProvider';
+import { serverErrorMessage } from '../services/apiError';
 import {
   MAX_VIDEO_BYTES,
   MAX_VIDEO_COUNT,
@@ -66,10 +67,8 @@ const NewPost: React.FC = () => {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const requestError = (request: any, korean: string, english: string) => (
-    locale === 'ko' && typeof request?.response?.data?.message === 'string'
-      ? request.response.data.message
-      : t(korean, english)
+  const requestError = (request: unknown, korean: string, english: string) => (
+    (locale === 'ko' ? serverErrorMessage(request) : undefined) ?? t(korean, english)
   );
 
   const uploadStatus = mediaUploadStatusText(uploadProgress);
@@ -209,7 +208,7 @@ const NewPost: React.FC = () => {
         setUploadProgress
       );
       navigate('/feed');
-    } catch (err: any) {
+    } catch (err) {
       setError(requestError(err, '게시글을 저장하지 못했습니다. 잠시 후 다시 시도해 주세요.', 'Could not publish your post. Please try again shortly.'));
     } finally {
       setSubmitting(false);

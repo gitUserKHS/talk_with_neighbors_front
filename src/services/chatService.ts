@@ -135,7 +135,7 @@ class ChatService {
     } catch (error) {
       console.error('채팅방 입장 중 오류 발생:', error);
       if (axios.isAxiosError(error) && error.response?.status === 409) {
-        console.warn(`User may already be in room ${roomId} (received 409). Proceeding with WebSocket connection.`);
+        console.warn('User may already be in the room (received 409). Proceeding with WebSocket connection.', { roomId });
         websocketService.joinRoom(roomId);
       } else {
         throw error;
@@ -171,7 +171,6 @@ class ChatService {
 
   async getRooms(page: number, size: number): Promise<Page<ChatRoom>> {
     try {
-      console.log(`채팅방 목록 조회 시작 - 페이지: ${page}, 크기: ${size}`);
       const response = await api.get<Page<ChatRoom>>('/chat/rooms', {
         params: { page, size },
         timeout: 5000
@@ -199,19 +198,18 @@ class ChatService {
       console.error('채팅방 목록 조회 중 오류 발생:', error);
       if (axios.isAxiosError(error)) {
         if (error.code === 'ECONNABORTED') {
-          throw new Error(translate('서버 응답 시간이 초과되었습니다.', 'The server took too long to respond.'));
+          throw new Error(translate('서버 응답 시간이 초과되었습니다.', 'The server took too long to respond.'), { cause: error });
         }
         if (error.response?.status === 401) {
-          throw new Error(translate('로그인이 필요합니다.', 'Please sign in to continue.'));
+          throw new Error(translate('로그인이 필요합니다.', 'Please sign in to continue.'), { cause: error });
         }
       }
-      throw new Error(translate('채팅방 목록을 불러오지 못했습니다.', 'We could not load your chats.'));
+      throw new Error(translate('채팅방 목록을 불러오지 못했습니다.', 'We could not load your chats.'), { cause: error });
     }
   }
 
   async getMessages(roomId: string, page: number, size: number): Promise<Page<ChatMessageDto>> {
     try {
-      console.log(`메시지 목록 조회 시작 - 방 ID: ${roomId}, 페이지: ${page}, 크기: ${size}`);
       const response = await api.get<Page<Message>>(`/chat/rooms/${roomId}/messages`, {
         params: { page, size }, 
         timeout: 10000 
@@ -224,7 +222,7 @@ class ChatService {
         };
         return messagesDtoPage;
       } else {
-        console.warn(`서버에서 예상치 못한 형태의 메시지 목록 응답 (방 ID: ${roomId}):`, response.data);
+        console.warn('서버에서 예상치 못한 형태의 메시지 목록 응답', { roomId, data: response.data });
         return {
           content: [],
           pageable: { pageNumber: page, pageSize: size, sort: { empty: true, sorted: false, unsorted: true }, offset: page * size, paged: true, unpaged: false },
@@ -240,16 +238,16 @@ class ChatService {
         };
       }
     } catch (error) {
-      console.error(`메시지 목록 조회 중 오류 발생 (방 ID: ${roomId}):`, error);
+      console.error('메시지 목록 조회 중 오류 발생', { roomId, error });
       if (axios.isAxiosError(error)) {
         if (error.code === 'ECONNABORTED') {
-          throw new Error(translate('서버 응답 시간이 초과되었습니다.', 'The server took too long to respond.'));
+          throw new Error(translate('서버 응답 시간이 초과되었습니다.', 'The server took too long to respond.'), { cause: error });
         }
         if (error.response?.status === 401) {
-          throw new Error(translate('로그인이 필요합니다.', 'Please sign in to continue.'));
+          throw new Error(translate('로그인이 필요합니다.', 'Please sign in to continue.'), { cause: error });
         }
       }
-      throw new Error(translate('메시지 목록을 불러오지 못했습니다.', 'We could not load the messages.'));
+      throw new Error(translate('메시지 목록을 불러오지 못했습니다.', 'We could not load the messages.'), { cause: error });
     }
   }
 
@@ -284,7 +282,6 @@ class ChatService {
     files: File[] = [],
     onProgress?: (percentage: number) => void
   ): Promise<ChatMessageDto> {
-    console.log('[chatService.ts] sendMessage called with:', message);
     if (!message.chatRoomId) {
       console.error('[chatService.ts] chatRoomId is missing in the message object', message);
       throw new Error('chatRoomId is required to send a message.');
@@ -292,7 +289,6 @@ class ChatService {
     try {
       // URL 경로에 message.chatRoomId를 포함하도록 수정
       // 요청 본문은 message 객체 전체를 보내는 것으로 유지 (백엔드가 @RequestBody ChatMessageDto로 받으므로)
-      console.log(`[chatService.ts] Attempting to POST to /chat/rooms/${message.chatRoomId}/messages`);
       let response;
       if (files.length > 0) {
         const formData = buildChatMessageFormData(message.content, files);
@@ -310,7 +306,6 @@ class ChatService {
       } else {
         response = await api.post<MessageDto>(`/chat/rooms/${message.chatRoomId}/messages`, message);
       }
-      console.log('[chatService.ts] sendMessage POST request successful, response:', response.data);
       return convertToChatMessageDto(response.data as Message);
     } catch (error) {
       console.error('[chatService.ts] Error sending message via API:', error);

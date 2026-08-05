@@ -159,6 +159,8 @@ class WebSocketService {
   }
 
   debugCurrentState(): void {
+    // 콘솔에 현재 연결 상태를 찍는 것이 이 함수의 목적 그 자체다.
+    // eslint-disable-next-line no-console
     console.info('[WebSocketService]', {
       currentUserId: this.currentUserId,
       connected: this.getIsConnected(),

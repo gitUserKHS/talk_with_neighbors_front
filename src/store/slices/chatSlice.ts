@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
 import { ChatRoom, ChatMessageDto, Page, ChatRoomType } from '../../types/chat';
 import { chatService } from '../../services/chatService';
+import { errorMessage } from '../../services/apiError';
 
 // 개별 채팅방의 메시지 상태 구조 정의
 export interface RoomMessagesState {
@@ -85,8 +86,8 @@ export const fetchChatRooms = createAsyncThunk<
     try {
       const data = await chatService.getRooms(page, size);
       return data;
-    } catch (error: any) {
-      return rejectWithValue(error.message || 'Failed to fetch chat rooms');
+    } catch (error) {
+      return rejectWithValue(errorMessage(error) || 'Failed to fetch chat rooms');
     }
   }
 );
@@ -104,8 +105,8 @@ export const fetchSearchedChatRooms = createAsyncThunk<
       // dispatch(clearSearchedRooms()); // 필요하다면 clear 액션 호출
       const data = await chatService.searchRooms(keyword, type, page, size);
       return data;
-    } catch (error: any) {
-      return rejectWithValue(error.message || 'Failed to fetch searched chat rooms');
+    } catch (error) {
+      return rejectWithValue(errorMessage(error) || 'Failed to fetch searched chat rooms');
     }
   }
 );
@@ -119,8 +120,8 @@ export const fetchMessages = createAsyncThunk<
   try {
     const data = await chatService.getMessages(roomId, page, size);
     return { roomId, data };
-  } catch (error: any) {
-    return rejectWithValue({ roomId, message: error.message || 'Failed to fetch messages' });
+  } catch (error) {
+    return rejectWithValue({ roomId, message: errorMessage(error) || 'Failed to fetch messages' });
   }
 });
 
@@ -135,8 +136,8 @@ export const fetchAllUnreadCounts = createAsyncThunk<
     try {
       const data = await chatService.getAllUnreadCounts();
       return data;
-    } catch (error: any) {
-      return rejectWithValue(error.message || 'Failed to fetch unread counts');
+    } catch (error) {
+      return rejectWithValue(errorMessage(error) || 'Failed to fetch unread counts');
     }
   }
 );
@@ -152,8 +153,8 @@ export const fetchUnreadCount = createAsyncThunk<
     try {
       const count = await chatService.getUnreadCount(roomId);
       return { roomId, count };
-    } catch (error: any) {
-      return rejectWithValue(error.message || 'Failed to fetch unread count');
+    } catch (error) {
+      return rejectWithValue(errorMessage(error) || 'Failed to fetch unread count');
     }
   }
 );
@@ -203,14 +204,12 @@ const chatSlice = createSlice({
       state.searchError = null;
     },
     setCurrentRoom: (state, action: PayloadAction<ChatRoom | null>) => {
-      console.log('[chatSlice] setCurrentRoom called with:', action.payload);
       state.currentRoom = action.payload;
 
       if (action.payload) {
         const newRoomId = action.payload.id;
         // 이전 방과 다른 새로운 방으로 설정될 때, 이전 방의 unreadCount는 유지 (목록에 표시 위함)
         // 새로운 방의 메시지 상태를 항상 initialRoomMessagesState로 초기화
-        console.log(`[chatSlice] Setting messages for new room ${newRoomId} to initial state.`);
         state.messages[newRoomId] = { ...initialRoomMessagesState }; 
         state.unreadCount[newRoomId] = state.unreadCount[newRoomId] || 0; // 기존 unread가 있으면 유지, 없으면 0
       } else {
@@ -291,15 +290,12 @@ const chatSlice = createSlice({
     },
     clearRoomMessages: (state, action: PayloadAction<string>) => {
       const roomId = action.payload;
-      console.log('[chatSlice] clearRoomMessages called for room:', roomId);
       if (state.messages[roomId]) {
         state.messages[roomId] = { ...initialRoomMessagesState };
-        console.log(`[chatSlice] Messages for room ${roomId} cleared.`);
       }
     },
     removeRoom: (state, action: PayloadAction<string>) => {
       const roomId = action.payload;
-      console.log('[chatSlice] removeRoom called for room:', roomId);
       
       // 일반 채팅방 목록에서 제거
       state.rooms = state.rooms.filter(room => room.id !== roomId);
@@ -316,19 +312,16 @@ const chatSlice = createSlice({
       delete state.messages[roomId];
       delete state.unreadCount[roomId];
       
-      console.log(`[chatSlice] Room ${roomId} removed from all states.`);
     },
     // 채팅방을 목록 맨 위로 이동 (새 메시지 받았을 때)
     moveChatRoomToTop: (state, action: PayloadAction<string>) => {
       const roomId = action.payload;
-      console.log(`[chatSlice] Moving room ${roomId} to top`);
       
       // 일반 채팅방 목록에서 해당 방을 찾아서 맨 위로 이동
       const roomIndex = state.rooms.findIndex(room => room.id === roomId);
       if (roomIndex > 0) { // 이미 맨 위에 있으면 이동하지 않음
         const [targetRoom] = state.rooms.splice(roomIndex, 1);
         state.rooms.unshift(targetRoom);
-        console.log(`[chatSlice] Room ${roomId} moved to top in general list`);
       }
       
       // 검색된 채팅방 목록에서도 해당 방을 찾아서 맨 위로 이동
@@ -336,14 +329,12 @@ const chatSlice = createSlice({
       if (searchedRoomIndex > 0) { // 이미 맨 위에 있으면 이동하지 않음
         const [targetRoom] = state.searchedRooms.splice(searchedRoomIndex, 1);
         state.searchedRooms.unshift(targetRoom);
-        console.log(`[chatSlice] Room ${roomId} moved to top in searched list`);
       }
     },
     // 읽지 않은 메시지 수 업데이트 (WebSocket을 통한 실시간 업데이트)
     updateUnreadCount: (state, action: PayloadAction<{ roomId: string; count: number }>) => {
       const { roomId, count } = action.payload;
       state.unreadCount[roomId] = count;
-      console.log(`[chatSlice] Unread count updated for room ${roomId}: ${count}`);
     },
     // 메시지 읽음 상태 업데이트 (WebSocket을 통한 실시간 업데이트)
     updateMessageReadStatus: (state, action: PayloadAction<{ messageId: string; readByUserId: number | string; roomId: string }>) => {
@@ -358,7 +349,6 @@ const chatSlice = createSlice({
           if (!message.readByUsers.map(String).includes(String(readByUserId))) {
             message.readByUsers.push(Number(readByUserId));
           }
-          console.log(`[chatSlice] Message ${messageId} read status updated by user ${readByUserId}`);
         }
       }
     },
@@ -403,7 +393,6 @@ const chatSlice = createSlice({
         if (timestamp !== undefined) state.currentRoom.lastMessageTime = timestamp ?? undefined;
       }
       
-      console.log(`[chatSlice] Room ${roomId} info updated with new message`);
     },
   },
   extraReducers: (builder) => {
@@ -512,14 +501,13 @@ const chatSlice = createSlice({
           state.messages[roomId].initialLoading = false;
           state.messages[roomId].error = message;
         }
-        console.error(`Failed to fetch messages for room ${roomId}:`, message);
+        console.error('Failed to fetch messages for room', { roomId, message });
       })
       .addCase(fetchAllUnreadCounts.fulfilled, (state, action) => {
         const unreadCounts = action.payload;
         Object.keys(unreadCounts).forEach(roomId => {
           state.unreadCount[roomId] = unreadCounts[roomId];
         });
-        console.log('[chatSlice] All unread counts updated:', unreadCounts);
       })
       .addCase(fetchAllUnreadCounts.rejected, (state, action) => {
         console.error('Failed to fetch all unread counts:', action.payload);
@@ -527,7 +515,6 @@ const chatSlice = createSlice({
       .addCase(fetchUnreadCount.fulfilled, (state, action) => {
         const { roomId, count } = action.payload;
         state.unreadCount[roomId] = count;
-        console.log(`[chatSlice] Unread count for room ${roomId} updated to ${count}`);
       })
       .addCase(fetchUnreadCount.rejected, (state, action) => {
         console.error('Failed to fetch unread count:', action.payload);
