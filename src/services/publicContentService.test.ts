@@ -105,6 +105,48 @@ describe('public content service access', () => {
     });
   });
 
+  it('loads one post through its permalink endpoint and maps it like the feed', async () => {
+    get.mockResolvedValueOnce({
+      data: {
+        id: 'p1',
+        authorId: 7,
+        authorUsername: '작성자',
+        authorProfileImage: 'https://cdn.example.com/avatar.png',
+        imageUrl: 'https://cdn.example.com/p1.jpg',
+        media: [{ url: 'https://cdn.example.com/p1.jpg', type: 'IMAGE', sortOrder: 0 }],
+        caption: '공유된 글',
+        interestTags: ['산책'],
+        publicPreview: true,
+        createdAt: '2026-07-14T03:00:00Z',
+        updatedAt: '2026-07-14T03:00:00Z',
+        likeCount: 2,
+        commentCount: 1,
+        likedByCurrentUser: true,
+        compatibilityScore: 80,
+        sharedInterests: ['산책'],
+      },
+    });
+
+    const post = await feedService.getPost('p1');
+
+    expect(get).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledWith('/feed/p1');
+    expect(post).toMatchObject({
+      id: 'p1',
+      authorId: 7,
+      authorUsername: '작성자',
+      authorProfileImage: 'https://cdn.example.com/avatar.png',
+      imageUrl: 'https://cdn.example.com/p1.jpg',
+      caption: '공유된 글',
+      likeCount: 2,
+      commentCount: 1,
+      likedByCurrentUser: true,
+      compatibilityScore: 80,
+      sharedInterests: ['산책'],
+    });
+    expect(post.media).toEqual([{ url: 'https://cdn.example.com/p1.jpg', type: 'IMAGE', sortOrder: 0, thumbnailUrl: undefined }]);
+  });
+
   it('keeps an explicit false public-preview opt-in in the multipart request', async () => {
     post.mockResolvedValueOnce({
       data: {

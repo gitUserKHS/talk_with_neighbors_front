@@ -1,6 +1,6 @@
 import { Client, IMessage, StompSubscription } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
-import { WebSocketResponse } from '../types/chat';
+import { RoomFrame } from '../types/chat';
 import { store } from '../store';
 import {
   addNotification,
@@ -18,6 +18,9 @@ import {
 } from '../store/slices/chatSlice';
 import { translate } from '../i18n/I18nProvider';
 
+// One typing frame per room every 2 s is enough for a 4 s indicator and keeps keystrokes off the broker.
+const TYPING_SIGNAL_INTERVAL_MS = 2000;
+
 interface WebSocketNotification<T = any> {
   type: string;
   data?: T;
@@ -33,6 +36,7 @@ class WebSocketService {
   private currentUserId: number | string | undefined;
   private isConnected = false;
   private roomSubscriptions = new Map<string, StompSubscription>();
+  private typingSentAt = new Map<string, number>();
   private connectionCallbacks: Array<(connected: boolean) => void> = [];
 
   initialize(currentUserId?: number | string): void {
@@ -112,12 +116,12 @@ class WebSocketService {
     };
   }
 
-  subscribeToRoom(roomId: string, callback: (message: WebSocketResponse) => void): void {
+  subscribeToRoom(roomId: string, callback: (message: RoomFrame) => void): void {
     if (!roomId || !this.client?.connected) return;
     if (this.roomSubscriptions.has(roomId)) return;
 
     const subscription = this.client.subscribe(`/user/queue/chat/room/${roomId}`, (message) => {
-      const parsed = this.parseMessage<WebSocketResponse>(message);
+      const parsed = this.parseMessage<RoomFrame>(message);
       if (parsed) {
         callback(parsed);
       }
@@ -128,6 +132,23 @@ class WebSocketService {
   unsubscribeFromRoom(roomId: string): void {
     this.roomSubscriptions.get(roomId)?.unsubscribe();
     this.roomSubscriptions.delete(roomId);
+    this.typingSentAt.delete(roomId);
+  }
+
+  sendTyping(roomId: string): void {
+    if (!roomId || !this.client?.connected) return;
+    const now = Date.now();
+    const lastSentAt = this.typingSentAt.get(roomId) ?? 0;
+    if (now - lastSentAt < TYPING_SIGNAL_INTERVAL_MS) return;
+    this.typingSentAt.set(roomId, now);
+    this.client.publish({
+      destination: '/app/chat.typing',
+      body: JSON.stringify({ roomId }),
+    });
+  }
+
+  clearTyping(roomId: string): void {
+    this.typingSentAt.delete(roomId);
   }
 
   joinRoom(roomId: string): void {

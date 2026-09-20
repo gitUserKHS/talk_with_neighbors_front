@@ -1,6 +1,8 @@
 import type { ChatSchedule } from './chatSchedule';
 
 export type MessageType = 'ENTER' | 'LEAVE' | 'TEXT' | 'IMAGE' | 'VIDEO' | 'FILE' | 'SYSTEM' | 'SCHEDULE';
+// Signal frames share /user/queue/chat/room/{roomId} with messages but are never stored or rendered as one.
+export type RoomSignalType = 'TYPING' | 'ROOM_READ';
 export type ChatAttachmentType = 'IMAGE' | 'VIDEO' | 'FILE';
 
 export interface ChatAttachment {
@@ -120,6 +122,34 @@ export interface WebSocketResponse {
   attachments?: ChatAttachment[];
   schedule?: ChatSchedule;
 }
+
+export interface TypingSignalFrame {
+  type: 'TYPING';
+  roomId: string;
+  userId: number;
+  senderName?: string;
+  // Server-side expiry hint (ISO-8601 LocalDateTime). Clients keep their own local TTL.
+  expiresAt?: string;
+}
+
+// Sent once per participant when another member marks the whole room as read
+// (POST /messages/read or /app/chat.enterRoom). Replaces per-message read frames.
+export interface RoomReadSignalFrame {
+  type: 'ROOM_READ';
+  roomId: string;
+  readByUserId: number;
+  // ISO-8601 LocalDateTime of the bulk read.
+  readAt: string;
+}
+
+export type RoomSignalFrame = TypingSignalFrame | RoomReadSignalFrame;
+
+// Everything that can arrive on /user/queue/chat/room/{roomId}.
+export type RoomFrame = WebSocketResponse | RoomSignalFrame;
+
+const ROOM_SIGNAL_TYPES: ReadonlySet<string> = new Set<RoomSignalType>(['TYPING', 'ROOM_READ']);
+
+export const isRoomSignal = (frame: RoomFrame): frame is RoomSignalFrame => ROOM_SIGNAL_TYPES.has(frame.type);
 
 export interface CreateRoomRequest {
   name: string;

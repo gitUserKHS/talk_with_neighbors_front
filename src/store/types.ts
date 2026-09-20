@@ -53,6 +53,8 @@ export interface NotificationMessage {
   type: 'info' | 'success' | 'warning' | 'error';
   duration?: number;
   navigateTo?: string;
+  /** 눌렀을 때 페이지를 새로고침한다. 새 버전 안내처럼 이동이 아니라 다시 불러오기가 필요할 때 쓴다. */
+  reloadOnClick?: boolean;
 }
 
 export interface ActiveMatchRoomInfo {

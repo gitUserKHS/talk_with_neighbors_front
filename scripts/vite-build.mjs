@@ -1,7 +1,8 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzipSync } from 'node:zlib';
 
 const projectRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const viteCli = path.join('node_modules', 'vite', 'bin', 'vite.js');
@@ -13,13 +14,54 @@ const runVite = (cwd) => spawnSync(process.execPath, viteArgs, {
   stdio: 'inherit',
 });
 
+// nginx의 gzip_static이 그대로 집어 갈 수 있도록 빌드 시점에 미리 압축해 둔다.
+// 런타임 gzip은 CPU 100m짜리 nginx 파드에서 매 요청마다 비용을 치르지만,
+// 여기서 한 번 만든 .gz는 그냥 파일을 읽어 보내면 끝이다.
+const PRECOMPRESS_EXTENSIONS = new Set(['.js', '.css', '.svg', '.json', '.html', '.webmanifest']);
+const PRECOMPRESS_MIN_BYTES = 1024;
+
+const walk = (dir, visit) => {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch (error) {
+    // A build that produced no dist directory is reported by Vite itself.
+    if (error.code === 'ENOENT') return;
+    throw error;
+  }
+  for (const entry of entries) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) walk(entryPath, visit);
+    else if (entry.isFile()) visit(entryPath);
+  }
+};
+
+const precompressDist = (distDir) => {
+  let written = 0;
+  walk(distDir, (filePath) => {
+    if (!PRECOMPRESS_EXTENSIONS.has(path.extname(filePath))) return;
+    // Read once and size the buffer: a separate stat would be a check the
+    // write below could no longer rely on.
+    const contents = readFileSync(filePath);
+    if (contents.length <= PRECOMPRESS_MIN_BYTES) return;
+    writeFileSync(`${filePath}.gz`, gzipSync(contents, { level: 9 }));
+    written += 1;
+  });
+  console.warn(`[build] 정적 자산 ${written}개를 gzip으로 미리 압축했습니다.`);
+};
+
+const finish = (result) => {
+  if (result.error) throw result.error;
+  if (result.status !== 0) process.exit(1);
+  precompressDist(path.join(projectRoot, 'dist'));
+  process.exit(0);
+};
+
 const windowsPathNeedsAlias = process.platform === 'win32'
   && /[^\u0000-\u007f]/.test(projectRoot);
 
 if (!windowsPathNeedsAlias) {
-  const result = runVite(projectRoot);
-  if (result.error) throw result.error;
-  process.exit(result.status === 0 ? 0 : 1);
+  finish(runVite(projectRoot));
 }
 
 let mappedDrive;
@@ -55,5 +97,4 @@ try {
   });
 }
 
-if (result.error) throw result.error;
-process.exit(result.status === 0 ? 0 : 1);
+finish(result);

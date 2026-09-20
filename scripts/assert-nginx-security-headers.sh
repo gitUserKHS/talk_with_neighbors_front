@@ -23,5 +23,24 @@ assert_security_headers() {
   done
 }
 
+assert_gzip_headers() {
+  local path="$1"
+  local headers
+  local expected
+
+  headers="$(curl --fail --silent --show-error --head --header 'Accept-Encoding: gzip' "${origin}${path}")"
+  headers="${headers//$'\r'/}"
+
+  for expected in \
+    'Content-Encoding: gzip' \
+    'Vary: Accept-Encoding'; do
+    if ! grep --fixed-strings --ignore-case --line-regexp --quiet -- "$expected" <<<"$headers"; then
+      printf 'Missing required compression header on %s: %s\n' "$path" "$expected" >&2
+      exit 1
+    fi
+  done
+}
+
 assert_security_headers "/"
 assert_security_headers "/healthz"
+assert_gzip_headers "/"

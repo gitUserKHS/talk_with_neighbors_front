@@ -38,7 +38,7 @@ import {
   setMatchStatusMessage,
 } from '../store/slices/notificationSlice';
 import { useI18n } from '../i18n/I18nProvider';
-import { serverErrorMessage } from '../services/apiError';
+import { useApiError } from '../i18n/useApiError';
 
 const Matching: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
@@ -62,9 +62,7 @@ const Matching: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const apiError = (err: unknown, korean: string, english: string) => (
-    (locale === 'ko' ? serverErrorMessage(err) : undefined) ?? t(korean, english)
-  );
+  const apiError = useApiError();
 
   const genderLabel = (gender?: string) => {
     switch (gender?.toLowerCase()) {

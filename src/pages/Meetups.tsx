@@ -48,7 +48,7 @@ import {
 } from '../services/accessScope';
 import { removeMeetup, replaceMeetup } from '../services/contentMutationState';
 import { useI18n } from '../i18n/I18nProvider';
-import { serverErrorMessage } from '../services/apiError';
+import { useApiError } from '../i18n/useApiError';
 
 const EMPTY_FORM: CreateHobbyMeetupRequest = {
   title: '',
@@ -230,7 +230,7 @@ const MeetupCard: React.FC<{
 
 const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ currentUser }) => {
   const navigate = useNavigate();
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
   const isGuest = !currentUser;
   const accessScope = accessScopeForUser(currentUser?.id);
   const [meetupSnapshot, setMeetupSnapshot] = useState<AccessScopedList<HobbyMeetup>>({
@@ -256,9 +256,7 @@ const MeetupsContent: React.FC<{ currentUser: RootState['auth']['user'] }> = ({ 
   const meetupRequestGeneration = useRef(0);
   const viewGeneration = useRef(0);
 
-  const apiError = (err: unknown, korean: string, english: string) => (
-    (locale === 'ko' ? serverErrorMessage(err) : undefined) ?? t(korean, english)
-  );
+  const apiError = useApiError();
 
   const setMeetups = (update: React.SetStateAction<HobbyMeetup[]>) => {
     setMeetupSnapshot((snapshot) => updateScopedItems(snapshot, accessScope, update));

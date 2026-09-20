@@ -5,6 +5,7 @@ import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import PlayCircleOutlineIcon from '@mui/icons-material/PlayCircleOutline';
 import { FeedMedia, FeedPost } from '../../types/feed';
 import { useI18n } from '../../i18n/I18nProvider';
+import { cardMediaSource } from '../../services/feedMedia';
 import PostMediaLightbox from './PostMediaLightbox';
 
 interface PostMediaCarouselProps {
@@ -38,6 +39,7 @@ const PostMediaCarousel: React.FC<PostMediaCarouselProps> = ({ post }) => {
   }
 
   const active = media[Math.min(activeIndex, media.length - 1)];
+  const source = cardMediaSource(active);
   const hasMultiple = media.length > 1;
 
   return (
@@ -52,20 +54,24 @@ const PostMediaCarousel: React.FC<PostMediaCarouselProps> = ({ post }) => {
         onClick={() => setLightboxOpen(true)}
         sx={mediaOpenerSx}
       >
-        {active.type === 'VIDEO' ? (
+        {source.isVideo ? (
           <>
+            {/* The card shows the poster only; the lightbox mounts <video controls> on demand. */}
             <Box
-              component="video"
-              key={active.url}
-              src={active.url}
-              poster={active.thumbnailUrl}
-              muted
-              playsInline
-              preload="metadata"
+              component="img"
+              src={source.poster}
+              alt=""
               aria-hidden="true"
+              loading="lazy"
+              decoding="async"
+              width={active.width}
+              height={active.height}
+              draggable={false}
               sx={{
                 display: 'block',
                 width: '100%',
+                height: 'auto',
+                aspectRatio: source.aspectRatio,
                 maxHeight: { xs: '72vh', sm: 720 },
                 objectFit: 'contain',
                 pointerEvents: 'none',
@@ -87,11 +93,23 @@ const PostMediaCarousel: React.FC<PostMediaCarouselProps> = ({ post }) => {
         ) : (
           <Box
             component="img"
-            src={active.url}
+            src={source.src}
+            srcSet={source.srcSet}
+            sizes={source.sizes}
             alt={post.caption || t('게시글 사진', 'Post photo')}
             loading="lazy"
+            decoding="async"
+            width={active.width}
+            height={active.height}
             draggable={false}
-            sx={{ display: 'block', width: '100%', height: 'auto', maxHeight: { xs: '72vh', sm: 720 }, objectFit: 'contain' }}
+            sx={{
+              display: 'block',
+              width: '100%',
+              height: 'auto',
+              aspectRatio: source.aspectRatio,
+              maxHeight: { xs: '72vh', sm: 720 },
+              objectFit: 'contain',
+            }}
           />
         )}
       </Box>

@@ -41,11 +41,19 @@ import {
   ChatAttachmentType,
   ChatMessageDto,
   ChatRoom as ChatRoomType,
+  RoomFrame,
   WebSocketResponse,
+  isRoomSignal,
 } from '../../types/chat';
 import { RootState } from '../../store/types';
 import { meetupService } from '../../services/meetupService';
-import { mergeChatMessage } from '../../services/chatMessageState';
+import {
+  TypingUserMap,
+  applyRoomRead,
+  applyTypingSignal,
+  mergeChatMessage,
+  pruneTypingSignals,
+} from '../../services/chatMessageState';
 import { chatScheduleService, normalizeChatSchedule } from '../../services/chatScheduleService';
 import {
   browserTimeZone,
@@ -164,6 +172,7 @@ const ChatRoom: React.FC = () => {
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [busyScheduleId, setBusyScheduleId] = useState<string | null>(null);
   const [scheduleClock, setScheduleClock] = useState(() => Date.now());
+  const [typingUsers, setTypingUsers] = useState<TypingUserMap>({});
   const endRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const pendingRef = useRef<PendingAttachment[]>([]);
@@ -178,8 +187,17 @@ const ChatRoom: React.FC = () => {
     [scheduleClock, schedules],
   );
   const hasConversationMessages = useMemo(
-    () => messages.some((message) => message.type !== 'SCHEDULE'),
+    () =>
+      messages.some(
+        (message) =>
+          !['SCHEDULE', 'ENTER', 'LEAVE', 'SYSTEM'].includes(message.type) ||
+          message.isDeleted,
+      ),
     [messages],
+  );
+  const typingNames = useMemo(
+    () => Object.values(typingUsers).map((entry) => entry.name),
+    [typingUsers],
   );
 
   const refreshSchedules = useCallback(async () => {
@@ -202,6 +220,15 @@ const ChatRoom: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    if (typingNames.length === 0) return;
+    const timer = window.setInterval(
+      () => setTypingUsers((current) => pruneTypingSignals(current, Date.now())),
+      1_000,
+    );
+    return () => window.clearInterval(timer);
+  }, [typingNames.length]);
+
+  useEffect(() => {
     if (!roomId) return;
     const loadRoom = async () => {
       setLoading(true);
@@ -211,6 +238,7 @@ const ChatRoom: React.FC = () => {
       setScheduleFormOpen(false);
       setEditingSchedule(null);
       setDetailScheduleId(null);
+      setTypingUsers({});
       try {
         const [roomData, messagePage] = await Promise.all([
           chatService.getRoom(roomId),
@@ -243,8 +271,18 @@ const ChatRoom: React.FC = () => {
 
   useEffect(() => {
     if (!roomId) return;
-    const handleRoomMessage = (message: WebSocketResponse) => {
-      const incoming = toChatMessage(message);
+    const handleRoomMessage = (message: RoomFrame) => {
+      if (isRoomSignal(message)) {
+        if (message.type === 'ROOM_READ') {
+          const { readByUserId } = message;
+          setMessages((current) => applyRoomRead(current, readByUserId));
+        } else if (message.type === 'TYPING' && message.senderName) {
+          const signal = { userId: message.userId, senderName: message.senderName };
+          setTypingUsers((current) => applyTypingSignal(current, signal, Date.now()));
+        }
+        return;
+      }
+const incoming = toChatMessage(message);
       if (incoming.type === 'SCHEDULE') {
         if (incoming.schedule) {
           setSchedules((current) => upsertChatSchedule(current, incoming.schedule!));
@@ -374,6 +412,7 @@ const ChatRoom: React.FC = () => {
     setSending(true);
     setUploadProgress(0);
     setNewMessage('');
+    websocketService.clearTyping(roomId);
     setPendingAttachments([]);
     setMessages((current) => [...current, optimisticMessage]);
     try {
@@ -637,6 +676,15 @@ const ChatRoom: React.FC = () => {
               if (message.type === 'SCHEDULE') {
                 return null;
               }
+              if (!message.isDeleted && ['ENTER', 'LEAVE', 'SYSTEM'].includes(message.type)) {
+                return (
+                  <Box key={message.id} sx={{ display: 'flex', justifyContent: 'center' }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ textAlign: 'center', whiteSpace: 'pre-wrap', px: 1.5 }}>
+                      {message.content}
+                    </Typography>
+                  </Box>
+                );
+              }
               const isMine = String(message.senderId) === String(currentUser?.id);
               const isEditing = editingMessageId === message.id;
               const isMutating = mutatingMessageId === message.id;
@@ -719,6 +767,14 @@ const ChatRoom: React.FC = () => {
               </Typography>
             </Box>
           )}
+          {typingNames.length > 0 && (
+            <Typography variant="caption" color="text.secondary" aria-live="polite" sx={{ display: 'block', px: 1.5, pt: 1 }}>
+              {t(
+                `${typingNames.join(', ')}님이 입력 중…`,
+                typingNames.length > 1 ? `${typingNames.join(', ')} are typing…` : `${typingNames.join(', ')} is typing…`,
+              )}
+            </Typography>
+          )}
           <Stack direction="row" spacing={0.75} alignItems="flex-end" sx={{ p: 1.5 }}>
             <input ref={fileInputRef} type="file" hidden multiple accept={ACCEPT_ATTRIBUTE} onChange={(event) => { addFiles(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
             <Tooltip title={t(
@@ -729,7 +785,10 @@ const ChatRoom: React.FC = () => {
             </Tooltip>
             <TextField
               value={newMessage}
-              onChange={(event) => setNewMessage(event.target.value)}
+              onChange={(event) => {
+                setNewMessage(event.target.value);
+                if (roomId && event.target.value.trim()) websocketService.sendTyping(roomId);
+              }}
               onKeyDown={(event) => {
                 if (event.key === 'Enter' && !event.shiftKey) {
                   event.preventDefault();

@@ -22,6 +22,7 @@ import { I18nProvider } from './i18n/I18nProvider';
 
 const Home = React.lazy(() => import('./pages/Home'));
 const Feed = React.lazy(() => import('./pages/Feed'));
+const PostDetail = React.lazy(() => import('./pages/PostDetail'));
 const NewPost = React.lazy(() => import('./pages/NewPost'));
 const Login = React.lazy(() => import('./pages/Login'));
 const Register = React.lazy(() => import('./pages/Register'));
@@ -166,6 +167,15 @@ const AppContent: React.FC = () => (
           <Route path="/register" element={<Register />} />
           <Route path="/auth/callback" element={<AuthCallback />} />
           <Route path="/password-reset" element={<PasswordReset />} />
+          {/* 공개 상세 API가 없어 공유 링크를 받은 손님은 로그인 뒤 returnTo로 돌아온다. */}
+          <Route
+            path="/feed/:postId"
+            element={
+              <ProtectedRoute>
+                <PostDetail />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/feed"
             element={

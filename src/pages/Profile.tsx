@@ -23,7 +23,7 @@ import { HobbyMeetup } from '../types/meetup';
 import { MyCommentActivity, MyPageOverview, UserPreferences } from '../types/mypage';
 import { BlockedUser, HiddenContent, SafetyReport } from '../types/safety';
 import { useI18n } from '../i18n/I18nProvider';
-import { serverErrorMessage } from '../services/apiError';
+import { useApiError } from '../i18n/useApiError';
 import SignOutDialog from '../components/auth/SignOutDialog';
 import { replaceFeedPost } from '../services/contentMutationState';
 
@@ -49,7 +49,7 @@ const emptyPreferences: UserPreferences = {
 const Profile: React.FC = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { locale, t, formatNumber, formatDate } = useI18n();
+  const { t, formatNumber, formatDate } = useI18n();
   const translateRef = useRef(t);
   translateRef.current = t;
   const [tab, setTab] = useState(0);
@@ -90,9 +90,7 @@ const Profile: React.FC = () => {
     ? formatDate(value, { dateStyle: 'medium', timeStyle: 'short' })
     : t('일정 없음', 'No date');
 
-  const apiError = (err: unknown, korean: string, english: string) => (
-    (locale === 'ko' ? serverErrorMessage(err) : undefined) ?? t(korean, english)
-  );
+  const apiError = useApiError();
 
   const reportReasonLabel = (reason: SafetyReport['reason']) => ({
     HARASSMENT: t('괴롭힘', 'Harassment'),

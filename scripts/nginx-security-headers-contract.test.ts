@@ -26,3 +26,10 @@ test('the production image installs security headers for static responses', () =
   assert.match(securityHeaders, /X-Frame-Options "DENY" always;/);
   assert.match(securityHeaders, /Referrer-Policy "strict-origin-when-cross-origin" always;/);
 });
+
+test('the production image serves precompressed assets and gzips proxied responses', () => {
+  assert.match(nginxConfig, /gzip on;/);
+  assert.match(nginxConfig, /gzip_vary on;/);
+  assert.match(nginxConfig, /gzip_static on;/);
+  assert.match(nginxConfig, /gzip_types [^;]*application\/json[^;]*;/);
+});
