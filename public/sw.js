@@ -1,24 +1,37 @@
 /* 이웃톡 서비스 워커.
  *
- * 캐시 대상은 내용 해시가 붙은 /assets/ 자산으로만 한정한다.
- * 이 파일들은 이름이 바뀌지 않는 한 내용도 바뀌지 않으므로 오래된 코드를 계속 보여줄 위험이 없다.
+ * 캐시 대상은 내용 해시가 붙은 /assets/ 자산과 오프라인 안내 페이지(/offline.html)뿐이다.
+ * 해시 자산은 이름이 바뀌지 않는 한 내용도 바뀌지 않으므로 오래된 코드를 계속 보여줄 위험이 없다.
  * index.html, API 응답, 업로드 미디어는 절대 캐시하지 않는다. HTML을 캐시하면 배포한 새 버전이
  * 사용자에게 도달하지 않고, API를 캐시하면 로그아웃한 뒤에도 이전 계정의 응답이 남을 수 있다.
+ * 페이지 이동(navigate)은 항상 네트워크로 가고, 네트워크가 없을 때만 offline.html을 대신 보여준다.
  * nginx도 같은 정책이다. index.html은 no-store, /assets/는 immutable.
  */
 
-const CACHE = 'twn-assets-v1';
+const CACHE = 'twn-assets-v2';
+// 오프라인 안내 페이지는 자산과 수명이 다르므로 따로 둔다. 워커가 새로 설치될 때마다 다시 받는다.
+const SHELL_CACHE = 'twn-shell-v1';
+const OFFLINE_URL = '/offline.html';
+const KEEP_CACHES = [CACHE, SHELL_CACHE];
 
 self.addEventListener('install', (event) => {
   // 새 워커가 이전 워커를 기다리지 않고 바로 활성화되도록 한다.
   self.skipWaiting();
-  event.waitUntil(Promise.resolve());
+  event.waitUntil((async () => {
+    try {
+      const cache = await caches.open(SHELL_CACHE);
+      // HTTP 캐시를 거치지 않고 지금 배포된 페이지를 받아 둔다.
+      await cache.add(new Request(OFFLINE_URL, { cache: 'reload' }));
+    } catch {
+      // 안내 페이지를 못 받아도 워커 설치는 막지 않는다. 그 경우 오프라인 대체 화면만 없다.
+    }
+  })());
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
     const names = await caches.keys();
-    await Promise.all(names.filter((name) => name !== CACHE).map((name) => caches.delete(name)));
+    await Promise.all(names.filter((name) => !KEEP_CACHES.includes(name)).map((name) => caches.delete(name)));
     await self.clients.claim();
   })());
 });
@@ -29,6 +42,15 @@ const isHashedAsset = (url) =>
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
+
+  // 페이지 이동은 네트워크 우선이다. 응답을 캐시하지 않으므로 새 배포는 그대로 도달하고,
+  // 네트워크가 끊겼을 때만 미리 받아 둔 안내 페이지로 대신한다.
+  if (request.mode === 'navigate') {
+    event.respondWith(
+      fetch(request).catch(async () => (await caches.match(OFFLINE_URL)) || Response.error()),
+    );
+    return;
+  }
 
   let url;
   try {

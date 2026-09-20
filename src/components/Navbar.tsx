@@ -32,7 +32,8 @@ import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import { authService } from '../services/authService';
 import { setUser } from '../store/slices/authSlice';
-import { RootState } from '../store/types';
+import { clearChat, fetchChatRooms, selectTotalChatUnread } from '../store/slices/chatSlice';
+import { AppDispatch, RootState } from '../store/types';
 import notificationService, { InboxNotification } from '../services/notificationService';
 import adminService from '../services/adminService';
 import { resolveMediaUrl } from '../services/mediaUrl';
@@ -50,8 +51,9 @@ interface NavigationItem {
 const Navbar: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const dispatch = useDispatch();
+  const dispatch = useDispatch<AppDispatch>();
   const user = useSelector((state: RootState) => state.auth.user);
+  const totalChatUnread = useSelector(selectTotalChatUnread);
   const { t } = useI18n();
   const [notificationAnchor, setNotificationAnchor] = useState<HTMLElement | null>(null);
   const [accountAnchor, setAccountAnchor] = useState<HTMLElement | null>(null);
@@ -96,6 +98,19 @@ const Navbar: React.FC = () => {
     return () => window.removeEventListener('notifications:changed', loadNotifications);
   }, [loadNotifications]);
 
+  // 채팅방 목록을 한 번 받아 두면 방별 unreadCount가 스토어에 실리고,
+  // 이후에는 웹소켓 UNREAD_COUNT_UPDATE가 갱신하므로 /feed에 있어도 배지가 살아 움직인다.
+  // 사용자가 바뀌거나(다른 계정 로그인) 사라지면(프로필 로그아웃, 401 만료) 이전 계정의
+  // 방 목록·안읽음 수·메시지가 남지 않도록 정리하고 나서 새 사용자 목록을 받는다.
+  const userId = user?.id;
+  useEffect(() => {
+    if (!userId) return;
+    dispatch(fetchChatRooms({ page: 0, size: 30 }));
+    return () => {
+      dispatch(clearChat());
+    };
+  }, [dispatch, userId]);
+
   useEffect(() => {
     if (!user) {
       setIsAdmin(false);
@@ -117,6 +132,7 @@ const Navbar: React.FC = () => {
     try {
       await authService.logout();
       dispatch(setUser(null));
+      dispatch(clearChat());
       setLogoutConfirmOpen(false);
       setAccountAnchor(null);
       navigate('/login', { replace: true });
@@ -156,6 +172,13 @@ const Navbar: React.FC = () => {
 
   const mobileItems = user ? navItems : browseItems;
   const neighborhood = user?.address?.trim() || t('동네 설정', 'Set neighborhood');
+
+  // 채팅 메뉴에만 읽지 않은 메시지 합계를 얹는다. Badge는 0이면 스스로 숨는다.
+  const navIcon = (item: NavigationItem) => (
+    item.path === '/chat'
+      ? <Badge badgeContent={totalChatUnread} color="error" max={99}>{item.icon}</Badge>
+      : item.icon
+  );
 
   return (
     <>
@@ -222,7 +245,7 @@ const Navbar: React.FC = () => {
                   key={item.path}
                   component={RouterLink}
                   to={item.path}
-                  startIcon={item.icon}
+                  startIcon={navIcon(item)}
                   aria-current={isActive(item.path) ? 'page' : undefined}
                   sx={{
                     color: isActive(item.path) ? 'primary.main' : 'text.secondary',
@@ -376,7 +399,7 @@ const Navbar: React.FC = () => {
               '& .MuiButton-startIcon': { m: 0 },
               fontSize: '0.68rem',
             }}
-            startIcon={item.icon}
+            startIcon={navIcon(item)}
           >
             {item.label}
           </Button>

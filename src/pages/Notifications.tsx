@@ -18,6 +18,7 @@ const Notifications: React.FC = () => {
     NEW_MESSAGE: t('새 메시지', 'New message'), MATCH_REQUEST: t('매칭 요청', 'Match request'),
     MATCH_ACCEPTED: t('매칭 수락', 'Match accepted'), MATCH_REJECTED: t('매칭 알림', 'Match update'),
     SYSTEM_NOTICE: t('서비스 알림', 'Service notice'), ROOM_DELETED: t('채팅방 알림', 'Chat update'),
+    POST_COMMENTED: t('새 댓글', 'New comment'), POST_LIKED: t('좋아요', 'New like'),
   };
   const [items, setItems] = useState<InboxNotification[]>([]);
   const [loading, setLoading] = useState(true);

@@ -64,6 +64,7 @@ const ContentSkeletons: React.FC = () => (
 
 const PublicContentHighlights: React.FC<PublicContentHighlightsProps> = ({ posts, meetups, loading }) => {
   const { t, formatDate, formatNumber } = useI18n();
+  const user = useSelector((state: RootState) => state.auth.user);
 
   return (
     <Box component="section" aria-labelledby="neighborhood-now-title" sx={{ py: { xs: 7, md: 10 }, bgcolor: 'background.default' }}>
@@ -123,15 +124,17 @@ const PublicContentHighlights: React.FC<PublicContentHighlightsProps> = ({ posts
                 </Card>
               ) : posts.map((post) => {
                 const firstMedia = post.media?.[0];
-                const previewImage = post.imageUrl
-                  || firstMedia?.thumbnailUrl
+                // The backend thumbnail is a fraction of the original; only fall back to full assets.
+                const previewImage = firstMedia?.thumbnailUrl
+                  || post.imageUrl
                   || (firstMedia?.type === 'IMAGE' ? firstMedia.url : '');
 
                 return (
                   <Card key={post.id} variant="outlined" sx={{ overflow: 'hidden' }}>
                     <CardActionArea
                       component={RouterLink}
-                      to="/feed"
+                      // The permalink needs a session; guests keep landing on the public list.
+                      to={user ? `/feed/${post.id}` : '/feed'}
                       sx={{ display: 'grid', gridTemplateColumns: previewImage ? { xs: '1fr', sm: '168px 1fr' } : '1fr' }}
                     >
                       {previewImage && (
@@ -139,6 +142,8 @@ const PublicContentHighlights: React.FC<PublicContentHighlightsProps> = ({ posts
                           component="img"
                           image={resolveMediaUrl(previewImage)}
                           alt=""
+                          loading="lazy"
+                          decoding="async"
                           sx={{ width: '100%', height: '100%', minHeight: 148, objectFit: 'cover' }}
                         />
                       )}
@@ -282,8 +287,8 @@ const Home: React.FC = () => {
 
   const heroPost = publicPosts[0];
   const heroMedia = heroPost?.media?.[0];
-  const heroImage = heroPost?.imageUrl
-    || heroMedia?.thumbnailUrl
+  const heroImage = heroMedia?.thumbnailUrl
+    || heroPost?.imageUrl
     || (heroMedia?.type === 'IMAGE' ? heroMedia.url : '');
   const heroTags = heroPost?.interestTags?.slice(0, 3) ?? [];
 
@@ -389,7 +394,14 @@ const Home: React.FC = () => {
                     {heroPost?.caption || t('오늘 동네에서 발견한 작은 즐거움을 이웃과 나눠 보세요.', 'Share a small moment you discovered in your neighborhood today.')}
                   </Typography>
                   {heroImage ? (
-                    <CardMedia component="img" image={resolveMediaUrl(heroImage)} alt="" sx={{ mt: 2, height: 190, borderRadius: 2.5, objectFit: 'cover' }} />
+                    <CardMedia
+                      component="img"
+                      image={resolveMediaUrl(heroImage)}
+                      alt=""
+                      fetchPriority="high"
+                      decoding="async"
+                      sx={{ mt: 2, height: 190, borderRadius: 2.5, objectFit: 'cover' }}
+                    />
                   ) : (
                     <Box sx={{ mt: 2, height: 190, borderRadius: 2.5, display: 'grid', placeItems: 'center', color: 'secondary.dark', background: 'linear-gradient(135deg, #E2F2EF, #FFF0EB)' }}>
                       <FavoriteBorderRoundedIcon sx={{ fontSize: 48 }} />

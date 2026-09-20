@@ -21,7 +21,7 @@ import {
 } from '@mui/material';
 import { useI18n } from '../i18n/I18nProvider';
 import adminService from '../services/adminService';
-import { serverErrorMessage } from '../services/apiError';
+import { useApiError } from '../i18n/useApiError';
 import { AdminReport, AdminReportDetail, ReportStatus, ReportStatusCounts } from '../types/admin';
 import { ReportReason, SafetyTargetType } from '../types/safety';
 
@@ -38,7 +38,7 @@ const statusColor = (status: ReportStatus) => {
 };
 
 const AdminReports: React.FC = () => {
-  const { t, locale, formatDate } = useI18n();
+  const { t, formatDate } = useI18n();
   const [status, setStatus] = useState<ReportStatus>('PENDING');
   const [reports, setReports] = useState<AdminReport[]>([]);
   const [counts, setCounts] = useState<ReportStatusCounts>({});
@@ -73,8 +73,7 @@ const AdminReports: React.FC = () => {
     MESSAGE: t('메시지', 'Message'),
   }[target]);
 
-  const failure = (err: unknown, korean: string, english: string) =>
-    (locale === 'ko' ? serverErrorMessage(err) : undefined) ?? t(korean, english);
+  const failure = useApiError();
 
   const load = useCallback(async (nextStatus: ReportStatus) => {
     setLoading(true);
@@ -92,9 +91,7 @@ const AdminReports: React.FC = () => {
     } finally {
       setLoading(false);
     }
-    // failure는 locale/t에만 의존하고 매 렌더 새로 만들어지므로 의존성에서 제외한다.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locale]);
+  }, [failure]);
 
   useEffect(() => {
     load(status);

@@ -4,12 +4,12 @@ import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import AuthLayout from '../components/AuthLayout';
 import { useI18n } from '../i18n/I18nProvider';
 import passwordResetService from '../services/passwordResetService';
-import { serverErrorMessage } from '../services/apiError';
+import { useApiError } from '../i18n/useApiError';
 
 type Step = 'request' | 'confirm' | 'done';
 
 const PasswordReset: React.FC = () => {
-  const { t, locale } = useI18n();
+  const { t } = useI18n();
   const navigate = useNavigate();
   const [available, setAvailable] = useState<boolean | null>(null);
   const [step, setStep] = useState<Step>('request');
@@ -29,8 +29,7 @@ const PasswordReset: React.FC = () => {
     };
   }, []);
 
-  const failure = (err: unknown, korean: string, english: string) =>
-    (locale === 'ko' ? serverErrorMessage(err) : undefined) ?? t(korean, english);
+  const failure = useApiError();
 
   const requestCode = async (event: React.FormEvent) => {
     event.preventDefault();

@@ -1,5 +1,6 @@
-import { createSlice, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
+import { createSlice, createSelector, PayloadAction, createAsyncThunk } from '@reduxjs/toolkit';
 import { ChatRoom, ChatMessageDto, Page, ChatRoomType } from '../../types/chat';
+import type { RootState } from '../types';
 import { chatService } from '../../services/chatService';
 import { errorMessage } from '../../services/apiError';
 
@@ -125,40 +126,6 @@ export const fetchMessages = createAsyncThunk<
   }
 });
 
-// 모든 채팅방의 읽지 않은 메시지 수 조회 Thunk
-export const fetchAllUnreadCounts = createAsyncThunk<
-  { [roomId: string]: number },
-  void,
-  { rejectValue: string }
->(
-  'chat/fetchAllUnreadCounts',
-  async (_, { rejectWithValue }) => {
-    try {
-      const data = await chatService.getAllUnreadCounts();
-      return data;
-    } catch (error) {
-      return rejectWithValue(errorMessage(error) || 'Failed to fetch unread counts');
-    }
-  }
-);
-
-// 특정 채팅방의 읽지 않은 메시지 수 조회 Thunk
-export const fetchUnreadCount = createAsyncThunk<
-  { roomId: string; count: number },
-  string,
-  { rejectValue: string }
->(
-  'chat/fetchUnreadCount',
-  async (roomId, { rejectWithValue }) => {
-    try {
-      const count = await chatService.getUnreadCount(roomId);
-      return { roomId, count };
-    } catch (error) {
-      return rejectWithValue(errorMessage(error) || 'Failed to fetch unread count');
-    }
-  }
-);
-
 const chatSlice = createSlice({
   name: 'chat',
   initialState,
@@ -262,8 +229,9 @@ const chatSlice = createSlice({
       const roomId = action.payload;
       if (state.messages[roomId]) {
         state.messages[roomId].data = state.messages[roomId].data.map(msg => ({ ...msg, isRead: true }));
-        state.unreadCount[roomId] = 0;
       }
+      // 메시지를 아직 불러오지 않은 방(목록에서 바로 진입)도 배지는 즉시 내려가야 한다.
+      state.unreadCount[roomId] = 0;
     },
     clearChat: (state) => {
       state.rooms = [];
@@ -397,17 +365,19 @@ const chatSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      .addCase(fetchChatRooms.pending, (state) => {
+      .addCase(fetchChatRooms.pending, (state, action) => {
         state.loadingRooms = true;
         state.roomsError = null; 
-        if (state.currentPage === 0) {
+        if (action.meta.arg.page === 0 && state.rooms.length === 0) {
           state.initialLoading = true;
         }
       })
       .addCase(fetchChatRooms.fulfilled, (state, action: PayloadAction<Page<ChatRoom>>) => {
         const { content, totalPages, totalElements, number, last } = action.payload;
+        // 0페이지는 서버 응답으로 목록을 통째로 교체한다. 이미 실린 방과 대조해 걸러내면
+        // 재조회(목록 재진입, 검색 해제) 때 목록이 비어 버린다.
         const newRooms = content.filter(newRoom => !state.rooms.some(existingRoom => existingRoom.id === newRoom.id));
-        state.rooms = (number === 0 && state.initialLoading) ? newRooms : [...state.rooms, ...newRooms];
+        state.rooms = number === 0 ? content : [...state.rooms, ...newRooms];
         state.totalPages = totalPages;
         state.totalElements = totalElements;
         state.currentPage = number;
@@ -441,7 +411,7 @@ const chatSlice = createSlice({
       .addCase(fetchSearchedChatRooms.fulfilled, (state, action: PayloadAction<Page<ChatRoom>>) => {
         const { content, totalPages, totalElements, number, last } = action.payload;
         const newSearchedRooms = content.filter(newRoom => !state.searchedRooms.some(existingRoom => existingRoom.id === newRoom.id));
-        state.searchedRooms = (number === 0 && state.initialLoadingSearch) ? newSearchedRooms : [...state.searchedRooms, ...newSearchedRooms];
+        state.searchedRooms = number === 0 ? content : [...state.searchedRooms, ...newSearchedRooms];
         state.searchedTotalPages = totalPages;
         state.searchedTotalElements = totalElements;
         state.searchedCurrentPage = number;
@@ -502,22 +472,6 @@ const chatSlice = createSlice({
           state.messages[roomId].error = message;
         }
         console.error('Failed to fetch messages for room', { roomId, message });
-      })
-      .addCase(fetchAllUnreadCounts.fulfilled, (state, action) => {
-        const unreadCounts = action.payload;
-        Object.keys(unreadCounts).forEach(roomId => {
-          state.unreadCount[roomId] = unreadCounts[roomId];
-        });
-      })
-      .addCase(fetchAllUnreadCounts.rejected, (state, action) => {
-        console.error('Failed to fetch all unread counts:', action.payload);
-      })
-      .addCase(fetchUnreadCount.fulfilled, (state, action) => {
-        const { roomId, count } = action.payload;
-        state.unreadCount[roomId] = count;
-      })
-      .addCase(fetchUnreadCount.rejected, (state, action) => {
-        console.error('Failed to fetch unread count:', action.payload);
       });
   },
 });
@@ -539,5 +493,13 @@ export const {
   updateMessageReadStatus,
   updateRoomInfo
 } = chatSlice.actions;
+
+// 셀렉터: 채팅방 목록 화면과 내비게이션 배지가 같은 스토어 상태를 읽는다.
+export const selectChatRooms = (state: RootState) => state.chat.rooms;
+export const selectChatUnreadCounts = (state: RootState) => state.chat.unreadCount;
+export const selectTotalChatUnread = createSelector(
+  [selectChatUnreadCounts],
+  (counts) => Object.values(counts).reduce((total, count) => total + count, 0),
+);
 
 export default chatSlice.reducer;

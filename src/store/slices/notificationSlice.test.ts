@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import reducer, {
   addOfflineNotification,
   handleNotificationSummary,
+  incrementReconnectAttempts,
   markAllOfflineNotificationsAsRead,
   markOfflineNotificationAsRead,
   setConnectionStatus,
@@ -72,6 +73,22 @@ describe('notificationSlice', () => {
 
     expect(state.connectionStatus).toEqual({
       isOnline: false,
+      wasOffline: true,
+      reconnectAttempts: 0,
+    });
+  });
+
+  it('counts reconnect attempts and clears them once the socket is back', () => {
+    let state = reducer(undefined, setConnectionStatus({ isOnline: false, wasOffline: true }));
+    state = reducer(state, incrementReconnectAttempts());
+    state = reducer(state, incrementReconnectAttempts());
+
+    expect(state.connectionStatus.reconnectAttempts).toBe(2);
+
+    state = reducer(state, setConnectionStatus({ isOnline: true, reconnectAttempts: 0 }));
+
+    expect(state.connectionStatus).toEqual({
+      isOnline: true,
       wasOffline: true,
       reconnectAttempts: 0,
     });

@@ -141,6 +141,12 @@ export const feedService = {
     return mapPage(response.data, page, mapAuthenticatedPost);
   },
 
+  /** One post by its permalink id; the server answers 404 `FEED_POST_NOT_FOUND` when it is gone. */
+  async getPost(postId: string): Promise<FeedPost> {
+    const response = await api.get<FeedPost>(`/feed/${postId}`);
+    return mapAuthenticatedPost(response.data);
+  },
+
   async createPost(
     request: CreateFeedPostRequest,
     files: File[],
