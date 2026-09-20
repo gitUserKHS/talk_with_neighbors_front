@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzipSync } from 'node:zlib';
@@ -21,7 +21,15 @@ const PRECOMPRESS_EXTENSIONS = new Set(['.js', '.css', '.svg', '.json', '.html',
 const PRECOMPRESS_MIN_BYTES = 1024;
 
 const walk = (dir, visit) => {
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch (error) {
+    // A build that produced no dist directory is reported by Vite itself.
+    if (error.code === 'ENOENT') return;
+    throw error;
+  }
+  for (const entry of entries) {
     const entryPath = path.join(dir, entry.name);
     if (entry.isDirectory()) walk(entryPath, visit);
     else if (entry.isFile()) visit(entryPath);
@@ -29,12 +37,14 @@ const walk = (dir, visit) => {
 };
 
 const precompressDist = (distDir) => {
-  if (!existsSync(distDir)) return;
   let written = 0;
   walk(distDir, (filePath) => {
     if (!PRECOMPRESS_EXTENSIONS.has(path.extname(filePath))) return;
-    if (statSync(filePath).size <= PRECOMPRESS_MIN_BYTES) return;
-    writeFileSync(`${filePath}.gz`, gzipSync(readFileSync(filePath), { level: 9 }));
+    // Read once and size the buffer: a separate stat would be a check the
+    // write below could no longer rely on.
+    const contents = readFileSync(filePath);
+    if (contents.length <= PRECOMPRESS_MIN_BYTES) return;
+    writeFileSync(`${filePath}.gz`, gzipSync(contents, { level: 9 }));
     written += 1;
   });
   console.warn(`[build] 정적 자산 ${written}개를 gzip으로 미리 압축했습니다.`);
