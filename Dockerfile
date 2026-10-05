@@ -16,7 +16,7 @@ ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 ENV VITE_KAKAO_MAP_JAVASCRIPT_KEY=${VITE_KAKAO_MAP_JAVASCRIPT_KEY}
 RUN npm run build
 
-FROM nginx:1.31-alpine-slim@sha256:8763397d71453fccb4a2613ccfd89aa62e1d731d618b1eaa8e14631539a3a65b
+FROM nginx:1.31-alpine-slim@sha256:45b82ed5f285b90d63df07ba70430fdd8f25624b416617d9e6dc93412b2006dc
 RUN apk upgrade --no-cache
 COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
 COPY deploy/security-headers.conf /etc/nginx/security-headers.inc
